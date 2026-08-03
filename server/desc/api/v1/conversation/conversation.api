@@ -1,0 +1,124 @@
+syntax = "v1"
+
+info (
+	title:      "Conversation API"
+	desc:       "对话管理与消息接口"
+	author:     "agentrazor"
+	version:    "v1"
+	go_package: "v1/conversation"
+)
+
+type (
+	Conversation {
+		Id         string  `json:"id"`
+		Title      string  `json:"title"`
+		Status     string  `json:"status"`
+		PinnedAt   *string `json:"pinnedAt,omitempty"`
+		ArchivedAt *string `json:"archivedAt,omitempty"`
+		GroupId    *string `json:"groupId,omitempty"`
+		CreatedAt  string  `json:"createdAt"`
+		UpdatedAt  string  `json:"updatedAt"`
+	}
+	Run {
+		Id          string                   `json:"id"`
+		Sequence    int                      `json:"sequence"`
+		Prompt      string                   `json:"prompt"`
+		Status      string                   `json:"status"`
+		Output      string                   `json:"output,omitempty"`
+		Error       string                   `json:"error,omitempty"`
+		ExitCode    int                      `json:"exitCode,omitempty"`
+		Events      []map[string]interface{} `json:"events,omitempty"`
+		CreatedAt   string                   `json:"createdAt"`
+		StartedAt   *string                  `json:"startedAt,omitempty"`
+		CompletedAt *string                  `json:"completedAt,omitempty"`
+	}
+	Message {
+		Id        string `json:"id"`
+		RunId     string `json:"runId"`
+		Role      string `json:"role"`
+		Content   string `json:"content"`
+		Status    string `json:"status"`
+		CreatedAt string `json:"createdAt"`
+	}
+	ListResponse {
+		Conversations []Conversation `json:"conversations"`
+	}
+	CreateRequest {
+		Title string `json:"title,optional"`
+	}
+	PathRequest {
+		ConversationId string `path:"conversation_id" validate:"required"`
+	}
+	EventsRequest {
+		ConversationId  string `path:"conversation_id" validate:"required"`
+		LastEventId     string `header:"Last-Event-ID,optional"`
+		LastEventIdForm string `form:"lastEventId,optional"`
+	}
+	EventsResponse {
+		Id        int64  `json:"id"`
+		Event     string `json:"event"`
+		Data      string `json:"data"`
+		CreatedAt string `json:"createdAt"`
+	}
+	DetailResponse {
+		Conversation Conversation `json:"conversation"`
+		SessionId    string       `json:"sessionId,omitempty"`
+		Messages     []Message    `json:"messages"`
+	}
+	UpdateRequest {
+		ConversationId string  `path:"conversation_id" validate:"required"`
+		Title          *string `json:"title,optional"`
+		Pinned         *bool   `json:"pinned,optional"`
+		Archived       *bool   `json:"archived,optional"`
+		GroupId        *string `json:"groupId,optional"`
+	}
+	SendMessageRequest {
+		ConversationId string `path:"conversation_id" validate:"required"`
+		Content        string `json:"content" validate:"required"`
+	}
+	SendMessageResponse {
+		ConversationId string `json:"conversationId"`
+		SessionId      string `json:"sessionId"`
+		Run            Run    `json:"run"`
+	}
+)
+
+@server (
+	prefix:          /api/v1
+	group:           v1/conversation
+	compact_handler: true
+)
+service server {
+	@doc "获取会话列表"
+	@handler List
+	get /conversations returns (ListResponse)
+
+	@doc "创建会话"
+	@handler Create
+	post /conversations (CreateRequest) returns (Conversation)
+
+	@doc "获取会话详情"
+	@handler Get
+	get /conversations/:conversation_id (PathRequest) returns (DetailResponse)
+
+	@doc "修改会话"
+	@handler Update
+	patch /conversations/:conversation_id (UpdateRequest) returns (Conversation)
+
+	@doc "发送消息"
+	@handler SendMessage
+	post /conversations/:conversation_id/messages (SendMessageRequest) returns (SendMessageResponse)
+}
+
+@server (
+	prefix:          /api/v1
+	group:           v1/conversation
+	compact_handler: true
+	sse:             true
+)
+service server {
+	@doc "订阅会话与 Agent 流式事件"
+	@handler StreamEvents
+	get /conversations/:conversation_id/events (EventsRequest) returns (EventsResponse)
+}
+

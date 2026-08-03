@@ -7,8 +7,8 @@ import (
 
 	"github.com/zeromicro/go-zero/rest/httpx"
 
-	"github.com/jzero-io/jzero-admin/server/internal/logic/swagger"
-	"github.com/jzero-io/jzero-admin/server/internal/svc"
+	"github.com/jzero-io/agentrazor/server/internal/logic/swagger"
+	"github.com/jzero-io/agentrazor/server/internal/svc"
 )
 
 func Swagger(svcCtx *svc.ServiceContext) http.HandlerFunc {

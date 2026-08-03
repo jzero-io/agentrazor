@@ -7,30 +7,36 @@ import (
 	"github.com/jzero-io/jzero/core/stores/modelx"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 
-	"github.com/jzero-io/jzero-admin/server/internal/model/manage_email"
-	"github.com/jzero-io/jzero-admin/server/internal/model/manage_menu"
-	"github.com/jzero-io/jzero-admin/server/internal/model/manage_role"
-	"github.com/jzero-io/jzero-admin/server/internal/model/manage_role_menu"
-	"github.com/jzero-io/jzero-admin/server/internal/model/manage_user"
-	"github.com/jzero-io/jzero-admin/server/internal/model/manage_user_role"
+	"github.com/jzero-io/agentrazor/server/internal/model/conversation"
+	"github.com/jzero-io/agentrazor/server/internal/model/conversation_group"
+	"github.com/jzero-io/agentrazor/server/internal/model/manage_email"
+	"github.com/jzero-io/agentrazor/server/internal/model/manage_menu"
+	"github.com/jzero-io/agentrazor/server/internal/model/manage_role"
+	"github.com/jzero-io/agentrazor/server/internal/model/manage_role_menu"
+	"github.com/jzero-io/agentrazor/server/internal/model/manage_user"
+	"github.com/jzero-io/agentrazor/server/internal/model/manage_user_role"
 )
 
 type Model struct {
-	ManageEmail    manage_email.ManageEmailModel
-	ManageMenu     manage_menu.ManageMenuModel
-	ManageRole     manage_role.ManageRoleModel
-	ManageRoleMenu manage_role_menu.ManageRoleMenuModel
-	ManageUser     manage_user.ManageUserModel
-	ManageUserRole manage_user_role.ManageUserRoleModel
+	Conversation      conversation.ConversationModel
+	ConversationGroup conversation_group.ConversationGroupModel
+	ManageEmail       manage_email.ManageEmailModel
+	ManageMenu        manage_menu.ManageMenuModel
+	ManageRole        manage_role.ManageRoleModel
+	ManageRoleMenu    manage_role_menu.ManageRoleMenuModel
+	ManageUser        manage_user.ManageUserModel
+	ManageUserRole    manage_user_role.ManageUserRoleModel
 }
 
 func NewModel(conn sqlx.SqlConn, op ...opts.Opt[modelx.ModelOpts]) Model {
 	return Model{
-		ManageEmail:    manage_email.NewManageEmailModel(conn, op...),
-		ManageMenu:     manage_menu.NewManageMenuModel(conn, op...),
-		ManageRole:     manage_role.NewManageRoleModel(conn, op...),
-		ManageRoleMenu: manage_role_menu.NewManageRoleMenuModel(conn, op...),
-		ManageUser:     manage_user.NewManageUserModel(conn, op...),
-		ManageUserRole: manage_user_role.NewManageUserRoleModel(conn, op...),
+		Conversation:      conversation.NewConversationModel(conn, op...),
+		ConversationGroup: conversation_group.NewConversationGroupModel(conn, op...),
+		ManageEmail:       manage_email.NewManageEmailModel(conn, op...),
+		ManageMenu:        manage_menu.NewManageMenuModel(conn, op...),
+		ManageRole:        manage_role.NewManageRoleModel(conn, op...),
+		ManageRoleMenu:    manage_role_menu.NewManageRoleMenuModel(conn, op...),
+		ManageUser:        manage_user.NewManageUserModel(conn, op...),
+		ManageUserRole:    manage_user_role.NewManageUserRoleModel(conn, op...),
 	}
 }

@@ -1,0 +1,772 @@
+package agent
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+)
+
+var (
+	ErrRuntimeClosed       = errors.New("agent runtime is closed")
+	ErrThreadTurnRunning   = errors.New("agent thread already has an active turn")
+	ErrAppServerTerminated = errors.New("codex app-server terminated")
+)
+
+// AgentRuntime isolates the conversation service from a specific agent
+// implementation. ExternalSessionID is the provider-owned conversation ID.
+type AgentRuntime interface {
+	Start(ctx context.Context, prompt string, emit EventHandler) (RuntimeResult, error)
+	Resume(ctx context.Context, externalSessionID, prompt string, emit EventHandler) (RuntimeResult, error)
+	Close() error
+}
+
+type EventHandler func(map[string]any)
+
+type CodexAppServerOptions struct {
+	Binary             string
+	CodexHome          string
+	Workspace          string
+	Sandbox            string
+	ServiceName        string
+	DisableApps        bool
+	DisabledMCPServers []string
+	MaxEvents          int
+	StartTimeout       time.Duration
+}
+
+// CodexAppServerRuntime owns one long-running Codex app-server process. Business
+// conversations are mapped to Codex threads and messages are mapped to turns.
+type CodexAppServerRuntime struct {
+	options CodexAppServerOptions
+
+	cmd      *exec.Cmd
+	stdin    io.WriteCloser
+	writeMu  sync.Mutex
+	stderr   limitedBuffer
+	waitDone chan struct{}
+	waitOnce sync.Once
+
+	nextRequestID atomic.Int64
+
+	stateMu     sync.Mutex
+	pending     map[int64]chan rpcEnvelope
+	executions  map[string]*appServerTurn
+	loaded      map[string]bool
+	closed      bool
+	terminalErr error
+}
+
+type rpcEnvelope struct {
+	ID     *int64          `json:"id,omitempty"`
+	Method string          `json:"method,omitempty"`
+	Params json.RawMessage `json:"params,omitempty"`
+	Result json.RawMessage `json:"result,omitempty"`
+	Error  *rpcError       `json:"error,omitempty"`
+}
+
+type rpcError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
+}
+
+// RPCError is the typed error returned when the app-server rejects a request.
+// Callers inspect it with errors.As (on Code) rather than matching err.Error()
+// text, which is not a stable API. rpcError above is the on-the-wire JSON shape;
+// RPCError is the value returned to callers.
+type RPCError struct {
+	Method  string
+	Code    int
+	Message string
+}
+
+func (e *RPCError) Error() string {
+	return fmt.Sprintf("Codex app-server RPC %s failed (%d): %s", e.Method, e.Code, e.Message)
+}
+
+type turnOutcome struct {
+	status     string
+	completion map[string]any
+	err        error
+}
+
+type appServerTurn struct {
+	threadID  string
+	maxEvents int
+	emit      EventHandler
+
+	mu         sync.Mutex
+	turnID     string
+	eventCount int
+	events     []map[string]any
+	outputs    []string
+	done       chan turnOutcome
+	once       sync.Once
+}
+
+func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRuntime, error) {
+	if options.Binary == "" {
+		options.Binary = "codex"
+	}
+	if options.Sandbox == "" {
+		options.Sandbox = "read-only"
+	}
+	switch options.Sandbox {
+	case "read-only", "workspace-write", "danger-full-access":
+	default:
+		return nil, fmt.Errorf("unsupported Codex sandbox %q", options.Sandbox)
+	}
+	if options.ServiceName == "" {
+		options.ServiceName = "agentrazor"
+	}
+	if options.MaxEvents <= 0 {
+		options.MaxEvents = 10_000
+	}
+	if options.StartTimeout <= 0 {
+		options.StartTimeout = 15 * time.Second
+	}
+	if options.Workspace != "" {
+		workspace, err := filepath.Abs(options.Workspace)
+		if err != nil {
+			return nil, fmt.Errorf("resolve Codex workspace: %w", err)
+		}
+		options.Workspace = workspace
+	}
+	if options.CodexHome != "" {
+		codexHome, err := filepath.Abs(options.CodexHome)
+		if err != nil {
+			return nil, fmt.Errorf("resolve Codex home: %w", err)
+		}
+		if err := os.MkdirAll(codexHome, 0o700); err != nil {
+			return nil, fmt.Errorf("create Codex home: %w", err)
+		}
+		options.CodexHome = codexHome
+	}
+
+	args := []string{"app-server", "--listen", "stdio://"}
+	if options.DisableApps {
+		args = append(args, "--disable", "apps")
+	}
+	for _, server := range options.DisabledMCPServers {
+		server = strings.TrimSpace(server)
+		if server == "" {
+			continue
+		}
+		args = append(args, "-c", fmt.Sprintf("mcp_servers.%s.enabled=false", server))
+	}
+
+	cmd := exec.Command(options.Binary, args...)
+	if options.Workspace != "" {
+		cmd.Dir = options.Workspace
+	}
+	if options.CodexHome != "" {
+		cmd.Env = isolatedCodexEnvironment(os.Environ(), options.CodexHome)
+	}
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("create Codex app-server stdin: %w", err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		_ = stdin.Close()
+		return nil, fmt.Errorf("create Codex app-server stdout: %w", err)
+	}
+
+	runtime := &CodexAppServerRuntime{
+		options:    options,
+		cmd:        cmd,
+		stdin:      stdin,
+		waitDone:   make(chan struct{}),
+		pending:    make(map[int64]chan rpcEnvelope),
+		executions: make(map[string]*appServerTurn),
+		loaded:     make(map[string]bool),
+	}
+	runtime.stderr.limit = 64 << 10
+	cmd.Stderr = &runtime.stderr
+
+	if err := cmd.Start(); err != nil {
+		_ = stdin.Close()
+		return nil, fmt.Errorf("start Codex app-server: %w", err)
+	}
+	go runtime.readLoop(stdout)
+	go runtime.waitProcess()
+
+	startCtx, cancel := context.WithTimeout(context.Background(), options.StartTimeout)
+	defer cancel()
+	if _, err := runtime.request(startCtx, "initialize", map[string]any{
+		"clientInfo": map[string]any{
+			"name":    "agentrazor",
+			"title":   "AgentRazor",
+			"version": "0.1.0",
+		},
+		"capabilities": map[string]any{
+			"experimentalApi": false,
+		},
+	}); err != nil {
+		_ = runtime.Close()
+		return nil, fmt.Errorf("initialize Codex app-server: %w", err)
+	}
+	if err := runtime.notify("initialized", map[string]any{}); err != nil {
+		_ = runtime.Close()
+		return nil, fmt.Errorf("acknowledge Codex app-server initialization: %w", err)
+	}
+	return runtime, nil
+}
+
+func isolatedCodexEnvironment(environment []string, codexHome string) []string {
+	result := make([]string, 0, len(environment)+1)
+	for _, value := range environment {
+		if strings.HasPrefix(value, "CODEX_HOME=") || strings.HasPrefix(value, "CODEX_SQLITE_HOME=") {
+			continue
+		}
+		result = append(result, value)
+	}
+	return append(result, "CODEX_HOME="+codexHome)
+}
+
+func (r *CodexAppServerRuntime) Start(ctx context.Context, prompt string, emit EventHandler) (RuntimeResult, error) {
+	threadID, err := r.startThread(ctx)
+	if err != nil {
+		return RuntimeResult{}, err
+	}
+	emitRuntimeEvent(emit, "thread.started", map[string]any{
+		"threadId": threadID,
+	})
+	return r.runTurn(ctx, threadID, prompt, emit)
+}
+
+func (r *CodexAppServerRuntime) Resume(ctx context.Context, externalSessionID, prompt string, emit EventHandler) (RuntimeResult, error) {
+	if externalSessionID == "" {
+		return RuntimeResult{}, errors.New("external session id is required")
+	}
+	resumed, err := r.ensureThread(ctx, externalSessionID)
+	if err != nil {
+		return RuntimeResult{}, err
+	}
+	if resumed {
+		emitRuntimeEvent(emit, "thread.resumed", map[string]any{
+			"threadId": externalSessionID,
+		})
+	}
+	return r.runTurn(ctx, externalSessionID, prompt, emit)
+}
+
+func (r *CodexAppServerRuntime) startThread(ctx context.Context) (string, error) {
+	result, err := r.request(ctx, "thread/start", map[string]any{
+		"cwd":            nullableString(r.options.Workspace),
+		"approvalPolicy": "never",
+		"sandbox":        r.options.Sandbox,
+		"serviceName":    r.options.ServiceName,
+	})
+	if err != nil {
+		return "", fmt.Errorf("start Codex thread: %w", err)
+	}
+	threadID := findString(result, "id")
+	if thread, ok := result["thread"].(map[string]any); ok {
+		threadID = stringValue(thread["id"])
+	}
+	if threadID == "" {
+		return "", errors.New("Codex thread/start response did not contain a thread id")
+	}
+	r.stateMu.Lock()
+	r.loaded[threadID] = true
+	r.stateMu.Unlock()
+	return threadID, nil
+}
+
+// ensureThread only resumes after this app-server process starts. Threads
+// created in the current process stay loaded and can receive turns directly.
+func (r *CodexAppServerRuntime) ensureThread(ctx context.Context, threadID string) (bool, error) {
+	r.stateMu.Lock()
+	if r.closed {
+		r.stateMu.Unlock()
+		return false, ErrRuntimeClosed
+	}
+	if r.loaded[threadID] {
+		r.stateMu.Unlock()
+		return false, nil
+	}
+	r.stateMu.Unlock()
+
+	result, err := r.request(ctx, "thread/resume", map[string]any{
+		"threadId":       threadID,
+		"cwd":            nullableString(r.options.Workspace),
+		"approvalPolicy": "never",
+		"sandbox":        r.options.Sandbox,
+	})
+	if err != nil {
+		return false, fmt.Errorf("resume Codex thread %s: %w", threadID, err)
+	}
+	if thread, ok := result["thread"].(map[string]any); ok {
+		resumedID := stringValue(thread["id"])
+		if resumedID != "" && resumedID != threadID {
+			return false, fmt.Errorf("Codex resumed thread %s as unexpected thread %s", threadID, resumedID)
+		}
+	}
+	r.stateMu.Lock()
+	r.loaded[threadID] = true
+	r.stateMu.Unlock()
+	return true, nil
+}
+
+func (r *CodexAppServerRuntime) runTurn(ctx context.Context, threadID, prompt string, emit EventHandler) (RuntimeResult, error) {
+	execution := &appServerTurn{
+		threadID:  threadID,
+		maxEvents: r.options.MaxEvents,
+		emit:      emit,
+		done:      make(chan turnOutcome, 1),
+	}
+	if err := r.registerExecution(execution); err != nil {
+		return RuntimeResult{ExternalSessionID: threadID}, err
+	}
+	defer r.unregisterExecution(threadID, execution)
+
+	result, err := r.request(ctx, "turn/start", map[string]any{
+		"threadId": threadID,
+		"input": []map[string]any{{
+			"type": "text",
+			"text": prompt,
+		}},
+	})
+	if err != nil {
+		return execution.result(threadID), fmt.Errorf("start Codex turn: %w", err)
+	}
+	turnID := findString(result, "id")
+	if turn, ok := result["turn"].(map[string]any); ok {
+		turnID = stringValue(turn["id"])
+	}
+	if turnID == "" {
+		return execution.result(threadID), errors.New("Codex turn/start response did not contain a turn id")
+	}
+	execution.setTurnID(turnID)
+
+	select {
+	case outcome := <-execution.done:
+		finalResult := execution.result(threadID)
+		if outcome.err != nil {
+			finalResult.ExitCode = 1
+			return finalResult, outcome.err
+		}
+		return finalResult, nil
+	case <-ctx.Done():
+		interruptCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		_, _ = r.request(interruptCtx, "turn/interrupt", map[string]any{
+			"threadId": threadID,
+			"turnId":   turnID,
+		})
+		cancel()
+		finalResult := execution.result(threadID)
+		finalResult.ExitCode = 1
+		return finalResult, ctx.Err()
+	}
+}
+
+func (r *CodexAppServerRuntime) registerExecution(execution *appServerTurn) error {
+	r.stateMu.Lock()
+	defer r.stateMu.Unlock()
+	if r.closed {
+		return ErrRuntimeClosed
+	}
+	if r.terminalErr != nil {
+		return r.terminalErr
+	}
+	if r.executions[execution.threadID] != nil {
+		return ErrThreadTurnRunning
+	}
+	r.executions[execution.threadID] = execution
+	return nil
+}
+
+func (r *CodexAppServerRuntime) unregisterExecution(threadID string, execution *appServerTurn) {
+	r.stateMu.Lock()
+	defer r.stateMu.Unlock()
+	if r.executions[threadID] == execution {
+		delete(r.executions, threadID)
+	}
+}
+
+func (r *CodexAppServerRuntime) request(ctx context.Context, method string, params any) (map[string]any, error) {
+	requestID := r.nextRequestID.Add(1)
+	responseCh := make(chan rpcEnvelope, 1)
+
+	r.stateMu.Lock()
+	if r.closed {
+		r.stateMu.Unlock()
+		return nil, ErrRuntimeClosed
+	}
+	if r.terminalErr != nil {
+		err := r.terminalErr
+		r.stateMu.Unlock()
+		return nil, err
+	}
+	r.pending[requestID] = responseCh
+	r.stateMu.Unlock()
+
+	if err := r.writeJSON(map[string]any{
+		"id":     requestID,
+		"method": method,
+		"params": params,
+	}); err != nil {
+		r.removePending(requestID)
+		return nil, err
+	}
+
+	select {
+	case response := <-responseCh:
+		if response.Error != nil {
+			return nil, &RPCError{
+				Method:  method,
+				Code:    response.Error.Code,
+				Message: response.Error.Message,
+			}
+		}
+		if len(response.Result) == 0 || string(response.Result) == "null" {
+			return map[string]any{}, nil
+		}
+		var result map[string]any
+		if err := json.Unmarshal(response.Result, &result); err != nil {
+			return nil, fmt.Errorf("decode Codex app-server RPC %s result: %w", method, err)
+		}
+		return result, nil
+	case <-ctx.Done():
+		r.removePending(requestID)
+		return nil, ctx.Err()
+	}
+}
+
+func (r *CodexAppServerRuntime) notify(method string, params any) error {
+	return r.writeJSON(map[string]any{
+		"method": method,
+		"params": params,
+	})
+}
+
+func (r *CodexAppServerRuntime) writeJSON(value any) error {
+	r.writeMu.Lock()
+	defer r.writeMu.Unlock()
+	if err := json.NewEncoder(r.stdin).Encode(value); err != nil {
+		return fmt.Errorf("write Codex app-server message: %w", err)
+	}
+	return nil
+}
+
+func (r *CodexAppServerRuntime) removePending(requestID int64) {
+	r.stateMu.Lock()
+	delete(r.pending, requestID)
+	r.stateMu.Unlock()
+}
+
+func (r *CodexAppServerRuntime) readLoop(stdout io.Reader) {
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 64<<10), 16<<20)
+	for scanner.Scan() {
+		var envelope rpcEnvelope
+		if err := json.Unmarshal(scanner.Bytes(), &envelope); err != nil {
+			r.failAll(fmt.Errorf("decode Codex app-server message: %w", err))
+			return
+		}
+		switch {
+		case envelope.Method != "" && envelope.ID != nil:
+			// This integration runs with approvalPolicy=never. Reject any server
+			// request instead of leaving app-server waiting indefinitely.
+			_ = r.writeJSON(map[string]any{
+				"id": *envelope.ID,
+				"error": map[string]any{
+					"code":    -32601,
+					"message": "server request is not supported by this client",
+				},
+			})
+		case envelope.Method != "":
+			r.handleNotification(envelope.Method, envelope.Params)
+		case envelope.ID != nil:
+			r.stateMu.Lock()
+			responseCh := r.pending[*envelope.ID]
+			delete(r.pending, *envelope.ID)
+			r.stateMu.Unlock()
+			if responseCh != nil {
+				responseCh <- envelope
+			}
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		r.failAll(fmt.Errorf("read Codex app-server output: %w", err))
+		return
+	}
+	// stdout normally closes just before cmd.Wait returns. Let waitProcess
+	// report the exit status together with stderr instead of racing it with a
+	// generic "terminated" error.
+	<-r.waitDone
+}
+
+func (r *CodexAppServerRuntime) handleNotification(method string, rawParams json.RawMessage) {
+	var params map[string]any
+	if len(rawParams) > 0 {
+		if err := json.Unmarshal(rawParams, &params); err != nil {
+			r.failAll(fmt.Errorf("decode Codex app-server notification %s: %w", method, err))
+			return
+		}
+	}
+	threadID := stringValue(params["threadId"])
+	if threadID == "" {
+		threadID = findString(params, "threadId", "thread_id")
+	}
+	if threadID == "" {
+		return
+	}
+
+	r.stateMu.Lock()
+	execution := r.executions[threadID]
+	r.stateMu.Unlock()
+	if execution == nil {
+		return
+	}
+	execution.handleNotification(method, params)
+}
+
+func (r *CodexAppServerRuntime) waitProcess() {
+	err := r.cmd.Wait()
+	message := strings.TrimSpace(r.stderr.String())
+	if err != nil {
+		if message != "" {
+			err = fmt.Errorf("%w: %v: %s", ErrAppServerTerminated, err, message)
+		} else {
+			err = fmt.Errorf("%w: %v", ErrAppServerTerminated, err)
+		}
+	} else {
+		err = ErrAppServerTerminated
+	}
+	r.failAll(err)
+	r.waitOnce.Do(func() { close(r.waitDone) })
+}
+
+func (r *CodexAppServerRuntime) failAll(runtimeErr error) {
+	if runtimeErr == nil {
+		runtimeErr = ErrAppServerTerminated
+	}
+	r.stateMu.Lock()
+	if r.terminalErr == nil {
+		r.terminalErr = runtimeErr
+	}
+	pending := r.pending
+	r.pending = make(map[int64]chan rpcEnvelope)
+	executions := make([]*appServerTurn, 0, len(r.executions))
+	for _, execution := range r.executions {
+		executions = append(executions, execution)
+	}
+	r.stateMu.Unlock()
+
+	for _, responseCh := range pending {
+		responseCh <- rpcEnvelope{Error: &rpcError{
+			Code:    -32000,
+			Message: runtimeErr.Error(),
+		}}
+	}
+	for _, execution := range executions {
+		execution.finish(turnOutcome{err: runtimeErr})
+	}
+}
+
+func (r *CodexAppServerRuntime) Close() error {
+	r.stateMu.Lock()
+	if r.closed {
+		r.stateMu.Unlock()
+		return nil
+	}
+	r.closed = true
+	r.stateMu.Unlock()
+
+	r.failAll(ErrRuntimeClosed)
+	_ = r.stdin.Close()
+	select {
+	case <-r.waitDone:
+	case <-time.After(2 * time.Second):
+		if r.cmd.Process != nil {
+			_ = r.cmd.Process.Kill()
+		}
+		<-r.waitDone
+	}
+	return nil
+}
+
+func (t *appServerTurn) setTurnID(turnID string) {
+	t.mu.Lock()
+	t.turnID = turnID
+	t.mu.Unlock()
+}
+
+func (t *appServerTurn) handleNotification(method string, params map[string]any) {
+	eventType := strings.ReplaceAll(method, "/", ".")
+	event := map[string]any{
+		"type":   eventType,
+		"method": method,
+		"params": params,
+	}
+	t.mu.Lock()
+	t.eventCount++
+	if t.eventCount > t.maxEvents {
+		t.mu.Unlock()
+		t.finish(turnOutcome{err: fmt.Errorf("Codex app-server emitted more than %d events", t.maxEvents)})
+		return
+	}
+	if method != "item/agentMessage/delta" {
+		t.events = append(t.events, event)
+	}
+	if method == "turn/started" {
+		if turn, ok := params["turn"].(map[string]any); ok {
+			if turnID := stringValue(turn["id"]); turnID != "" {
+				t.turnID = turnID
+			}
+		}
+	}
+	if method == "item/completed" {
+		if item, ok := params["item"].(map[string]any); ok && stringValue(item["type"]) == "agentMessage" {
+			if text := stringValue(item["text"]); text != "" {
+				t.outputs = append(t.outputs, text)
+			}
+		}
+	}
+	t.mu.Unlock()
+
+	if t.emit != nil {
+		t.emit(event)
+	}
+	if method != "turn/completed" {
+		return
+	}
+
+	status := ""
+	var turnErr error
+	if turn, ok := params["turn"].(map[string]any); ok {
+		status = stringValue(turn["status"])
+		if len(t.outputs) == 0 {
+			t.captureTurnOutput(turn)
+		}
+		if status == "failed" {
+			if detail, ok := turn["error"].(map[string]any); ok {
+				turnErr = errors.New(stringValue(detail["message"]))
+			}
+			if turnErr == nil || turnErr.Error() == "" {
+				turnErr = errors.New("Codex turn failed")
+			}
+		} else if status == "interrupted" {
+			turnErr = context.Canceled
+		}
+	}
+	t.finish(turnOutcome{status: status, completion: params, err: turnErr})
+}
+
+func (t *appServerTurn) captureTurnOutput(turn map[string]any) {
+	items, _ := turn["items"].([]any)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if len(t.outputs) > 0 {
+		return
+	}
+	for _, rawItem := range items {
+		item, _ := rawItem.(map[string]any)
+		if stringValue(item["type"]) == "agentMessage" {
+			if text := stringValue(item["text"]); text != "" {
+				t.outputs = append(t.outputs, text)
+			}
+		}
+	}
+}
+
+func (t *appServerTurn) finish(outcome turnOutcome) {
+	t.once.Do(func() {
+		t.done <- outcome
+	})
+}
+
+func (t *appServerTurn) result(threadID string) RuntimeResult {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return RuntimeResult{
+		ExternalSessionID: threadID,
+		Output:            strings.Join(t.outputs, "\n"),
+		Events:            append([]map[string]any(nil), t.events...),
+	}
+}
+
+func emitRuntimeEvent(emit EventHandler, eventType string, params map[string]any) {
+	if emit == nil {
+		return
+	}
+	emit(map[string]any{
+		"type":   eventType,
+		"method": strings.ReplaceAll(eventType, ".", "/"),
+		"params": params,
+	})
+}
+
+func nullableString(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
+}
+
+func stringValue(value any) string {
+	text, _ := value.(string)
+	return text
+}
+
+func findString(value any, keys ...string) string {
+	switch typed := value.(type) {
+	case map[string]any:
+		for _, key := range keys {
+			if found, ok := typed[key].(string); ok && found != "" {
+				return found
+			}
+		}
+		for _, child := range typed {
+			if found := findString(child, keys...); found != "" {
+				return found
+			}
+		}
+	case []any:
+		for _, child := range typed {
+			if found := findString(child, keys...); found != "" {
+				return found
+			}
+		}
+	}
+	return ""
+}
+
+type limitedBuffer struct {
+	mu sync.Mutex
+	bytes.Buffer
+	limit int
+}
+
+func (b *limitedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	original := len(p)
+	if b.Len() < b.limit {
+		remaining := b.limit - b.Len()
+		if len(p) > remaining {
+			p = p[:remaining]
+		}
+		_, _ = b.Buffer.Write(p)
+	}
+	return original, nil
+}
+
+func (b *limitedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.Buffer.String()
+}

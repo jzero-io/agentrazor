@@ -7,7 +7,7 @@ import (
 	"github.com/jzero-io/jzero/core/swaggerv2"
 	"github.com/zeromicro/go-zero/core/logx"
 
-	"github.com/jzero-io/jzero-admin/server/internal/svc"
+	"github.com/jzero-io/agentrazor/server/internal/svc"
 )
 
 type Swagger struct {

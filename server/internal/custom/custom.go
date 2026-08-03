@@ -7,15 +7,18 @@ import (
 
 	"github.com/casbin/casbin/v2"
 
-	"github.com/jzero-io/jzero-admin/server/internal/global"
-	"github.com/jzero-io/jzero-admin/server/internal/model"
-	menutypes "github.com/jzero-io/jzero-admin/server/internal/types/v1/manage/menu"
+	"github.com/jzero-io/agentrazor/server/internal/agent"
+	"github.com/jzero-io/agentrazor/server/internal/global"
+	"github.com/jzero-io/agentrazor/server/internal/model"
+	menutypes "github.com/jzero-io/agentrazor/server/internal/types/v1/manage/menu"
 )
 
-type Custom struct{}
+type Custom struct {
+	agentThreads *agent.ThreadService
+}
 
-func New() *Custom {
-	return &Custom{}
+func New(agentThreads *agent.ThreadService) *Custom {
+	return &Custom{agentThreads: agentThreads}
 }
 
 // Init Please add custom logic here.
@@ -35,7 +38,11 @@ func (c *Custom) Init() error {
 func (c *Custom) Start() {}
 
 // Stop Please add shut down logic here.
-func (c *Custom) Stop() {}
+func (c *Custom) Stop() {
+	if c.agentThreads != nil {
+		_ = c.agentThreads.Close()
+	}
+}
 
 func InitCasbinRule(ctx context.Context, model model.Model, enforcer *casbin.Enforcer) error {
 	// get all role

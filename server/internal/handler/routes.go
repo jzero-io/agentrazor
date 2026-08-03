@@ -7,14 +7,16 @@ import (
 
 	"github.com/zeromicro/go-zero/rest"
 
-	swagger "github.com/jzero-io/jzero-admin/server/internal/handler/swagger"
-	v1auth "github.com/jzero-io/jzero-admin/server/internal/handler/v1/auth"
-	v1managemenu "github.com/jzero-io/jzero-admin/server/internal/handler/v1/manage/menu"
-	v1managerole "github.com/jzero-io/jzero-admin/server/internal/handler/v1/manage/role"
-	v1manageuser "github.com/jzero-io/jzero-admin/server/internal/handler/v1/manage/user"
-	v1route "github.com/jzero-io/jzero-admin/server/internal/handler/v1/route"
-	version "github.com/jzero-io/jzero-admin/server/internal/handler/version"
-	"github.com/jzero-io/jzero-admin/server/internal/svc"
+	swagger "github.com/jzero-io/agentrazor/server/internal/handler/swagger"
+	v1auth "github.com/jzero-io/agentrazor/server/internal/handler/v1/auth"
+	v1conversation "github.com/jzero-io/agentrazor/server/internal/handler/v1/conversation"
+	v1conversationgroup "github.com/jzero-io/agentrazor/server/internal/handler/v1/conversation/group"
+	v1managemenu "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/menu"
+	v1managerole "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/role"
+	v1manageuser "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/user"
+	v1route "github.com/jzero-io/agentrazor/server/internal/handler/v1/route"
+	version "github.com/jzero-io/agentrazor/server/internal/handler/version"
+	"github.com/jzero-io/agentrazor/server/internal/svc"
 )
 
 var (
@@ -80,6 +82,83 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				},
 			},
 			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
+			rest.WithPrefix("/api/v1"),
+		)
+	}
+	{
+		server.AddRoutes(
+			[]rest.Route{
+				{
+
+					Method:  http.MethodGet,
+					Path:    "/conversations",
+					Handler: v1conversation.List(serverCtx),
+				},
+				{
+
+					Method:  http.MethodPost,
+					Path:    "/conversations",
+					Handler: v1conversation.Create(serverCtx),
+				},
+				{
+
+					Method:  http.MethodGet,
+					Path:    "/conversations/:conversation_id",
+					Handler: v1conversation.Get(serverCtx),
+				},
+				{
+
+					Method:  http.MethodPatch,
+					Path:    "/conversations/:conversation_id",
+					Handler: v1conversation.Update(serverCtx),
+				},
+				{
+
+					Method:  http.MethodPost,
+					Path:    "/conversations/:conversation_id/messages",
+					Handler: v1conversation.SendMessage(serverCtx),
+				},
+			},
+			rest.WithPrefix("/api/v1"),
+		)
+
+		server.AddRoutes(
+			[]rest.Route{
+				{
+
+					Method:  http.MethodGet,
+					Path:    "/conversations/:conversation_id/events",
+					Handler: v1conversation.StreamEvents(serverCtx),
+				},
+			},
+			rest.WithPrefix("/api/v1"),
+			rest.WithSSE(),
+		)
+	}
+	{
+		server.AddRoutes(
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/conversation-groups",
+					Handler: v1conversationgroup.List(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/conversation-groups",
+					Handler: v1conversationgroup.Create(serverCtx),
+				},
+				{
+					Method:  http.MethodPatch,
+					Path:    "/conversation-groups/:group_id",
+					Handler: v1conversationgroup.Update(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/conversation-groups/:group_id",
+					Handler: v1conversationgroup.Delete(serverCtx),
+				},
+			},
 			rest.WithPrefix("/api/v1"),
 		)
 	}

@@ -24,7 +24,7 @@ type RestConf struct {
 }
 
 type JwtConf struct {
-	AccessSecret  string `json:",default=jzero-admin"`
+	AccessSecret  string `json:",default=agentrazor"`
 	AccessExpire  int    `json:",default=7200"`
 	RefreshExpire int    `json:",default=86400"`
 }
@@ -34,7 +34,7 @@ type LogConf struct {
 }
 
 type BannerConf struct {
-	Text     string `json:",default=JZERO"`
+	Text     string `json:",default=AGENTRAZOR"`
 	Color    string `json:",default=green"`
 	FontName string `json:",default=starwars,options=big|larry3d|starwars|standard"`
 }
@@ -45,6 +45,7 @@ type SqlxConf struct {
 
 type RedisConf struct {
 	redis.RedisConf
+
 	// MiniRedis only for testing
 	MiniRedis bool `json:",default=false"`
 }

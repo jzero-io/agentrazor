@@ -4,7 +4,7 @@ import (
 	"github.com/zeromicro/go-zero/rest"
 	"github.com/zeromicro/go-zero/rest/httpx"
 
-	"github.com/jzero-io/jzero-admin/server/internal/global"
+	"github.com/jzero-io/agentrazor/server/internal/global"
 )
 
 func Register(server *rest.Server) {

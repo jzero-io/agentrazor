@@ -8,9 +8,9 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 
-	"github.com/jzero-io/jzero-admin/server/internal/model/manage_user"
-	"github.com/jzero-io/jzero-admin/server/internal/svc"
-	types "github.com/jzero-io/jzero-admin/server/internal/types/v1/manage/user"
+	"github.com/jzero-io/agentrazor/server/internal/model/manage_user"
+	"github.com/jzero-io/agentrazor/server/internal/svc"
+	types "github.com/jzero-io/agentrazor/server/internal/types/v1/manage/user"
 )
 
 type Delete struct {

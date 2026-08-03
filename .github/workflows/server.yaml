@@ -22,17 +22,22 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22.3'
+          go-version: '1.24.5'
+          cache-dependency-path: server/go.sum
+
+      - name: Test server
+        working-directory: server
+        run: go test ./...
 
       - name: Download tools
         run: |-
           go install github.com/jzero-io/gorename@latest
           go install github.com/jaronnie/grum@latest
 
-      - name: Upload to jaronnie/jzero-admin-deploy-server
+      - name: Upload server artifact
         run: |          
           cd server
-          gorename github.com/jzero-io/jzero-admin/server/internal github.com/jzero-io/jzero-admin/server/server
+          gorename github.com/jzero-io/agentrazor/server/internal github.com/jzero-io/agentrazor/server/server
           cd ..
 
           GITHUB_TOKEN=${{ secrets.ACCESS_TOKEN }} grum clone https://github.com/jaronnie/jzero-admin-deploy-server

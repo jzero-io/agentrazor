@@ -9,10 +9,10 @@ import (
 	"github.com/samber/lo"
 	"github.com/zeromicro/go-zero/core/logx"
 
-	"github.com/jzero-io/jzero-admin/server/internal/model/manage_role"
-	"github.com/jzero-io/jzero-admin/server/internal/model/manage_user_role"
-	"github.com/jzero-io/jzero-admin/server/internal/svc"
-	types "github.com/jzero-io/jzero-admin/server/internal/types/v1/manage/user"
+	"github.com/jzero-io/agentrazor/server/internal/model/manage_role"
+	"github.com/jzero-io/agentrazor/server/internal/model/manage_user_role"
+	"github.com/jzero-io/agentrazor/server/internal/svc"
+	types "github.com/jzero-io/agentrazor/server/internal/types/v1/manage/user"
 )
 
 type Edit struct {

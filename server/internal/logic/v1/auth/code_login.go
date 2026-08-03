@@ -12,11 +12,11 @@ import (
 	"github.com/pkg/errors"
 	"github.com/zeromicro/go-zero/core/logx"
 
-	"github.com/jzero-io/jzero-admin/server/internal/constant"
-	"github.com/jzero-io/jzero-admin/server/internal/model/manage_user"
-	"github.com/jzero-io/jzero-admin/server/internal/model/manage_user_role"
-	"github.com/jzero-io/jzero-admin/server/internal/svc"
-	types "github.com/jzero-io/jzero-admin/server/internal/types/v1/auth"
+	"github.com/jzero-io/agentrazor/server/internal/constant"
+	"github.com/jzero-io/agentrazor/server/internal/model/manage_user"
+	"github.com/jzero-io/agentrazor/server/internal/model/manage_user_role"
+	"github.com/jzero-io/agentrazor/server/internal/svc"
+	types "github.com/jzero-io/agentrazor/server/internal/types/v1/auth"
 )
 
 type CodeLogin struct {

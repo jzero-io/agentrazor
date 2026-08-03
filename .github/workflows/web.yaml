@@ -37,12 +37,13 @@ jobs:
       - name: Build web
         run: |-
           cd web
-          pnpm i
+          pnpm install --frozen-lockfile
+          pnpm typecheck
           VITE_SERVICE_BASE_URL=https://api.jzero-admin-server.jaronnie.com pnpm build
           VITE_SERVICE_BASE_URL=https://api.jzero-admin-server.jaronnie.com pnpm build --outDir fc3-dist
           cd ..
 
-      - name: Upload to jaronnie/jzero-admin-deploy-web
+      - name: Upload admin web artifact
         run: |
           go install github.com/jaronnie/grum@latest
           GITHUB_TOKEN=${{ secrets.ACCESS_TOKEN }} grum clone https://github.com/jaronnie/jzero-admin-deploy-web

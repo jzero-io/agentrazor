@@ -4,7 +4,7 @@ package plugins
 import (
 	"github.com/zeromicro/go-zero/rest"
 
-	"github.com/jzero-io/jzero-admin/server/internal/svc"
+	"github.com/jzero-io/agentrazor/server/internal/svc"
 )
 
 func LoadPlugins(server *rest.Server, svcCtx *svc.ServiceContext) {

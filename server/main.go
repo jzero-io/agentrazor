@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/jzero-io/jzero-admin/server/cmd"
+	"github.com/jzero-io/agentrazor/server/cmd"
 )
 
 func main() {

@@ -1,34 +1,48 @@
-# jzero-admin
+# AgentRazor
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/jzero-io/jzero-admin/web.yaml?branch=main&label=web&logo=github&style=flat-square)](https://github.com/jzero-io/jzero-admin/actions?query=workflow%3Aweb)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/jzero-io/jzero-admin/web.yaml?branch=main&label=server&logo=github&style=flat-square)](https://github.com/jzero-io/jzero-admin/actions?query=workflow%3Aserver)
-[![GitHub release](https://img.shields.io/github/release/jzero-io/jzero-admin.svg?style=flat-square)](https://github.com/jzero-io/jzero-admin/releases/latest)
-[![GitHub package version](https://img.shields.io/github/v/release/jzero-io/jzero-admin?include_prereleases&sort=semver&label=Docker%20Image%20version)](https://github.com/jzero-io/jzero-admin/pkgs/container/jzero)
-
-<p align="center">
-<img align="center" width="150px" src="https://oss.jaronnie.com/hiking.svg">
-</p>
+[![Server](https://img.shields.io/github/actions/workflow/status/jzero-io/agentrazor/server.yaml?branch=main&label=server&logo=go&style=flat-square)](https://github.com/jzero-io/agentrazor/actions/workflows/server.yaml)
+[![Admin Web](https://img.shields.io/github/actions/workflow/status/jzero-io/agentrazor/web.yaml?branch=main&label=admin%20web&logo=vuedotjs&style=flat-square)](https://github.com/jzero-io/agentrazor/actions/workflows/web.yaml)
+[![Agent Web](https://img.shields.io/github/actions/workflow/status/jzero-io/agentrazor/agent.yaml?branch=main&label=agent%20web&logo=vuedotjs&style=flat-square)](https://github.com/jzero-io/agentrazor/actions/workflows/agent.yaml)
 
 English | [简体中文](README.zh-CN.md)
 
-A next-generation admin management system with backend service built on [jzero](https://github.com/jzero-io/jzero) framework and frontend service built on [soybean](https://github.com/soybeanjs/soybean-admin) framework.
+AgentRazor is a plugin-oriented AI agent runtime. The repository contains:
 
-## Demo Addresses
+- `server`: jzero REST server, Codex app-server lifecycle management, conversations and SSE.
+- `agent`: user-facing Vue 3 chat application.
+- `web`: Vue 3 administration application.
+- `core-engine`: shared administration engine.
 
-### Deployed on [Vercel](https://vercel.com) Platform
+## Local development
 
-[Demo Address](https://admin.jzero.io)
-
-### Deployed on Alibaba Cloud Function Compute
-
-[Demo Address](https://jzero-admin.jaronnie.com)
-
-## Local One-Click Deployment
+### Server
 
 ```shell
-git clone https://github.com/jzero-io/jzero-admin.git
-cd jzero-admin/deploy/docker-compose
-docker-compose up
-# Rebuild after modifying source code
-# docker-compose up --build
+cd server
+go test ./...
+go run . server -c etc/etc.yaml
+```
+
+The Codex runtime can be configured with `CODEX_BINARY_PATH`, `CODEX_HOME_PATH`,
+`AGENT_WORKSPACE`, `AGENT_SANDBOX`, and `AGENT_ENABLED`.
+
+### Agent web
+
+```shell
+cd agent
+pnpm install
+pnpm typecheck
+pnpm dev
+```
+
+The development server listens on `http://localhost:5174` and proxies `/api` to
+`http://localhost:8001`.
+
+### Admin web
+
+```shell
+cd web
+pnpm install
+pnpm typecheck
+pnpm dev
 ```

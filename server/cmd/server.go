@@ -14,20 +14,20 @@ import (
 	"github.com/zeromicro/go-zero/rest"
 	"github.com/zeromicro/go-zero/rest/httpx"
 
-	"github.com/jzero-io/jzero-admin/server/internal/config"
-	"github.com/jzero-io/jzero-admin/server/internal/custom"
-	"github.com/jzero-io/jzero-admin/server/internal/global"
-	"github.com/jzero-io/jzero-admin/server/internal/handler"
-	"github.com/jzero-io/jzero-admin/server/internal/middleware"
-	"github.com/jzero-io/jzero-admin/server/internal/svc"
-	"github.com/jzero-io/jzero-admin/server/plugins"
+	"github.com/jzero-io/agentrazor/server/internal/config"
+	"github.com/jzero-io/agentrazor/server/internal/custom"
+	"github.com/jzero-io/agentrazor/server/internal/global"
+	"github.com/jzero-io/agentrazor/server/internal/handler"
+	"github.com/jzero-io/agentrazor/server/internal/middleware"
+	"github.com/jzero-io/agentrazor/server/internal/svc"
+	"github.com/jzero-io/agentrazor/server/plugins"
 )
 
 // serverCmd represents the server command
 var serverCmd = &cobra.Command{
 	Use:   "server",
-	Short: "server server",
-	Long:  "server server",
+	Short: "agentrazor server",
+	Long:  "agentrazor server",
 	Run: func(cmd *cobra.Command, args []string) {
 		cc := configcenter.MustNewConfigCenter[config.Config](configcenter.Config{
 			Type: "yaml",
@@ -45,10 +45,10 @@ var serverCmd = &cobra.Command{
 		logx.Infof("Starting rest server at %s:%d...", cc.MustGetConfig().Rest.Host, cc.MustGetConfig().Rest.Port)
 		restServer := rest.MustNewServer(cc.MustGetConfig().Rest.RestConf, rest.WithUnauthorizedCallback(func(w http.ResponseWriter, r *http.Request, err error) {
 			httpx.ErrorCtx(r.Context(), w, err)
-		}), rest.WithCustomCors(func(header http.Header) {
+		}), rest.WithCorsHeaders("Content-Type", "Last-Event-ID", "Authorization"), rest.WithCustomCors(func(header http.Header) {
 			header.Set("Access-Control-Allow-Origin", "*")
-			header.Add("Access-Control-Allow-Headers", "X-Request-Id")
-			header.Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE, UPDATE")
+			header.Add("Access-Control-Allow-Headers", "X-Request-Id, Content-Type, Last-Event-ID, Authorization")
+			header.Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, PATCH, DELETE")
 		}, nil, "*"))
 
 		m, err := migrate.NewMigrate(cc.MustGetConfig().Sqlx.SqlConf, migrate.WithSourceAppendDriver(true))
@@ -62,7 +62,7 @@ var serverCmd = &cobra.Command{
 		handler.RegisterHandlers(restServer, svcCtx)
 		plugins.LoadPlugins(restServer, svcCtx)
 
-		customServer := custom.New()
+		customServer := custom.New(svcCtx.AgentThreads)
 		logx.Must(customServer.Init())
 
 		group := service.NewServiceGroup()

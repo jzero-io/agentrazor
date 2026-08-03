@@ -1,8 +1,8 @@
 banner:
-    text: jzero-admin
+    text: agentrazor
 
 rest:
-    name: jzero-admin-api
+    name: agentrazor-api
     host: 0.0.0.0
     port: 8001
     timeout: 20000
@@ -10,16 +10,27 @@ rest:
 log:
     encoding: plain
     level: info
-    mode: console
+    mode: file
 
 sqlx:
-#    datasource: "${DATASOURCE:-root:123456@tcp(127.0.0.1:3306)/jzero-admin?charset=utf8mb4&parseTime=True&loc=Local}"
+#    datasource: "${DATASOURCE:-root:123456@tcp(127.0.0.1:3306)/agentrazor?charset=utf8mb4&parseTime=True&loc=Local}"
 #    driverName: "${DRIVER_NAME:-mysql}"
-#    datasource: "${DATASOURCE:-postgres://root:123456@localhost:5432/jzero-admin}"
+#    datasource: "${DATASOURCE:-postgres://root:123456@localhost:5432/agentrazor}"
 #    driverName: "${DRIVER_NAME:-pgx}"
-    datasource: "${DATASOURCE:-jzero-admin.db}"
+    datasource: "${DATASOURCE:-agentrazor.db}"
     driverName: "${DRIVER_NAME:-sqlite}"
 
 redis:
     miniRedis: ${REDIS_MINI_REDIS:-true}
     host: "${REDIS_HOST:-127.0.0.1:6379}"
+
+agent:
+    enabled: ${AGENT_ENABLED:-true}
+    runtime: codex-app-server
+    binaryPath: "${CODEX_BINARY_PATH:-codex}"
+    codexHome: "${CODEX_HOME_PATH:-data/codex-home}"
+    workspace: "${AGENT_WORKSPACE:-..}"
+    sandbox: "${AGENT_SANDBOX:-read-only}"
+    serviceName: agentrazor
+    startTimeoutSeconds: 15
+    runTimeoutSeconds: 600

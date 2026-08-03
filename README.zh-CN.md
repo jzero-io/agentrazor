@@ -1,34 +1,48 @@
-# jzero-admin
+# AgentRazor
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/jzero-io/jzero-admin/web.yaml?branch=main&label=web&logo=github&style=flat-square)](https://github.com/jzero-io/jzero-admin/actions?query=workflow%3Aweb)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/jzero-io/jzero-admin/web.yaml?branch=main&label=server&logo=github&style=flat-square)](https://github.com/jzero-io/jzero-admin/actions?query=workflow%3Aserver)
-[![GitHub release](https://img.shields.io/github/release/jzero-io/jzero-admin.svg?style=flat-square)](https://github.com/jzero-io/jzero-admin/releases/latest)
-[![GitHub package version](https://img.shields.io/github/v/release/jzero-io/jzero-admin?include_prereleases&sort=semver&label=Docker%20Image%20version)](https://github.com/jzero-io/jzero-admin/pkgs/container/jzero)
-
-<p align="center">
-<img align="center" width="150px" src="https://oss.jaronnie.com/hiking.svg">
-</p>
+[![服务端测试](https://img.shields.io/github/actions/workflow/status/jzero-io/agentrazor/server.yaml?branch=main&label=server&logo=go&style=flat-square)](https://github.com/jzero-io/agentrazor/actions/workflows/server.yaml)
+[![管理端测试](https://img.shields.io/github/actions/workflow/status/jzero-io/agentrazor/web.yaml?branch=main&label=admin%20web&logo=vuedotjs&style=flat-square)](https://github.com/jzero-io/agentrazor/actions/workflows/web.yaml)
+[![Agent 用户端测试](https://img.shields.io/github/actions/workflow/status/jzero-io/agentrazor/agent.yaml?branch=main&label=agent%20web&logo=vuedotjs&style=flat-square)](https://github.com/jzero-io/agentrazor/actions/workflows/agent.yaml)
 
 [English](README.md) | 简体中文
 
-基于 [jzero](https://github.com/jzero-io/jzero) 脚手架搭建后台服务, 基于 [soybean](https://github.com/soybeanjs/soybean-admin) 搭建前端服务的下一代后台管理系统.
+AgentRazor 是一个面向业务插件的通用 AI Agent 基座，仓库包含：
 
-## 演示地址
+- `server`：基于 jzero 的服务端，负责 Codex app-server 生命周期、会话管理和 SSE。
+- `agent`：面向普通用户的 Vue 3 对话页面。
+- `web`：Vue 3 管理端。
+- `core-engine`：管理端共享能力。
 
-### 部署在 [vercel](https://vercel.com) 平台
+## 本地开发
 
-[demo 演示地址](https://admin.jzero.io)
-
-### 部署在阿里云函数计算
-
-[demo 演示地址](https://jzero-admin.jaronnie.com)
-
-## 本地一键部署
+### 服务端
 
 ```shell
-git clone https://github.com/jzero-io/jzero-admin.git
-cd jzero-admin/deploy/docker-compose
-docker-compose up
-# 修改源码后重新编译
-# docker-compose up --build
+cd server
+go test ./...
+go run . server -c etc/etc.yaml
+```
+
+Codex 运行时支持通过 `CODEX_BINARY_PATH`、`CODEX_HOME_PATH`、
+`AGENT_WORKSPACE`、`AGENT_SANDBOX` 和 `AGENT_ENABLED` 调整。
+
+### Agent 用户端
+
+```shell
+cd agent
+pnpm install
+pnpm typecheck
+pnpm dev
+```
+
+开发地址为 `http://localhost:5174`，`/api` 默认代理到
+`http://localhost:8001`。
+
+### 管理端
+
+```shell
+cd web
+pnpm install
+pnpm typecheck
+pnpm dev
 ```
