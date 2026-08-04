@@ -14,8 +14,8 @@ import (
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 
-	"github.com/jzero-io/jzero-admin/core-engine/config"
-	"github.com/jzero-io/jzero-admin/core-engine/i18n"
+	"github.com/jzero-io/agentrazor/core-engine/config"
+	"github.com/jzero-io/agentrazor/core-engine/i18n"
 )
 
 type ServiceContext struct {

@@ -8,15 +8,15 @@ services:
 
       # 使用 sqlite
       - DRIVER_NAME=sqlite
-      - DATASOURCE=postgres://root:123456@postgres:5432/jzero-admin
+      - DATASOURCE=postgres://root:123456@postgres:5432/agentrazor
 
 #      # 使用 mysql
 #      - DRIVER_NAME=mysql
-#      - DATASOURCE=root:123456@tcp(mysql:3306)/jzero-admin?charset=utf8mb4&parseTime=True&loc=Local
+#      - DATASOURCE=root:123456@tcp(mysql:3306)/agentrazor?charset=utf8mb4&parseTime=True&loc=Local
 
 #      # 使用 postgres
 #      - DRIVER_NAME=pgx
-#      - DATASOURCE=postgres://root:123456@postgres:5432/jzero-admin
+#      - DATASOURCE=postgres://root:123456@postgres:5432/agentrazor
 
       # 使用 miniredis(内存)
       - REDIS_MINI_REDIS=true
@@ -39,12 +39,12 @@ services:
   postgres:
     image: postgres
     restart: always
-    container_name: jzero-admin-postgres
+    container_name: agentrazor-postgres
     environment:
       TZ: Asia/Shanghai
       POSTGRES_PASSWORD: 123456
       POSTGRES_USER: root
-      POSTGRES_DB: jzero-admin
+      POSTGRES_DB: agentrazor
     volumes:
       - ./postgres/data:/var/lib/postgres/data
     ports:
@@ -52,12 +52,12 @@ services:
   mysql:
     image: mysql:8.0
     restart: always
-    container_name: jzero-admin-mysql
+    container_name: agentrazor-mysql
     environment:
       - TZ=Asia/Shanghai
       - MYSQL_ROOT_PASSWORD=123456
       - MYSQL_ROOT_USER=root
-      - MYSQL_DATABASE=jzero-admin
+      - MYSQL_DATABASE=agentrazor
     volumes:
       - ./mysql/config:/etc/mysql/conf.d
       - ./mysql/data:/var/lib/mysql
@@ -66,6 +66,6 @@ services:
   redis:
     image: redis:latest
     restart: always
-    container_name: jzero-admin-redis
+    container_name: agentrazor-redis
     ports:
       - "6379:6379"

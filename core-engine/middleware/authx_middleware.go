@@ -6,7 +6,7 @@ import (
 	casbin "github.com/casbin/casbin/v2"
 	"github.com/spf13/cast"
 
-	"github.com/jzero-io/jzero-admin/core-engine/helper/auth"
+	"github.com/jzero-io/agentrazor/core-engine/helper/auth"
 )
 
 type AuthxMiddleware struct {

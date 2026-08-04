@@ -6,7 +6,7 @@ import (
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 	"github.com/zeromicro/go-zero/rest"
 
-	"github.com/jzero-io/jzero-admin/core-engine/i18n"
+	"github.com/jzero-io/agentrazor/core-engine/i18n"
 )
 
 type Config struct {
