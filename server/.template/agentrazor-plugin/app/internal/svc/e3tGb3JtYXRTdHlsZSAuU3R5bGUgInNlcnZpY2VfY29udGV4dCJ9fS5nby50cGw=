@@ -6,7 +6,7 @@ import (
     "github.com/jzero-io/jzero/core/configcenter"
 	"github.com/eddieowens/opts"
 	"github.com/jzero-io/jzero/core/stores/modelx"
-	"github.com/jzero-io/agentrazor-admin/core-engine/svc"
+	"github.com/jzero-io/agentrazor/core-engine/svc"
 
 	"{{.Module}}/internal/config"
 	"{{.Module}}/internal/model"

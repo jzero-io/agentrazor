@@ -1,7 +1,7 @@
 # web
 
 ```shell
-git clone https://github.com/jzero-io/agentrazor-admin.git
+git clone https://github.com/jzero-io/agentrazor.git
 cd web
 
 pnpm i
