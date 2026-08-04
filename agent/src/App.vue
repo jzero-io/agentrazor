@@ -24,7 +24,7 @@ interface SidebarViewState {
   sidebarCollapsed?: boolean;
   pinnedExpanded?: boolean;
   groupsExpanded?: boolean;
-  recentExpanded?: boolean;
+  conversationsExpanded?: boolean;
   collapsedGroups?: Record<string, boolean>;
 }
 
@@ -62,7 +62,7 @@ const settingsSection = ref<'appearance' | 'archives'>('appearance');
 const userMenuVisible = ref(false);
 const pinnedExpanded = ref(savedSidebarView.pinnedExpanded ?? true);
 const groupsExpanded = ref(savedSidebarView.groupsExpanded ?? true);
-const recentExpanded = ref(savedSidebarView.recentExpanded ?? true);
+const conversationsExpanded = ref(savedSidebarView.conversationsExpanded ?? true);
 const archiveQuery = ref('');
 interface ConversationGroup {
   id: string;
@@ -98,6 +98,9 @@ let streamEventCutoff = 0;
 
 const themeOverrides = {
   common: {
+    fontSize: '16px',
+    fontSizeMedium: '16px',
+    fontSizeSmall: '14px',
     primaryColor: '#3186c7',
     primaryColorHover: '#2476b5',
     primaryColorPressed: '#1d6399',
@@ -115,7 +118,7 @@ const archivedConversations = computed(() =>
 const pinnedConversations = computed(() =>
   visibleConversations.value.filter(item => Boolean(item.pinnedAt))
 );
-const recentConversations = computed(() =>
+const conversationList = computed(() =>
   visibleConversations.value.filter(item => !item.pinnedAt && !item.groupId)
 );
 const filteredArchivedConversations = computed(() => {
@@ -763,7 +766,7 @@ watch(isDarkAppearance, value => {
   document.documentElement.dataset.theme = value ? 'dark' : 'light';
 }, { immediate: true });
 watch(
-  [sidebarCollapsed, pinnedExpanded, groupsExpanded, recentExpanded, conversationGroups],
+  [sidebarCollapsed, pinnedExpanded, groupsExpanded, conversationsExpanded, conversationGroups],
   () => {
     const collapsedGroups = Object.fromEntries(
       conversationGroups.value.map(group => [group.id, group.collapsed])
@@ -772,7 +775,7 @@ watch(
       sidebarCollapsed: sidebarCollapsed.value,
       pinnedExpanded: pinnedExpanded.value,
       groupsExpanded: groupsExpanded.value,
-      recentExpanded: recentExpanded.value,
+      conversationsExpanded: conversationsExpanded.value,
       collapsedGroups
     } satisfies SidebarViewState));
   },
@@ -958,15 +961,18 @@ watch(
                       </n-tooltip>
                     </div>
                   </div>
-                  <div v-if="!conversationsInGroup(group.id).length" class="group-empty">暂无对话</div>
+                  <div v-if="!conversationsInGroup(group.id).length" class="sidebar-empty-state">
+                    <Icon icon="solar:inbox-line-outline" />
+                    <span>暂无对话</span>
+                  </div>
                 </template>
               </div>
               </template>
               <div class="conversation-group conversation-list-group">
                 <div class="conversation-list-heading">
-                  <button class="conversation-group-toggle" @click="recentExpanded = !recentExpanded">
+                  <button class="conversation-group-toggle" @click="conversationsExpanded = !conversationsExpanded">
                     <span>对话</span>
-                    <Icon :icon="recentExpanded ? 'solar:alt-arrow-down-linear' : 'solar:alt-arrow-right-linear'" />
+                    <Icon :icon="conversationsExpanded ? 'solar:alt-arrow-down-linear' : 'solar:alt-arrow-right-linear'" />
                   </button>
                   <n-tooltip trigger="hover" placement="top">
                     <template #trigger>
@@ -977,9 +983,9 @@ watch(
                     新建对话
                   </n-tooltip>
                 </div>
-                <template v-if="recentExpanded">
+                <template v-if="conversationsExpanded">
                   <div
-                    v-for="item in recentConversations"
+                    v-for="item in conversationList"
                     :key="item.id"
                     class="conversation-row previewable-conversation-row"
                     :class="{ selected: item.id === selectedId }"
@@ -1025,7 +1031,7 @@ watch(
                   </div>
                 </template>
               </div>
-              <div v-if="!loadingList && !visibleConversations.length" class="sidebar-empty-state">
+              <div v-if="conversationsExpanded && !loadingList && !conversationList.length" class="sidebar-empty-state">
                 <Icon icon="solar:inbox-line-outline" />
                 <span>暂无对话</span>
               </div>
@@ -1133,7 +1139,6 @@ watch(
               @keydown="handleComposerKeydown"
             />
             <div class="composer-footer">
-              <span>Enter 发送 · Shift + Enter 换行</span>
               <n-button type="primary" circle :disabled="!canSend" @click="sendMessage">
                 <template #icon><Icon icon="solar:arrow-up-linear" /></template>
               </n-button>
@@ -1192,7 +1197,6 @@ watch(
                 @keydown="handleComposerKeydown"
               />
               <div class="composer-footer">
-                <span>Enter 发送 · Shift + Enter 换行</span>
                 <n-button type="primary" circle :disabled="!canSend" @click="sendMessage">
                   <template #icon><Icon icon="solar:arrow-up-linear" /></template>
                 </n-button>

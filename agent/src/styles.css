@@ -36,7 +36,7 @@ textarea {
 }
 
 .app-shell {
-  --sidebar-width: 280px;
+  --sidebar-width: 320px;
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
@@ -60,8 +60,8 @@ textarea {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px 12px 12px;
+  gap: 16px;
+  padding: 18px 14px 14px;
   overflow: hidden;
   border-right: 1px solid #d8e8ee;
   background: #eaf5fa;
@@ -84,8 +84,8 @@ textarea {
 }
 
 .brand-mark {
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   border-radius: 11px;
 }
 
@@ -107,13 +107,13 @@ textarea {
 }
 
 .brand-copy strong {
-  font-size: 15px;
+  font-size: 17px;
 }
 
 .brand-copy span {
   margin-top: 1px;
   color: #73838b;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .collapse-button {
@@ -126,10 +126,10 @@ textarea {
 
 .new-chat {
   width: 100%;
-  min-height: 42px;
+  min-height: 46px;
   justify-content: flex-start;
   border-radius: 11px;
-  font-size: 14px;
+  font-size: 16px;
   --n-padding: 0 10px !important;
   --n-color: transparent !important;
   --n-color-hover: #dfedf3 !important;
@@ -159,7 +159,7 @@ textarea {
   padding: 3px 7px 3px 9px;
   color: #697c84;
   background: transparent;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
 }
 
@@ -193,6 +193,17 @@ textarea {
   color: #697c84;
   background: transparent;
   cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
+}
+
+.group-section-heading:hover .group-add-button,
+.group-section-heading:focus-within .group-add-button,
+.conversation-list-heading:hover .group-add-button,
+.conversation-list-heading:focus-within .group-add-button {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .group-add-button:hover {
@@ -240,7 +251,7 @@ textarea {
   color: #839198;
   background: transparent;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 650;
   text-align: left;
 }
@@ -303,12 +314,6 @@ textarea {
   background: rgb(255 255 255 / 64%);
 }
 
-.group-empty {
-  padding: 7px 12px 8px 27px;
-  color: #a0aaae;
-  font-size: 11px;
-}
-
 .sidebar-empty-state {
   display: flex;
   min-height: 96px;
@@ -317,7 +322,7 @@ textarea {
   flex-direction: column;
   gap: 8px;
   color: #98a5aa;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .sidebar-empty-state svg {
@@ -351,13 +356,13 @@ textarea {
   color: #263238;
   background: transparent;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 16px;
   text-align: left;
 }
 
 .grouped-conversation .conversation-item {
   padding-left: 28px;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .conversation-row:hover {
@@ -508,7 +513,7 @@ textarea {
   min-width: 0;
   align-items: center;
   gap: 9px;
-  font-size: 16px;
+  font-size: 18px;
 }
 
 .conversation-heading > svg {
@@ -662,21 +667,21 @@ textarea {
 .empty-state h1 {
   margin: 20px 0 7px;
   color: #272625;
-  font-size: 28px;
+  font-size: 30px;
   letter-spacing: -0.6px;
 }
 
 .welcome p,
 .empty-state p {
   margin: 0 0 24px;
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .message {
   display: flex;
   gap: 14px;
   margin-bottom: 36px;
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1.75;
 }
 
@@ -729,7 +734,7 @@ textarea {
   gap: 5px;
   padding-top: 5px;
   color: #888680;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .thinking i {
@@ -785,9 +790,10 @@ textarea {
 }
 
 .composer {
+  position: relative;
   width: min(820px, 100%);
   margin: 0 auto;
-  padding: 13px 14px 10px;
+  padding: 13px 58px 13px 14px;
   border: 1px solid #dfe2e4;
   border-radius: 21px;
   background: #fff;
@@ -806,17 +812,16 @@ textarea {
   min-height: 42px !important;
   max-height: 180px !important;
   padding: 4px 2px !important;
-  font-size: 16px !important;
+  font-size: 17px !important;
   line-height: 1.55 !important;
 }
 
 .composer-footer {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
   display: flex;
-  min-height: 34px;
   align-items: center;
-  justify-content: space-between;
-  color: #aaa9a5;
-  font-size: 12px;
 }
 
 .modal-actions {
@@ -1347,27 +1352,27 @@ textarea {
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  color: #e5e9eb;
-  background: #171a1c;
+  color: #ececec;
+  background: #181818;
 }
 
 :root[data-theme="dark"] .sidebar {
-  border-right-color: #2d3b42;
-  background: #202c32;
+  border-right-color: #303030;
+  background: #212121;
 }
 
 :root[data-theme="dark"] .brand-copy span,
 :root[data-theme="dark"] .login-entry-copy > span {
-  color: #91a0a7;
+  color: #a3a3a3;
 }
 
 :root[data-theme="dark"] .conversation-row.selected {
-  color: #f0f4f5;
-  background: #31444d;
+  color: #f2f2f2;
+  background: #303030;
 }
 
 :root[data-theme="dark"] .conversation-item {
-  color: #e6ecef;
+  color: #e8e8e8;
 }
 
 :root[data-theme="dark"] .custom-group-heading .conversation-group-toggle {
@@ -1377,72 +1382,72 @@ textarea {
 :root[data-theme="dark"] .conversation-item:hover,
 :root[data-theme="dark"] .new-chat:hover,
 :root[data-theme="dark"] .user-menu-trigger:hover {
-  background: #2a3b43 !important;
+  background: #2b2b2b !important;
 }
 
 :root[data-theme="dark"] .conversation-row:hover {
-  background: #2a3b43;
+  background: #2b2b2b;
 }
 
 :root[data-theme="dark"] .conversation-hover-card {
-  border-color: #405159;
-  background: rgb(31 43 49 / 98%);
+  border-color: #3b3b3b;
+  background: rgb(43 43 43 / 98%);
   box-shadow: 0 12px 30px rgb(0 0 0 / 32%);
 }
 
 :root[data-theme="dark"] .group-add-button:hover,
 :root[data-theme="dark"] .group-actions button:hover {
   color: #83c0eb;
-  background: #2a3b43;
+  background: #303030;
 }
 
 :root[data-theme="dark"] .conversation-actions button {
-  color: #aab8be;
-  background: rgb(42 59 67 / 96%);
+  color: #b5b5b5;
+  background: rgb(48 48 48 / 96%);
 }
 
 :root[data-theme="dark"] .conversation-actions button:hover,
 :root[data-theme="dark"] .conversation-actions button:focus-visible {
   color: #83c0eb;
-  background: #364a53;
+  background: #3a3a3a;
 }
 
 :root[data-theme="dark"] .main-panel,
 :root[data-theme="dark"] .composer-wrap,
 :root[data-theme="dark"] .composer {
-  background: #171a1c;
+  background: #181818;
 }
 
 :root[data-theme="dark"] .empty-state {
   background:
-    radial-gradient(circle at 50% 47%, rgb(74 155 212 / 8%), transparent 260px),
-    #171a1c;
+    radial-gradient(circle at 50% 47%, rgb(255 255 255 / 2%), transparent 260px),
+    #181818;
 }
 
 :root[data-theme="dark"] .topbar {
-  border-bottom-color: #2a3033;
-  background: rgb(23 26 28 / 92%);
+  border-bottom-color: #303030;
+  background: rgb(24 24 24 / 94%);
 }
 
 :root[data-theme="dark"] .welcome h1,
 :root[data-theme="dark"] .empty-state h1,
 :root[data-theme="dark"] .conversation-heading,
 :root[data-theme="dark"] .message-content {
-  color: #e8ecee;
+  color: #ececec;
 }
 
 :root[data-theme="dark"] .message.user .message-content {
-  background: #2a2f32;
+  background: #2b2b2b;
 }
 
 :root[data-theme="dark"] .composer {
-  border-color: #394145;
+  border-color: #393939;
   box-shadow: 0 12px 38px rgb(0 0 0 / 26%);
 }
 
 :root[data-theme="dark"] .login-hero {
-  border-bottom-color: #34434a;
-  background: linear-gradient(145deg, #26343b, #202d33);
+  border-bottom-color: #393939;
+  background: linear-gradient(145deg, #2b2b2b, #222222);
 }
 
 :root[data-theme="dark"] .login-hero h2,
@@ -1451,20 +1456,20 @@ textarea {
 }
 
 :root[data-theme="dark"] .login-hero p {
-  color: #9aa7ad;
+  color: #a3a3a3;
 }
 
 :root[data-theme="dark"] .login-form .n-input,
 :root[data-theme="dark"] .login-form input:-webkit-autofill,
 :root[data-theme="dark"] .login-form input:-webkit-autofill:hover,
 :root[data-theme="dark"] .login-form input:-webkit-autofill:focus {
-  background: #252a2d;
+  background: #292929;
   -webkit-text-fill-color: #edf1f2 !important;
-  box-shadow: 0 0 0 1000px #252a2d inset !important;
+  box-shadow: 0 0 0 1000px #292929 inset !important;
 }
 
 :root[data-theme="dark"] .sidebar-footer {
-  border-top-color: #304047;
+  border-top-color: #333333;
 }
 
 :root[data-theme="dark"] .login-entry,
@@ -1474,33 +1479,33 @@ textarea {
 
 :root[data-theme="dark"] .login-entry:hover,
 :root[data-theme="dark"] .login-entry:focus-visible {
-  border-color: #41545d;
+  border-color: #444444;
   background: rgb(255 255 255 / 5%);
 }
 
 :root[data-theme="dark"] .login-entry-icon {
-  border-color: #42545d;
-  background: #283840;
+  border-color: #444444;
+  background: #303030;
 }
 
 :root[data-theme="dark"] .user-popover {
-  border-color: #3a484e;
-  background: rgb(34 40 43 / 98%);
+  border-color: #414141;
+  background: rgb(43 43 43 / 98%);
   box-shadow: 0 14px 38px rgb(0 0 0 / 34%);
 }
 
 :root[data-theme="dark"] .user-popover-account {
-  border-color: #3a4449;
+  border-color: #414141;
 }
 
 :root[data-theme="dark"] .user-popover-account strong,
 :root[data-theme="dark"] .user-popover > button {
-  color: #dce4e7;
+  color: #e6e6e6;
 }
 
 :root[data-theme="dark"] .user-popover > button:hover,
 :root[data-theme="dark"] .user-popover > button:focus-visible {
-  background: #303c42;
+  background: #383838;
 }
 
 :root[data-theme="dark"] .user-popover > .logout-menu-item {
@@ -1508,57 +1513,57 @@ textarea {
 }
 
 :root[data-theme="dark"] .appearance-options button {
-  border-color: #3c474c;
-  color: #aeb9bd;
-  background: #252b2e;
+  border-color: #414141;
+  color: #b5b5b5;
+  background: #292929;
 }
 
 :root[data-theme="dark"] .appearance-options button:hover {
-  border-color: #4c6470;
-  background: #2b3438;
+  border-color: #555555;
+  background: #333333;
 }
 
 :root[data-theme="dark"] .appearance-options button.active {
   border-color: #4a9bd4;
   color: #83c0eb;
-  background: #263e4b;
+  background: #30363a;
 }
 
 :root[data-theme="dark"] .archive-item {
-  border-color: #3a4449;
-  background: #242a2d;
+  border-color: #3d3d3d;
+  background: #252525;
 }
 
 :root[data-theme="dark"] .archive-item > span {
-  color: #c5d0d4;
+  color: #d0d0d0;
 }
 
 :root[data-theme="dark"] .archive-empty {
-  border-color: #3b464b;
-  color: #7f8d93;
+  border-color: #414141;
+  color: #8f8f8f;
 }
 
 :root[data-theme="dark"] .settings-shell,
 :root[data-theme="dark"] .settings-content {
-  color: #e5e9eb;
-  background: #171a1c;
+  color: #ececec;
+  background: #181818;
 }
 
 :root[data-theme="dark"] .settings-sidebar {
-  border-right-color: #2d3b42;
-  background: #202c32;
+  border-right-color: #303030;
+  background: #212121;
 }
 
 :root[data-theme="dark"] .settings-back,
 :root[data-theme="dark"] .settings-sidebar nav button {
-  color: #aebbc0;
+  color: #b0b0b0;
 }
 
 :root[data-theme="dark"] .settings-back:hover,
 :root[data-theme="dark"] .settings-sidebar nav button:hover,
 :root[data-theme="dark"] .settings-sidebar nav button.active {
-  color: #f0f4f5;
-  background: #31444d;
+  color: #f2f2f2;
+  background: #303030;
 }
 
 :root[data-theme="dark"] .settings-page-header h1,
@@ -1568,7 +1573,7 @@ textarea {
 
 :root[data-theme="dark"] .settings-page-header p,
 :root[data-theme="dark"] .archive-item-copy span {
-  color: #98a5aa;
+  color: #a3a3a3;
 }
 
 @media (max-width: 720px) {
@@ -1629,7 +1634,4 @@ textarea {
     padding: 20px 12px 12px;
   }
 
-  .composer-footer span {
-    display: none;
-  }
 }
