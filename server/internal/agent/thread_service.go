@@ -7,13 +7,24 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
+
+var (
+	ErrServiceStopped  = errors.New("agent service is stopped")
+	ErrThreadArchived  = errors.New("agent thread is archived")
+	ErrInvalidThreadID = errors.New("invalid Codex thread id")
+)
+
+func newRunID() string {
+	return "run_" + uuid.NewString()
+}
 
 type StoredThread struct {
 	ID        string
 	Name      string
 	Preview   string
-	Status    string
 	IsPinned  bool
 	Archived  bool
 	CreatedAt time.Time
@@ -34,8 +45,12 @@ type ThreadRun struct {
 	ID        string
 	ThreadID  string
 	Prompt    string
-	Status    string
 	CreatedAt time.Time
+}
+
+type activeRun struct {
+	id     string
+	cancel context.CancelFunc
 }
 
 type ThreadService struct {
@@ -43,10 +58,9 @@ type ThreadService struct {
 	timeout time.Duration
 	events  *EventHub
 
-	mu      sync.Mutex
-	cancels map[string]context.CancelFunc
-	threads map[string]string
-	closed  bool
+	mu     sync.Mutex
+	runs   map[string]activeRun
+	closed bool
 }
 
 func NewThreadService(runtime ThreadRuntime, timeout time.Duration) *ThreadService {
@@ -57,8 +71,7 @@ func NewThreadService(runtime ThreadRuntime, timeout time.Duration) *ThreadServi
 		runtime: runtime,
 		timeout: timeout,
 		events:  NewEventHub(1_000, 256),
-		cancels: make(map[string]context.CancelFunc),
-		threads: make(map[string]string),
+		runs:    make(map[string]activeRun),
 	}
 }
 
@@ -70,6 +83,7 @@ func (s *ThreadService) Create(ctx context.Context, title string) (StoredThread,
 	title = strings.TrimSpace(title)
 	if title != "" {
 		if err := s.runtime.SetThreadName(ctx, thread.ID, title); err != nil {
+			s.deleteCreatedThread(thread.ID)
 			return StoredThread{}, err
 		}
 		thread.Name = title
@@ -130,12 +144,11 @@ func (s *ThreadService) SetArchived(ctx context.Context, threadID string, archiv
 	}
 	if archived {
 		s.mu.Lock()
-		for runID, currentThreadID := range s.threads {
-			if currentThreadID == threadID {
-				s.cancels[runID]()
-			}
-		}
+		_, running := s.runs[threadID]
 		s.mu.Unlock()
+		if running {
+			return ErrThreadTurnRunning
+		}
 		return s.runtime.ArchiveStoredThread(ctx, threadID)
 	}
 	_, err := s.runtime.UnarchiveStoredThread(ctx, threadID)
@@ -155,19 +168,20 @@ func (s *ThreadService) Send(threadID, prompt string) (ThreadRun, error) {
 		s.mu.Unlock()
 		return ThreadRun{}, ErrServiceStopped
 	}
+	if _, ok := s.runs[threadID]; ok {
+		s.mu.Unlock()
+		return ThreadRun{}, ErrThreadTurnRunning
+	}
 	run := ThreadRun{
-		ID:        newID("run"),
+		ID:        newRunID(),
 		ThreadID:  threadID,
 		Prompt:    prompt,
-		Status:    RunStatusQueued,
 		CreatedAt: time.Now().UTC(),
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
-	s.cancels[run.ID] = cancel
-	s.threads[run.ID] = threadID
+	s.runs[threadID] = activeRun{id: run.ID, cancel: cancel}
 	s.mu.Unlock()
 
-	s.events.Publish(threadID, run.ID, "run.queued", run)
 	go s.execute(ctx, cancel, run)
 	return run, nil
 }
@@ -176,8 +190,9 @@ func (s *ThreadService) execute(ctx context.Context, cancel context.CancelFunc, 
 	defer cancel()
 	defer func() {
 		s.mu.Lock()
-		delete(s.cancels, run.ID)
-		delete(s.threads, run.ID)
+		if current, ok := s.runs[run.ThreadID]; ok && current.id == run.ID {
+			delete(s.runs, run.ThreadID)
+		}
 		s.mu.Unlock()
 	}()
 
@@ -199,15 +214,12 @@ func (s *ThreadService) execute(ctx context.Context, cancel context.CancelFunc, 
 		}
 		s.events.Publish(run.ThreadID, run.ID, publishedName, event)
 	}
-	result, err := s.runtime.Resume(ctx, run.ThreadID, run.Prompt, emit)
+	err := s.runtime.Resume(ctx, run.ThreadID, run.Prompt, emit)
 	if err != nil {
 		s.events.Publish(run.ThreadID, run.ID, "run.failed", map[string]any{"error": err.Error()})
 		return
 	}
-	s.events.Publish(run.ThreadID, run.ID, "run.completed", map[string]any{
-		"output":   result.Output,
-		"exitCode": result.ExitCode,
-	})
+	s.events.Publish(run.ThreadID, run.ID, "run.completed", nil)
 }
 
 func (s *ThreadService) Subscribe(threadID string, afterID int64) *Subscription {
@@ -221,18 +233,30 @@ func (s *ThreadService) Close() error {
 		return nil
 	}
 	s.closed = true
-	for _, cancel := range s.cancels {
-		cancel()
+	for _, run := range s.runs {
+		run.cancel()
 	}
 	s.mu.Unlock()
-	return s.runtime.Close()
+	err := s.runtime.Close()
+	s.events.Close()
+	return err
 }
 
 func (s *ThreadService) Delete(ctx context.Context, threadID string) error {
 	if err := validateThreadID(threadID); err != nil {
 		return err
 	}
-	return s.runtime.DeleteThread(ctx, threadID)
+	s.mu.Lock()
+	_, running := s.runs[threadID]
+	s.mu.Unlock()
+	if running {
+		return ErrThreadTurnRunning
+	}
+	if err := s.runtime.DeleteThread(ctx, threadID); err != nil {
+		return err
+	}
+	s.events.Release(threadID)
+	return nil
 }
 
 func (s *ThreadService) ValidateThread(ctx context.Context, threadID string) error {
@@ -253,4 +277,10 @@ func validateThreadID(threadID string) error {
 	default:
 		return nil
 	}
+}
+
+func (s *ThreadService) deleteCreatedThread(threadID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_ = s.runtime.DeleteThread(ctx, threadID)
 }

@@ -799,6 +799,42 @@
       }
     },
     "/api/v1/conversations/{conversation_id}": {
+      "delete": {
+        "consumes": [
+          "application/x-www-form-urlencoded"
+        ],
+        "description": "接口权限编码:v1:conversation:delete",
+        "operationId": "v1/ConversationDelete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {}
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "删除会话",
+        "tags": [
+          "v1/conversation"
+        ]
+      },
       "get": {
         "description": "接口权限编码:v1:conversation:get",
         "operationId": "v1/ConversationGet",
@@ -1105,56 +1141,20 @@
                 },
                 "run": {
                   "properties": {
-                    "completedAt": {
-                      "type": "string"
-                    },
                     "createdAt": {
                       "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    },
-                    "events": {
-                      "items": {
-                        "additionalProperties": {},
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "exitCode": {
-                      "type": "integer"
                     },
                     "id": {
                       "type": "string"
                     },
-                    "output": {
-                      "type": "string"
-                    },
                     "prompt": {
-                      "type": "string"
-                    },
-                    "sequence": {
-                      "type": "integer"
-                    },
-                    "startedAt": {
-                      "type": "string"
-                    },
-                    "status": {
                       "type": "string"
                     }
                   },
                   "required": [
                     "id",
-                    "sequence",
                     "prompt",
-                    "status",
-                    "output",
-                    "error",
-                    "exitCode",
-                    "events",
-                    "createdAt",
-                    "startedAt",
-                    "completedAt"
+                    "createdAt"
                   ],
                   "type": "object"
                 },

@@ -26,7 +26,6 @@ redis:
 
 agent:
     enabled: ${AGENT_ENABLED:-true}
-    runtime: codex-app-server
     binaryPath: "${CODEX_BINARY_PATH:-codex}"
     codexHome: "${CODEX_HOME_PATH:-data/codex-home}"
     workspace: "${AGENT_WORKSPACE:-..}"

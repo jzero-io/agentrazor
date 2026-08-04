@@ -834,6 +834,63 @@ textarea {
   width: min(440px, calc(100vw - 32px));
 }
 
+.confirm-modal {
+  width: min(440px, calc(100vw - 32px));
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgb(25 24 20 / 18%);
+}
+
+.confirm-modal > .n-card-header {
+  display: none;
+}
+
+.confirm-modal > .n-card__content {
+  padding: 26px 26px 18px !important;
+}
+
+.confirm-modal > .n-card__footer {
+  padding: 0 26px 24px !important;
+}
+
+.confirm-modal-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+}
+
+.confirm-modal-icon {
+  display: grid;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 12px;
+  color: #d94b4b;
+  background: #fff0f0;
+  font-size: 21px;
+}
+
+.confirm-modal-body h2 {
+  margin: 1px 0 8px;
+  font-size: 19px;
+  line-height: 1.35;
+}
+
+.confirm-modal-body p {
+  margin: 0;
+  color: #73716b;
+  line-height: 1.65;
+}
+
+html[data-theme='dark'] .confirm-modal-icon {
+  color: #ff8585;
+  background: rgb(217 75 75 / 14%);
+}
+
+html[data-theme='dark'] .confirm-modal-body p {
+  color: #aaa8a2;
+}
+
 .login-modal {
   width: min(432px, calc(100vw - 28px));
   overflow: hidden;

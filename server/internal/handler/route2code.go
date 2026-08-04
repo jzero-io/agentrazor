@@ -23,6 +23,7 @@ var RoutesCodesMap = map[string]string{
 	"GET:/api/v1/auth/sendVerificationCode":                "v1:auth:sendVerificationCode",
 	"GET:/api/v1/conversations":                            "v1:conversation:list",
 	"POST:/api/v1/conversations":                           "v1:conversation:create",
+	"DELETE:/api/v1/conversations/:conversation_id":        "v1:conversation:delete",
 	"GET:/api/v1/conversations/:conversation_id":           "v1:conversation:get",
 	"PATCH:/api/v1/conversations/:conversation_id":         "v1:conversation:update",
 	"GET:/api/v1/conversations/:conversation_id/events":    "v1:conversation:streamEvents",

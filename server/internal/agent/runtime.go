@@ -21,15 +21,8 @@ var (
 	ErrRuntimeClosed       = errors.New("agent runtime is closed")
 	ErrThreadTurnRunning   = errors.New("agent thread already has an active turn")
 	ErrAppServerTerminated = errors.New("codex app-server terminated")
+	ErrEventLimitExceeded  = errors.New("Codex app-server event limit exceeded")
 )
-
-// AgentRuntime isolates the conversation service from a specific agent
-// implementation. ExternalSessionID is the provider-owned conversation ID.
-type AgentRuntime interface {
-	Start(ctx context.Context, prompt string, emit EventHandler) (RuntimeResult, error)
-	Resume(ctx context.Context, externalSessionID, prompt string, emit EventHandler) (RuntimeResult, error)
-	Close() error
-}
 
 type EventHandler func(map[string]any)
 
@@ -59,12 +52,15 @@ type CodexAppServerRuntime struct {
 
 	nextRequestID atomic.Int64
 
-	stateMu     sync.Mutex
-	pending     map[int64]chan rpcEnvelope
-	executions  map[string]*appServerTurn
-	loaded      map[string]bool
-	closed      bool
-	terminalErr error
+	stateMu      sync.Mutex
+	pending      map[int64]chan rpcEnvelope
+	executions   map[string]*appServerTurn
+	loaded       map[string]bool
+	loads        map[string]*threadLoad
+	archived     map[string]bool
+	archiveKnown map[string]bool
+	closed       bool
+	terminalErr  error
 }
 
 type rpcEnvelope struct {
@@ -78,7 +74,6 @@ type rpcEnvelope struct {
 type rpcError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
-	Data    any    `json:"data,omitempty"`
 }
 
 // RPCError is the typed error returned when the app-server rejects a request.
@@ -96,9 +91,12 @@ func (e *RPCError) Error() string {
 }
 
 type turnOutcome struct {
-	status     string
-	completion map[string]any
-	err        error
+	err error
+}
+
+type threadLoad struct {
+	done chan struct{}
+	err  error
 }
 
 type appServerTurn struct {
@@ -107,10 +105,7 @@ type appServerTurn struct {
 	emit      EventHandler
 
 	mu         sync.Mutex
-	turnID     string
 	eventCount int
-	events     []map[string]any
-	outputs    []string
 	done       chan turnOutcome
 	once       sync.Once
 }
@@ -184,13 +179,16 @@ func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRun
 	}
 
 	runtime := &CodexAppServerRuntime{
-		options:    options,
-		cmd:        cmd,
-		stdin:      stdin,
-		waitDone:   make(chan struct{}),
-		pending:    make(map[int64]chan rpcEnvelope),
-		executions: make(map[string]*appServerTurn),
-		loaded:     make(map[string]bool),
+		options:      options,
+		cmd:          cmd,
+		stdin:        stdin,
+		waitDone:     make(chan struct{}),
+		pending:      make(map[int64]chan rpcEnvelope),
+		executions:   make(map[string]*appServerTurn),
+		loaded:       make(map[string]bool),
+		loads:        make(map[string]*threadLoad),
+		archived:     make(map[string]bool),
+		archiveKnown: make(map[string]bool),
 	}
 	runtime.stderr.limit = 64 << 10
 	cmd.Stderr = &runtime.stderr
@@ -235,24 +233,13 @@ func isolatedCodexEnvironment(environment []string, codexHome string) []string {
 	return append(result, "CODEX_HOME="+codexHome)
 }
 
-func (r *CodexAppServerRuntime) Start(ctx context.Context, prompt string, emit EventHandler) (RuntimeResult, error) {
-	threadID, err := r.startThread(ctx)
-	if err != nil {
-		return RuntimeResult{}, err
-	}
-	emitRuntimeEvent(emit, "thread.started", map[string]any{
-		"threadId": threadID,
-	})
-	return r.runTurn(ctx, threadID, prompt, emit)
-}
-
-func (r *CodexAppServerRuntime) Resume(ctx context.Context, externalSessionID, prompt string, emit EventHandler) (RuntimeResult, error) {
+func (r *CodexAppServerRuntime) Resume(ctx context.Context, externalSessionID, prompt string, emit EventHandler) error {
 	if externalSessionID == "" {
-		return RuntimeResult{}, errors.New("external session id is required")
+		return errors.New("external session id is required")
 	}
 	resumed, err := r.ensureThread(ctx, externalSessionID)
 	if err != nil {
-		return RuntimeResult{}, err
+		return err
 	}
 	if resumed {
 		emitRuntimeEvent(emit, "thread.resumed", map[string]any{
@@ -272,15 +259,20 @@ func (r *CodexAppServerRuntime) startThread(ctx context.Context) (string, error)
 	if err != nil {
 		return "", fmt.Errorf("start Codex thread: %w", err)
 	}
-	threadID := findString(result, "id")
+	threadID := ""
 	if thread, ok := result["thread"].(map[string]any); ok {
 		threadID = stringValue(thread["id"])
+	}
+	if threadID == "" {
+		threadID = stringValue(result["id"])
 	}
 	if threadID == "" {
 		return "", errors.New("Codex thread/start response did not contain a thread id")
 	}
 	r.stateMu.Lock()
 	r.loaded[threadID] = true
+	r.archived[threadID] = false
+	r.archiveKnown[threadID] = true
 	r.stateMu.Unlock()
 	return threadID, nil
 }
@@ -297,6 +289,17 @@ func (r *CodexAppServerRuntime) ensureThread(ctx context.Context, threadID strin
 		r.stateMu.Unlock()
 		return false, nil
 	}
+	if load := r.loads[threadID]; load != nil {
+		r.stateMu.Unlock()
+		select {
+		case <-load.done:
+			return false, load.err
+		case <-ctx.Done():
+			return false, ctx.Err()
+		}
+	}
+	load := &threadLoad{done: make(chan struct{})}
+	r.loads[threadID] = load
 	r.stateMu.Unlock()
 
 	result, err := r.request(ctx, "thread/resume", map[string]any{
@@ -306,21 +309,28 @@ func (r *CodexAppServerRuntime) ensureThread(ctx context.Context, threadID strin
 		"sandbox":        r.options.Sandbox,
 	})
 	if err != nil {
-		return false, fmt.Errorf("resume Codex thread %s: %w", threadID, err)
+		err = fmt.Errorf("resume Codex thread %s: %w", threadID, err)
 	}
-	if thread, ok := result["thread"].(map[string]any); ok {
-		resumedID := stringValue(thread["id"])
-		if resumedID != "" && resumedID != threadID {
-			return false, fmt.Errorf("Codex resumed thread %s as unexpected thread %s", threadID, resumedID)
+	if err == nil {
+		if thread, ok := result["thread"].(map[string]any); ok {
+			resumedID := stringValue(thread["id"])
+			if resumedID != "" && resumedID != threadID {
+				err = fmt.Errorf("Codex resumed thread %s as unexpected thread %s", threadID, resumedID)
+			}
 		}
 	}
 	r.stateMu.Lock()
-	r.loaded[threadID] = true
+	if err == nil {
+		r.loaded[threadID] = true
+	}
+	load.err = err
+	delete(r.loads, threadID)
+	close(load.done)
 	r.stateMu.Unlock()
-	return true, nil
+	return err == nil, err
 }
 
-func (r *CodexAppServerRuntime) runTurn(ctx context.Context, threadID, prompt string, emit EventHandler) (RuntimeResult, error) {
+func (r *CodexAppServerRuntime) runTurn(ctx context.Context, threadID, prompt string, emit EventHandler) error {
 	execution := &appServerTurn{
 		threadID:  threadID,
 		maxEvents: r.options.MaxEvents,
@@ -328,7 +338,7 @@ func (r *CodexAppServerRuntime) runTurn(ctx context.Context, threadID, prompt st
 		done:      make(chan turnOutcome, 1),
 	}
 	if err := r.registerExecution(execution); err != nil {
-		return RuntimeResult{ExternalSessionID: threadID}, err
+		return err
 	}
 	defer r.unregisterExecution(threadID, execution)
 
@@ -340,36 +350,37 @@ func (r *CodexAppServerRuntime) runTurn(ctx context.Context, threadID, prompt st
 		}},
 	})
 	if err != nil {
-		return execution.result(threadID), fmt.Errorf("start Codex turn: %w", err)
+		return fmt.Errorf("start Codex turn: %w", err)
 	}
-	turnID := findString(result, "id")
+	turnID := ""
 	if turn, ok := result["turn"].(map[string]any); ok {
 		turnID = stringValue(turn["id"])
 	}
 	if turnID == "" {
-		return execution.result(threadID), errors.New("Codex turn/start response did not contain a turn id")
+		turnID = stringValue(result["id"])
 	}
-	execution.setTurnID(turnID)
-
+	if turnID == "" {
+		return errors.New("Codex turn/start response did not contain a turn id")
+	}
 	select {
 	case outcome := <-execution.done:
-		finalResult := execution.result(threadID)
-		if outcome.err != nil {
-			finalResult.ExitCode = 1
-			return finalResult, outcome.err
+		if errors.Is(outcome.err, ErrEventLimitExceeded) {
+			r.interruptTurn(threadID, turnID)
 		}
-		return finalResult, nil
+		return outcome.err
 	case <-ctx.Done():
-		interruptCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		_, _ = r.request(interruptCtx, "turn/interrupt", map[string]any{
-			"threadId": threadID,
-			"turnId":   turnID,
-		})
-		cancel()
-		finalResult := execution.result(threadID)
-		finalResult.ExitCode = 1
-		return finalResult, ctx.Err()
+		r.interruptTurn(threadID, turnID)
+		return ctx.Err()
 	}
+}
+
+func (r *CodexAppServerRuntime) interruptTurn(threadID, turnID string) {
+	interruptCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_, _ = r.request(interruptCtx, "turn/interrupt", map[string]any{
+		"threadId": threadID,
+		"turnId":   turnID,
+	})
 }
 
 func (r *CodexAppServerRuntime) registerExecution(execution *appServerTurn) error {
@@ -519,7 +530,14 @@ func (r *CodexAppServerRuntime) handleNotification(method string, rawParams json
 	}
 	threadID := stringValue(params["threadId"])
 	if threadID == "" {
-		threadID = findString(params, "threadId", "thread_id")
+		if thread, ok := params["thread"].(map[string]any); ok {
+			threadID = stringValue(thread["id"])
+		}
+	}
+	if threadID == "" {
+		if turn, ok := params["turn"].(map[string]any); ok {
+			threadID = stringValue(turn["threadId"])
+		}
 	}
 	if threadID == "" {
 		return
@@ -599,12 +617,6 @@ func (r *CodexAppServerRuntime) Close() error {
 	return nil
 }
 
-func (t *appServerTurn) setTurnID(turnID string) {
-	t.mu.Lock()
-	t.turnID = turnID
-	t.mu.Unlock()
-}
-
 func (t *appServerTurn) handleNotification(method string, params map[string]any) {
 	eventType := strings.ReplaceAll(method, "/", ".")
 	event := map[string]any{
@@ -616,25 +628,8 @@ func (t *appServerTurn) handleNotification(method string, params map[string]any)
 	t.eventCount++
 	if t.eventCount > t.maxEvents {
 		t.mu.Unlock()
-		t.finish(turnOutcome{err: fmt.Errorf("Codex app-server emitted more than %d events", t.maxEvents)})
+		t.finish(turnOutcome{err: fmt.Errorf("%w: maximum %d", ErrEventLimitExceeded, t.maxEvents)})
 		return
-	}
-	if method != "item/agentMessage/delta" {
-		t.events = append(t.events, event)
-	}
-	if method == "turn/started" {
-		if turn, ok := params["turn"].(map[string]any); ok {
-			if turnID := stringValue(turn["id"]); turnID != "" {
-				t.turnID = turnID
-			}
-		}
-	}
-	if method == "item/completed" {
-		if item, ok := params["item"].(map[string]any); ok && stringValue(item["type"]) == "agentMessage" {
-			if text := stringValue(item["text"]); text != "" {
-				t.outputs = append(t.outputs, text)
-			}
-		}
 	}
 	t.mu.Unlock()
 
@@ -649,9 +644,6 @@ func (t *appServerTurn) handleNotification(method string, params map[string]any)
 	var turnErr error
 	if turn, ok := params["turn"].(map[string]any); ok {
 		status = stringValue(turn["status"])
-		if len(t.outputs) == 0 {
-			t.captureTurnOutput(turn)
-		}
 		if status == "failed" {
 			if detail, ok := turn["error"].(map[string]any); ok {
 				turnErr = errors.New(stringValue(detail["message"]))
@@ -663,40 +655,13 @@ func (t *appServerTurn) handleNotification(method string, params map[string]any)
 			turnErr = context.Canceled
 		}
 	}
-	t.finish(turnOutcome{status: status, completion: params, err: turnErr})
-}
-
-func (t *appServerTurn) captureTurnOutput(turn map[string]any) {
-	items, _ := turn["items"].([]any)
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if len(t.outputs) > 0 {
-		return
-	}
-	for _, rawItem := range items {
-		item, _ := rawItem.(map[string]any)
-		if stringValue(item["type"]) == "agentMessage" {
-			if text := stringValue(item["text"]); text != "" {
-				t.outputs = append(t.outputs, text)
-			}
-		}
-	}
+	t.finish(turnOutcome{err: turnErr})
 }
 
 func (t *appServerTurn) finish(outcome turnOutcome) {
 	t.once.Do(func() {
 		t.done <- outcome
 	})
-}
-
-func (t *appServerTurn) result(threadID string) RuntimeResult {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return RuntimeResult{
-		ExternalSessionID: threadID,
-		Output:            strings.Join(t.outputs, "\n"),
-		Events:            append([]map[string]any(nil), t.events...),
-	}
 }
 
 func emitRuntimeEvent(emit EventHandler, eventType string, params map[string]any) {
@@ -720,29 +685,6 @@ func nullableString(value string) any {
 func stringValue(value any) string {
 	text, _ := value.(string)
 	return text
-}
-
-func findString(value any, keys ...string) string {
-	switch typed := value.(type) {
-	case map[string]any:
-		for _, key := range keys {
-			if found, ok := typed[key].(string); ok && found != "" {
-				return found
-			}
-		}
-		for _, child := range typed {
-			if found := findString(child, keys...); found != "" {
-				return found
-			}
-		}
-	case []any:
-		for _, child := range typed {
-			if found := findString(child, keys...); found != "" {
-				return found
-			}
-		}
-	}
-	return ""
 }
 
 type limitedBuffer struct {

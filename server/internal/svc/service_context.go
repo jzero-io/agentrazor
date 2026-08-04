@@ -32,24 +32,17 @@ func NewServiceContext(cc configcenter.ConfigCenter[config.Config], route2code f
 	svcCtx.Middleware = NewMiddleware(svcCtx)
 	agentConfig := cc.MustGetConfig().Agent
 	if agentConfig.Enabled {
-		var runtime agent.ThreadRuntime
-		var err error
-		switch agentConfig.Runtime {
-		case "codex-app-server":
-			runtime, err = agent.NewCodexAppServerRuntime(agent.CodexAppServerOptions{
-				Binary:             agentConfig.BinaryPath,
-				CodexHome:          agentConfig.CodexHome,
-				Workspace:          agentConfig.Workspace,
-				Sandbox:            agentConfig.Sandbox,
-				ServiceName:        agentConfig.ServiceName,
-				DisableApps:        agentConfig.DisableApps,
-				DisabledMCPServers: agentConfig.DisabledMCPServers,
-				MaxEvents:          10_000,
-				StartTimeout:       time.Duration(agentConfig.StartTimeoutSeconds) * time.Second,
-			})
-		default:
-			panic("unsupported agent runtime: " + agentConfig.Runtime)
-		}
+		runtime, err := agent.NewCodexAppServerRuntime(agent.CodexAppServerOptions{
+			Binary:             agentConfig.BinaryPath,
+			CodexHome:          agentConfig.CodexHome,
+			Workspace:          agentConfig.Workspace,
+			Sandbox:            agentConfig.Sandbox,
+			ServiceName:        agentConfig.ServiceName,
+			DisableApps:        agentConfig.DisableApps,
+			DisabledMCPServers: agentConfig.DisabledMCPServers,
+			MaxEvents:          10_000,
+			StartTimeout:       time.Duration(agentConfig.StartTimeoutSeconds) * time.Second,
+		})
 		if err != nil {
 			panic(err)
 		}

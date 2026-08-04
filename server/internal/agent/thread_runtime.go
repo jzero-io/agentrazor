@@ -20,7 +20,7 @@ type ThreadRuntime interface {
 	ArchiveStoredThread(ctx context.Context, threadID string) error
 	UnarchiveStoredThread(ctx context.Context, threadID string) (StoredThread, error)
 	DeleteThread(ctx context.Context, threadID string) error
-	Resume(ctx context.Context, externalSessionID, prompt string, emit EventHandler) (RuntimeResult, error)
+	Resume(ctx context.Context, externalSessionID, prompt string, emit EventHandler) error
 	Close() error
 }
 
@@ -36,7 +36,6 @@ func (r *CodexAppServerRuntime) CreateStoredThread(ctx context.Context) (StoredT
 	now := time.Now().UTC()
 	return StoredThread{
 		ID:        threadID,
-		Status:    "idle",
 		CreatedAt: now,
 		UpdatedAt: now,
 	}, nil
@@ -78,6 +77,7 @@ func (r *CodexAppServerRuntime) ListStoredThreads(ctx context.Context, archived 
 				}
 				thread := decodeStoredThread(raw, archived)
 				if thread.ID != "" {
+					r.setArchiveState(thread.ID, archived)
 					threads = append(threads, thread)
 				}
 			}
@@ -109,6 +109,11 @@ func (r *CodexAppServerRuntime) ReadStoredThread(ctx context.Context, threadID s
 	if err != nil {
 		return StoredThread{}, fmt.Errorf("read Codex thread %s: %w", threadID, err)
 	}
+	archived, err := r.archiveState(ctx, threadID)
+	if err != nil {
+		return StoredThread{}, err
+	}
+	thread.Archived = archived
 	return thread, nil
 }
 
@@ -125,6 +130,10 @@ func (r *CodexAppServerRuntime) readThread(ctx context.Context, threadID string,
 		return StoredThread{}, fmt.Errorf("Codex thread/read response did not contain thread %s", threadID)
 	}
 	thread := decodeStoredThread(raw, false)
+	if archived, known := archiveValue(raw); known {
+		thread.Archived = archived
+		r.setArchiveState(threadID, archived)
+	}
 	if thread.ID == "" {
 		return StoredThread{}, errors.New("Codex thread/read response did not contain a thread id")
 	}
@@ -169,6 +178,8 @@ func (r *CodexAppServerRuntime) ArchiveStoredThread(ctx context.Context, threadI
 	}
 	r.stateMu.Lock()
 	delete(r.loaded, threadID)
+	r.archived[threadID] = true
+	r.archiveKnown[threadID] = true
 	r.stateMu.Unlock()
 	return nil
 }
@@ -179,6 +190,8 @@ func (r *CodexAppServerRuntime) DeleteThread(ctx context.Context, threadID strin
 	}
 	r.stateMu.Lock()
 	delete(r.loaded, threadID)
+	delete(r.archived, threadID)
+	delete(r.archiveKnown, threadID)
 	r.stateMu.Unlock()
 	return nil
 }
@@ -189,10 +202,38 @@ func (r *CodexAppServerRuntime) UnarchiveStoredThread(ctx context.Context, threa
 		return StoredThread{}, fmt.Errorf("unarchive Codex thread: %w", err)
 	}
 	raw, ok := result["thread"].(map[string]any)
+	r.setArchiveState(threadID, false)
 	if !ok {
 		return r.ReadStoredThread(ctx, threadID, false)
 	}
 	return decodeStoredThread(raw, false), nil
+}
+
+func (r *CodexAppServerRuntime) setArchiveState(threadID string, archived bool) {
+	r.stateMu.Lock()
+	r.archived[threadID] = archived
+	r.archiveKnown[threadID] = true
+	r.stateMu.Unlock()
+}
+
+func (r *CodexAppServerRuntime) archiveState(ctx context.Context, threadID string) (bool, error) {
+	r.stateMu.Lock()
+	archived, known := r.archived[threadID], r.archiveKnown[threadID]
+	r.stateMu.Unlock()
+	if known {
+		return archived, nil
+	}
+	if _, err := r.ListStoredThreads(ctx, true); err != nil {
+		return false, fmt.Errorf("resolve Codex thread archive state: %w", err)
+	}
+	r.stateMu.Lock()
+	archived = r.archived[threadID]
+	if !r.archiveKnown[threadID] {
+		r.archived[threadID] = false
+		r.archiveKnown[threadID] = true
+	}
+	r.stateMu.Unlock()
+	return archived, nil
 }
 
 func decodeStoredThread(raw map[string]any, archived bool) StoredThread {
@@ -204,14 +245,6 @@ func decodeStoredThread(raw map[string]any, archived bool) StoredThread {
 		Archived:  archived,
 		CreatedAt: timeValue(raw["createdAt"]),
 		UpdatedAt: timeValue(raw["updatedAt"]),
-	}
-	if status, ok := raw["status"].(map[string]any); ok {
-		thread.Status = stringValue(status["type"])
-	} else {
-		thread.Status = stringValue(raw["status"])
-	}
-	if thread.Status == "" {
-		thread.Status = "notLoaded"
 	}
 	if thread.CreatedAt.IsZero() {
 		thread.CreatedAt = thread.UpdatedAt
@@ -263,6 +296,21 @@ func boolValue(value any) bool {
 	default:
 		return false
 	}
+}
+
+func archiveValue(raw map[string]any) (bool, bool) {
+	for _, key := range []string{"archived", "isArchived"} {
+		switch value := raw[key].(type) {
+		case bool:
+			return value, true
+		case string:
+			parsed, err := strconv.ParseBool(value)
+			if err == nil {
+				return parsed, true
+			}
+		}
+	}
+	return false, false
 }
 
 func timeValue(value any) time.Time {

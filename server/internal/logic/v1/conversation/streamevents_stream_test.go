@@ -44,8 +44,8 @@ func (s *streamRuntimeStub) UnarchiveStoredThread(context.Context, string) (agen
 	return s.thread, nil
 }
 
-func (s *streamRuntimeStub) Resume(_ context.Context, id, _ string, _ agentdomain.EventHandler) (agentdomain.RuntimeResult, error) {
-	return agentdomain.RuntimeResult{ExternalSessionID: id, Output: "done"}, nil
+func (s *streamRuntimeStub) Resume(context.Context, string, string, agentdomain.EventHandler) error {
+	return nil
 }
 
 func (s *streamRuntimeStub) Close() error { return nil }
@@ -85,7 +85,7 @@ func TestStreamEventsReplaysFromCursor(t *testing.T) {
 
 	select {
 	case response := <-client:
-		if response.Id != 1 || response.Event != "run.queued" {
+		if response.Id != 1 || response.Event != "run.started" {
 			t.Fatalf("unexpected first event: %#v", response)
 		}
 		var event agentdomain.StreamEvent

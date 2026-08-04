@@ -61,17 +61,9 @@ type PathRequest struct {
 }
 
 type Run struct {
-	Id          string                   `json:"id"`
-	Sequence    int                      `json:"sequence"`
-	Prompt      string                   `json:"prompt"`
-	Status      string                   `json:"status"`
-	Output      string                   `json:"output,omitempty"`
-	Error       string                   `json:"error,omitempty"`
-	ExitCode    int                      `json:"exitCode,omitempty"`
-	Events      []map[string]interface{} `json:"events,omitempty"`
-	CreatedAt   string                   `json:"createdAt"`
-	StartedAt   *string                  `json:"startedAt,omitempty"`
-	CompletedAt *string                  `json:"completedAt,omitempty"`
+	Id        string `json:"id"`
+	Prompt    string `json:"prompt"`
+	CreatedAt string `json:"createdAt"`
 }
 
 type SendMessageRequest struct {

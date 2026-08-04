@@ -84,6 +84,25 @@ func Update(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
+// 删除会话
+func Delete(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req types.PathRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+			return
+		}
+
+		l := conversation.NewDelete(r.Context(), svcCtx, r, w)
+		err := l.Delete(&req)
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.Ok(w)
+		}
+	}
+}
+
 // 发送消息
 func SendMessage(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

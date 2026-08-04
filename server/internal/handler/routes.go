@@ -114,6 +114,12 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				},
 				{
 
+					Method:  http.MethodDelete,
+					Path:    "/conversations/:conversation_id",
+					Handler: v1conversation.Delete(serverCtx),
+				},
+				{
+
 					Method:  http.MethodPost,
 					Path:    "/conversations/:conversation_id/messages",
 					Handler: v1conversation.SendMessage(serverCtx),

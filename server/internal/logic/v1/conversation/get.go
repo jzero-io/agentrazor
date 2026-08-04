@@ -103,9 +103,7 @@ func toConversation(value agentdomain.StoredThread) types.Conversation {
 func toRun(value agentdomain.ThreadRun) types.Run {
 	return types.Run{
 		Id:        value.ID,
-		Sequence:  0,
 		Prompt:    value.Prompt,
-		Status:    value.Status,
 		CreatedAt: formatTime(value.CreatedAt),
 	}
 }

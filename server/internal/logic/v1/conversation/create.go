@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/zeromicro/go-zero/core/logx"
 
@@ -42,6 +43,9 @@ func (l *Create) Create(req *types.CreateRequest) (resp *types.Conversation, err
 		return nil, err
 	}
 	if err := l.svcCtx.Model.Conversation.InsertV2(l.ctx, nil, &conversationmodel.Conversation{Id: created.ID, UserUuid: uuid}); err != nil {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_ = l.svcCtx.AgentThreads.Delete(cleanupCtx, created.ID)
 		return nil, err
 	}
 	response := toConversation(created)

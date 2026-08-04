@@ -38,7 +38,7 @@ function loadSidebarViewState(): SidebarViewState {
 }
 const savedSidebarView = loadSidebarViewState();
 
-const { message: toast, dialog } = createDiscreteApi(['message', 'dialog']);
+const { message: toast } = createDiscreteApi(['message']);
 const conversations = ref<Conversation[]>([]);
 const selectedId = ref('');
 const detail = ref<ConversationDetail | null>(null);
@@ -57,6 +57,12 @@ const loginVisible = ref(false);
 const loginUsername = ref('');
 const loginPassword = ref('');
 const loginLoading = ref(false);
+const confirmVisible = ref(false);
+const confirmTitle = ref('');
+const confirmContent = ref('');
+const confirmPositiveText = ref('删除');
+const confirmLoading = ref(false);
+let confirmAction: (() => Promise<void>) | undefined;
 const settingsVisible = ref(false);
 const settingsSection = ref<'appearance' | 'archives'>('appearance');
 const userMenuVisible = ref(false);
@@ -255,12 +261,11 @@ function toggleGroup(group: ConversationGroup) {
 }
 
 function deleteGroup(group: ConversationGroup) {
-  dialog.warning({
-    title: '删除分组',
-    content: `删除「${group.name}」后，其中的对话会移回“对话”列表。`,
-    positiveText: '删除分组',
-    negativeText: '取消',
-    onPositiveClick: async () => {
+  openConfirm(
+    '删除分组',
+    `删除「${group.name}」后，其中的对话会移回“对话”列表。`,
+    '删除分组',
+    async () => {
       try {
         await conversationGroupApi.remove(group.id);
         await Promise.all([loadConversationGroups(), loadConversations()]);
@@ -268,7 +273,7 @@ function deleteGroup(group: ConversationGroup) {
         showError(error);
       }
     }
-  });
+  );
 }
 
 async function moveConversationToGroup(item: Conversation, key: string) {
@@ -524,13 +529,12 @@ async function archiveConversation(item: Conversation) {
 
 function confirmDelete() {
   if (!activeConversation.value) return;
-  dialog.warning({
-    title: '删除对话',
-    content: `确定删除「${activeConversation.value.title}」吗？此操作不可撤销。`,
-    positiveText: '删除',
-    negativeText: '取消',
-    onPositiveClick: () => deleteConversation()
-  });
+  openConfirm(
+    '删除对话',
+    `确定删除「${activeConversation.value.title}」吗？此操作不可撤销。`,
+    '删除',
+    deleteConversation
+  );
 }
 
 async function deleteConversation() {
@@ -676,12 +680,11 @@ async function restoreArchived(item: Conversation) {
 }
 
 function confirmDeleteArchived(item: Conversation) {
-  dialog.warning({
-    title: '删除归档对话',
-    content: `确定删除「${item.title}」吗？此操作不可撤销。`,
-    positiveText: '删除',
-    negativeText: '取消',
-    onPositiveClick: async () => {
+  openConfirm(
+    '删除归档对话',
+    `确定删除「${item.title}」吗？此操作不可撤销。`,
+    '删除',
+    async () => {
       try {
         await conversationApi.remove(item.id);
         await loadConversations();
@@ -689,7 +692,7 @@ function confirmDeleteArchived(item: Conversation) {
         showError(error);
       }
     }
-  });
+  );
 }
 
 function openLogin() {
@@ -712,12 +715,11 @@ function formatConversationDate(value: string) {
 
 function confirmDeleteAllArchived() {
   if (!archivedConversations.value.length) return;
-  dialog.warning({
-    title: '删除全部归档对话',
-    content: `确定永久删除全部 ${archivedConversations.value.length} 个归档对话吗？此操作不可撤销。`,
-    positiveText: '全部删除',
-    negativeText: '取消',
-    onPositiveClick: async () => {
+  openConfirm(
+    '删除全部归档对话',
+    `确定永久删除全部 ${archivedConversations.value.length} 个归档对话吗？此操作不可撤销。`,
+    '全部删除',
+    async () => {
       try {
         await Promise.all(archivedConversations.value.map(item => conversationApi.remove(item.id)));
         await loadConversations();
@@ -725,7 +727,33 @@ function confirmDeleteAllArchived() {
         showError(error);
       }
     }
-  });
+  );
+}
+
+function openConfirm(title: string, content: string, positiveText: string, action: () => Promise<void>) {
+  confirmTitle.value = title;
+  confirmContent.value = content;
+  confirmPositiveText.value = positiveText;
+  confirmAction = action;
+  confirmVisible.value = true;
+}
+
+function closeConfirm() {
+  if (confirmLoading.value) return;
+  confirmVisible.value = false;
+  confirmAction = undefined;
+}
+
+async function submitConfirm() {
+  if (!confirmAction || confirmLoading.value) return;
+  confirmLoading.value = true;
+  try {
+    await confirmAction();
+    confirmVisible.value = false;
+    confirmAction = undefined;
+  } finally {
+    confirmLoading.value = false;
+  }
 }
 
 function handleSystemAppearanceChange(event: MediaQueryListEvent) {
@@ -1242,6 +1270,29 @@ watch(
         <div class="modal-actions">
           <n-button @click="groupEditorVisible = false">取消</n-button>
           <n-button type="primary" :disabled="!groupEditorName.trim()" @click="saveGroup">保存</n-button>
+        </div>
+      </template>
+    </n-modal>
+
+    <n-modal
+      v-model:show="confirmVisible"
+      preset="card"
+      :bordered="false"
+      :mask-closable="!confirmLoading"
+      :close-on-esc="!confirmLoading"
+      class="confirm-modal"
+    >
+      <div class="confirm-modal-body">
+        <span class="confirm-modal-icon"><Icon icon="solar:trash-bin-trash-linear" /></span>
+        <div>
+          <h2>{{ confirmTitle }}</h2>
+          <p>{{ confirmContent }}</p>
+        </div>
+      </div>
+      <template #footer>
+        <div class="modal-actions">
+          <n-button :disabled="confirmLoading" @click="closeConfirm">取消</n-button>
+          <n-button type="error" :loading="confirmLoading" @click="submitConfirm">{{ confirmPositiveText }}</n-button>
         </div>
       </template>
     </n-modal>

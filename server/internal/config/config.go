@@ -9,7 +9,6 @@ type Config struct {
 
 type AgentConf struct {
 	Enabled             bool     `json:",default=true"`
-	Runtime             string   `json:",default=codex-app-server,options=codex-app-server"`
 	BinaryPath          string   `json:",default=codex"`
 	CodexHome           string   `json:",default=data/codex-home"`
 	Workspace           string   `json:",default=.."`
