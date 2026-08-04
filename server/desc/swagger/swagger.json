@@ -566,7 +566,9 @@
         "responses": {
           "200": {
             "description": "",
-            "schema": {}
+            "schema": {
+              "type": "object"
+            }
           }
         },
         "schemes": [
@@ -819,7 +821,9 @@
         "responses": {
           "200": {
             "description": "",
-            "schema": {}
+            "schema": {
+              "type": "object"
+            }
           }
         },
         "schemes": [

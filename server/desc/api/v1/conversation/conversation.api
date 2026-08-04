@@ -41,6 +41,7 @@ type (
 	PathRequest {
 		ConversationId string `path:"conversation_id" validate:"required"`
 	}
+	DeleteResponse  {}
 	EventsRequest {
 		ConversationId  string `path:"conversation_id" validate:"required"`
 		LastEventId     string `header:"Last-Event-ID,optional"`
@@ -99,7 +100,7 @@ service server {
 
 	@doc "删除会话"
 	@handler Delete
-	delete /conversations/:conversation_id (PathRequest)
+	delete /conversations/:conversation_id (PathRequest) returns (DeleteResponse)
 
 	@doc "发送消息"
 	@handler SendMessage

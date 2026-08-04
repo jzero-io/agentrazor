@@ -344,6 +344,30 @@ textarea {
   transition: background 120ms ease;
 }
 
+.conversation-row[draggable='true'] {
+  cursor: grab;
+}
+
+.conversation-row.dragging {
+  opacity: 0.42;
+}
+
+.conversation-drop-zone {
+  position: relative;
+  border-radius: 10px;
+  transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+.conversation-drop-zone.drag-over {
+  background: rgb(49 134 199 / 10%);
+  box-shadow: inset 0 0 0 1px rgb(49 134 199 / 42%);
+}
+
+html[data-theme='dark'] .conversation-drop-zone.drag-over {
+  background: rgb(83 164 221 / 12%);
+  box-shadow: inset 0 0 0 1px rgb(83 164 221 / 48%);
+}
+
 .conversation-item {
   display: flex;
   width: 100%;
@@ -416,10 +440,6 @@ textarea {
   outline: none;
   color: #2476b5;
   background: #fff;
-}
-
-.dropdown-tooltip-trigger {
-  display: inline-flex;
 }
 
 .conversation-item span {

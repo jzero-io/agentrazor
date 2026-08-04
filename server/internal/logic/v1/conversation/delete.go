@@ -18,35 +18,36 @@ type Delete struct {
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 	r      *http.Request
-	w      http.ResponseWriter
 }
 
 // 删除会话
-func NewDelete(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Request, w http.ResponseWriter) *Delete {
+func NewDelete(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Request) *Delete {
 	return &Delete{
 		Logger: logx.WithContext(ctx),
 		ctx:    ctx,
 		svcCtx: svcCtx,
 		r:      r,
-		w:      w,
 	}
 }
 
-func (l *Delete) Delete(req *types.PathRequest) error {
+func (l *Delete) Delete(req *types.PathRequest) (resp *types.DeleteResponse, err error) {
 	uuid, err := requireOwner(l.ctx, l.svcCtx, req.ConversationId)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if l.svcCtx.AgentThreads == nil {
-		return errors.New("agent runtime is disabled")
+		return nil, errors.New("agent runtime is disabled")
 	}
 	if err := l.svcCtx.AgentThreads.Delete(l.ctx, req.ConversationId); err != nil {
-		return err
+		return nil, err
 	}
-	return l.svcCtx.Model.Conversation.DeleteByCondition(l.ctx, nil,
+	if err := l.svcCtx.Model.Conversation.DeleteByCondition(l.ctx, nil,
 		condition.NewChain().
 			Equal(conversationmodel.Id, req.ConversationId).
 			Equal(conversationmodel.UserUuid, uuid).
 			Build()...,
-	)
+	); err != nil {
+		return nil, err
+	}
+	return nil, nil
 }

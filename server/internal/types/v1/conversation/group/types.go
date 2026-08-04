@@ -22,6 +22,9 @@ type CreateRequest struct {
 	Pinned *bool  `json:"pinned,optional"`
 }
 
+type DeleteResponse struct {
+}
+
 type ListResponse struct {
 	Groups []ConversationGroup `json:"groups"`
 }

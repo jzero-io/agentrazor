@@ -26,6 +26,7 @@ type (
 	PathRequest {
 		GroupId string `path:"group_id" validate:"required"`
 	}
+	DeleteResponse  {}
 	UpdateRequest {
 		GroupId string  `path:"group_id" validate:"required"`
 		Name    *string `json:"name,optional" validate:"omitempty,max=40"`
@@ -49,6 +50,6 @@ service server {
 	patch /conversation-groups/:group_id (UpdateRequest) returns (ConversationGroup)
 
 	@handler Delete
-	delete /conversation-groups/:group_id (PathRequest)
+	delete /conversation-groups/:group_id (PathRequest) returns (DeleteResponse)
 }
 

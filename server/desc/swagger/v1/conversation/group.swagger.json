@@ -158,7 +158,9 @@
         "responses": {
           "200": {
             "description": "",
-            "schema": {}
+            "schema": {
+              "type": "object"
+            }
           }
         },
         "schemes": [

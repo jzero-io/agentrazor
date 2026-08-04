@@ -93,12 +93,12 @@ func Delete(svcCtx *svc.ServiceContext) http.HandlerFunc {
 			return
 		}
 
-		l := conversation.NewDelete(r.Context(), svcCtx, r, w)
-		err := l.Delete(&req)
+		l := conversation.NewDelete(r.Context(), svcCtx, r)
+		resp, err := l.Delete(&req)
 		if err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 		} else {
-			httpx.Ok(w)
+			httpx.OkJsonCtx(r.Context(), w, resp)
 		}
 	}
 }

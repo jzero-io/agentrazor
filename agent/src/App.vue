@@ -16,7 +16,6 @@ import {
   zhCN,
   dateZhCN
 } from 'naive-ui';
-import type { DropdownOption } from 'naive-ui';
 import { authApi, clearToken, conversationApi, conversationGroupApi, getToken, setAuthErrorHandler, setToken } from './api';
 import type { Conversation, ConversationDetail, Message, StreamEvent, UserInfo } from './api';
 
@@ -29,6 +28,7 @@ interface SidebarViewState {
 }
 
 const SIDEBAR_VIEW_KEY = 'agentrazor_sidebar_view';
+const CONVERSATION_LIST_DROP_TARGET = 'conversation-list';
 function loadSidebarViewState(): SidebarViewState {
   try {
     return JSON.parse(localStorage.getItem(SIDEBAR_VIEW_KEY) || '{}') as SidebarViewState;
@@ -80,9 +80,10 @@ const conversationGroups = ref<ConversationGroup[]>([]);
 const groupEditorVisible = ref(false);
 const groupEditorName = ref('');
 const editingGroupId = ref('');
-const pendingMoveConversationId = ref('');
 const conversationPreview = ref<Conversation | null>(null);
 const conversationPreviewTop = ref(0);
+const draggedConversationId = ref('');
+const conversationDropTarget = ref('');
 const userMenuWrap = ref<HTMLElement>();
 type Appearance = 'system' | 'light' | 'dark';
 const APPEARANCE_KEY = 'agentrazor_appearance';
@@ -192,24 +193,6 @@ function hideConversationPreview() {
   conversationPreview.value = null;
 }
 
-function groupMoveOptions(item: Conversation): DropdownOption[] {
-  const currentGroup = item.groupId;
-  const options: DropdownOption[] = conversationGroups.value.map(group => ({
-    label: group.name,
-    key: `group:${group.id}`,
-    icon: renderIcon('solar:folder-linear'),
-    disabled: group.id === currentGroup
-  }));
-  if (currentGroup) {
-    if (options.length) options.push({ type: 'divider', key: 'divider' });
-    options.push({ label: '移出分组', key: 'ungroup', icon: renderIcon('solar:folder-with-files-linear') });
-  }
-  if (!conversationGroups.value.length) {
-    options.push({ label: '新建分组', key: 'create', icon: renderIcon('solar:add-folder-linear') });
-  }
-  return options;
-}
-
 async function loadConversationGroups() {
   const previous = new Map(conversationGroups.value.map(group => [group.id, group.collapsed]));
   try {
@@ -226,9 +209,8 @@ async function loadConversationGroups() {
   }
 }
 
-function openCreateGroup(conversationId = '') {
+function openCreateGroup() {
   editingGroupId.value = '';
-  pendingMoveConversationId.value = conversationId;
   groupEditorName.value = '';
   groupEditorVisible.value = true;
 }
@@ -245,15 +227,10 @@ async function saveGroup() {
   if (editingGroupId.value) {
     await conversationGroupApi.update(editingGroupId.value, { name });
   } else {
-    const created = await conversationGroupApi.create(name);
-    if (pendingMoveConversationId.value) {
-      const updated = await conversationApi.update(pendingMoveConversationId.value, { groupId: created.id });
-      replaceConversation(updated);
-    }
+    await conversationGroupApi.create(name);
   }
   await loadConversationGroups();
   groupEditorVisible.value = false;
-  pendingMoveConversationId.value = '';
 }
 
 function toggleGroup(group: ConversationGroup) {
@@ -276,18 +253,51 @@ function deleteGroup(group: ConversationGroup) {
   );
 }
 
-async function moveConversationToGroup(item: Conversation, key: string) {
-  if (key === 'create') {
-    openCreateGroup(item.id);
-    return;
-  }
+async function updateConversationGroup(item: Conversation, groupId: string) {
   try {
-    const groupId = key === 'ungroup' ? '' : key.startsWith('group:') ? key.slice(6) : item.groupId || '';
     const updated = await conversationApi.update(item.id, { groupId });
     replaceConversation(updated);
   } catch (error) {
     showError(error);
   }
+}
+
+function startConversationDrag(item: Conversation, event: DragEvent) {
+  draggedConversationId.value = item.id;
+  conversationDropTarget.value = '';
+  hideConversationPreview();
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', item.id);
+  }
+}
+
+function setConversationDropTarget(target: string, event: DragEvent) {
+  if (!draggedConversationId.value) return;
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+  conversationDropTarget.value = target;
+}
+
+async function dropConversation(targetGroupId: string, event: DragEvent) {
+  event.preventDefault();
+  const conversationId = draggedConversationId.value || event.dataTransfer?.getData('text/plain') || '';
+  const item = conversations.value.find(conversation => conversation.id === conversationId);
+  if (!item || (item.groupId || '') === targetGroupId) {
+    endConversationDrag();
+    return;
+  }
+  if (targetGroupId) {
+    const group = conversationGroups.value.find(candidate => candidate.id === targetGroupId);
+    if (group) group.collapsed = false;
+  }
+  await updateConversationGroup(item, targetGroupId);
+  endConversationDrag();
+}
+
+function endConversationDrag() {
+  draggedConversationId.value = '';
+  conversationDropTarget.value = '';
 }
 
 async function loadConversations(selectFirst = false) {
@@ -847,7 +857,10 @@ watch(
                     v-for="item in pinnedConversations"
                     :key="item.id"
                     class="conversation-row previewable-conversation-row"
-                    :class="{ selected: item.id === selectedId }"
+                    :class="{ selected: item.id === selectedId, dragging: item.id === draggedConversationId }"
+                    draggable="true"
+                    @dragstart="startConversationDrag(item, $event)"
+                    @dragend="endConversationDrag"
                     @mouseenter="showConversationPreview(item, $event)"
                     @mouseleave="hideConversationPreview"
                   >
@@ -864,21 +877,6 @@ watch(
                         </template>
                         取消置顶
                       </n-tooltip>
-                      <n-dropdown
-                        trigger="click"
-                        placement="right-start"
-                        :options="groupMoveOptions(item)"
-                        @select="key => moveConversationToGroup(item, String(key))"
-                      >
-                        <span class="dropdown-tooltip-trigger">
-                          <n-tooltip trigger="hover" placement="top" :delay="0" :duration="0">
-                            <template #trigger>
-                              <button type="button" aria-label="移动到分组"><Icon icon="solar:folder-with-files-linear" /></button>
-                            </template>
-                            移动到分组
-                          </n-tooltip>
-                        </span>
-                      </n-dropdown>
                       <n-tooltip trigger="hover" placement="top">
                         <template #trigger>
                           <button type="button" aria-label="归档" @click="archiveConversation(item)">
@@ -906,7 +904,14 @@ watch(
                 </n-tooltip>
               </div>
               <template v-if="groupsExpanded">
-              <div v-for="group in conversationGroups" :key="group.id" class="conversation-group custom-group">
+              <div
+                v-for="group in conversationGroups"
+                :key="group.id"
+                class="conversation-group custom-group conversation-drop-zone"
+                :class="{ 'drag-over': conversationDropTarget === group.id }"
+                @dragover="setConversationDropTarget(group.id, $event)"
+                @drop.stop="dropConversation(group.id, $event)"
+              >
                 <div class="custom-group-heading">
                   <button class="conversation-group-toggle" @click="toggleGroup(group)">
                     <Icon icon="solar:folder-linear" class="group-folder-icon" />
@@ -946,7 +951,10 @@ watch(
                     v-for="item in conversationsInGroup(group.id)"
                     :key="item.id"
                     class="conversation-row grouped-conversation previewable-conversation-row"
-                    :class="{ selected: item.id === selectedId }"
+                    :class="{ selected: item.id === selectedId, dragging: item.id === draggedConversationId }"
+                    draggable="true"
+                    @dragstart="startConversationDrag(item, $event)"
+                    @dragend="endConversationDrag"
                     @mouseenter="showConversationPreview(item, $event)"
                     @mouseleave="hideConversationPreview"
                   >
@@ -966,21 +974,6 @@ watch(
                         </template>
                         {{ item.pinnedAt ? '取消置顶' : '置顶' }}
                       </n-tooltip>
-                      <n-dropdown
-                        trigger="click"
-                        placement="right-start"
-                        :options="groupMoveOptions(item)"
-                        @select="key => moveConversationToGroup(item, String(key))"
-                      >
-                        <span class="dropdown-tooltip-trigger">
-                          <n-tooltip trigger="hover" placement="top" :delay="0" :duration="0">
-                            <template #trigger>
-                              <button type="button" aria-label="移动到分组"><Icon icon="solar:folder-with-files-linear" /></button>
-                            </template>
-                            移动到分组
-                          </n-tooltip>
-                        </span>
-                      </n-dropdown>
                       <n-tooltip trigger="hover" placement="top">
                         <template #trigger>
                           <button type="button" aria-label="归档" @click="archiveConversation(item)"><Icon icon="solar:archive-linear" /></button>
@@ -996,7 +989,12 @@ watch(
                 </template>
               </div>
               </template>
-              <div class="conversation-group conversation-list-group">
+              <div
+                class="conversation-group conversation-list-group conversation-drop-zone"
+                :class="{ 'drag-over': conversationDropTarget === CONVERSATION_LIST_DROP_TARGET }"
+                @dragover="setConversationDropTarget(CONVERSATION_LIST_DROP_TARGET, $event)"
+                @drop.stop="dropConversation('', $event)"
+              >
                 <div class="conversation-list-heading">
                   <button class="conversation-group-toggle" @click="conversationsExpanded = !conversationsExpanded">
                     <span>对话</span>
@@ -1016,7 +1014,10 @@ watch(
                     v-for="item in conversationList"
                     :key="item.id"
                     class="conversation-row previewable-conversation-row"
-                    :class="{ selected: item.id === selectedId }"
+                    :class="{ selected: item.id === selectedId, dragging: item.id === draggedConversationId }"
+                    draggable="true"
+                    @dragstart="startConversationDrag(item, $event)"
+                    @dragend="endConversationDrag"
                     @mouseenter="showConversationPreview(item, $event)"
                     @mouseleave="hideConversationPreview"
                   >
@@ -1032,21 +1033,6 @@ watch(
                         </template>
                         置顶
                       </n-tooltip>
-                      <n-dropdown
-                        trigger="click"
-                        placement="right-start"
-                        :options="groupMoveOptions(item)"
-                        @select="key => moveConversationToGroup(item, String(key))"
-                      >
-                        <span class="dropdown-tooltip-trigger">
-                          <n-tooltip trigger="hover" placement="top" :delay="0" :duration="0">
-                            <template #trigger>
-                              <button type="button" aria-label="移动到分组"><Icon icon="solar:folder-with-files-linear" /></button>
-                            </template>
-                            移动到分组
-                          </n-tooltip>
-                        </span>
-                      </n-dropdown>
                       <n-tooltip trigger="hover" placement="top">
                         <template #trigger>
                           <button type="button" aria-label="归档" @click="archiveConversation(item)">

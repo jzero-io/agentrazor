@@ -24,6 +24,9 @@ type CreateRequest struct {
 	Title string `json:"title,optional"`
 }
 
+type DeleteResponse struct {
+}
+
 type DetailResponse struct {
 	Conversation Conversation `json:"conversation"`
 	SessionId    string       `json:"sessionId,omitempty"`

@@ -20,24 +20,26 @@ type Delete struct {
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 	r      *http.Request
-	w      http.ResponseWriter
 }
 
-func NewDelete(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Request, w http.ResponseWriter) *Delete {
-	return &Delete{Logger: logx.WithContext(ctx), ctx: ctx, svcCtx: svcCtx, r: r, w: w}
+func NewDelete(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Request) *Delete {
+	return &Delete{Logger: logx.WithContext(ctx), ctx: ctx, svcCtx: svcCtx, r: r}
 }
 
-func (l *Delete) Delete(req *types.PathRequest) error {
+func (l *Delete) Delete(req *types.PathRequest) (resp *types.DeleteResponse, err error) {
 	user, err := auth.Info(l.ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	row, err := l.svcCtx.Model.ConversationGroup.FindOne(l.ctx, nil, req.GroupId)
 	if err != nil || row.UserUuid != user.Uuid {
-		return errors.New("conversation group not found")
+		return nil, errors.New("conversation group not found")
 	}
 	if err := l.svcCtx.Model.Conversation.UpdateFieldsByCondition(l.ctx, nil, map[string]any{string(conversationmodel.GroupUuid): nil}, condition.NewChain().Equal(conversationmodel.GroupUuid, req.GroupId).Equal(conversationmodel.UserUuid, user.Uuid).Build()...); err != nil {
-		return err
+		return nil, err
 	}
-	return l.svcCtx.Model.ConversationGroup.DeleteByCondition(l.ctx, nil, condition.NewChain().Equal(conversationgroupmodel.Uuid, req.GroupId).Equal(conversationgroupmodel.UserUuid, user.Uuid).Build()...)
+	if err := l.svcCtx.Model.ConversationGroup.DeleteByCondition(l.ctx, nil, condition.NewChain().Equal(conversationgroupmodel.Uuid, req.GroupId).Equal(conversationgroupmodel.UserUuid, user.Uuid).Build()...); err != nil {
+		return nil, err
+	}
+	return nil, nil
 }

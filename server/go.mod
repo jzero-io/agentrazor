@@ -18,7 +18,6 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/zeromicro/go-zero v1.10.1
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
-	modernc.org/sqlite v1.55.0
 )
 
 require (
@@ -168,6 +167,7 @@ require (
 	modernc.org/libc v1.74.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
+	modernc.org/sqlite v1.55.0 // indirect
 )
 
 tool github.com/jzero-io/jzero/cmd/jzero
