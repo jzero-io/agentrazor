@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/jzero-io/jzero-admin/core-engine/svc"
+	"github.com/jzero-io/agentrazor/core-engine/svc"
 	"github.com/jzero-io/jzero/core/configcenter"
 	"github.com/jzero-io/jzero/core/stores/modelx"
 

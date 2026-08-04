@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/jzero-io/jzero-admin/core-engine/helper/auth"
+	"github.com/jzero-io/agentrazor/core-engine/helper/auth"
 	"github.com/zeromicro/go-zero/core/logx"
 
 	conversationgroupmodel "github.com/jzero-io/agentrazor/server/internal/model/conversation_group"

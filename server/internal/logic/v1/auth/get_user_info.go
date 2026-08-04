@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/jzero-io/jzero-admin/core-engine/helper/auth"
+	"github.com/jzero-io/agentrazor/core-engine/helper/auth"
 	"github.com/jzero-io/jzero/core/stores/condition"
 	"github.com/zeromicro/go-zero/core/logx"
 

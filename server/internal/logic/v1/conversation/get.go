@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jzero-io/jzero-admin/core-engine/helper/auth"
+	"github.com/jzero-io/agentrazor/core-engine/helper/auth"
 	"github.com/zeromicro/go-zero/core/logx"
 
 	agentdomain "github.com/jzero-io/agentrazor/server/internal/agent"

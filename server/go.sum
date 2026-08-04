@@ -207,14 +207,14 @@ github.com/jhump/protoreflect v1.18.0 h1:TOz0MSR/0JOZ5kECB/0ufGnC2jdsgZ123Rd/k4Z
 github.com/jhump/protoreflect v1.18.0/go.mod h1:ezWcltJIVF4zYdIFM+D/sHV4Oh5LNU08ORzCGfwvTz8=
 github.com/jhump/protoreflect/v2 v2.0.0-beta.1 h1:Dw1rslK/VotaUGYsv53XVWITr+5RCPXfvvlGrM/+B6w=
 github.com/jhump/protoreflect/v2 v2.0.0-beta.1/go.mod h1:D9LBEowZyv8/iSu97FU2zmXG3JxVTmNw21mu63niFzU=
+github.com/jzero-io/agentrazor/core-engine v0.0.0-20260804050014-fd42e845cf2e h1:QoygqL/rU5iquSnTIuTPHVEwtwfPVdqd2YhcI1baB0g=
+github.com/jzero-io/agentrazor/core-engine v0.0.0-20260804050014-fd42e845cf2e/go.mod h1:AuoMBED7T+RjiQZazc1SrEZ8dmDMPFmm6q18ShaqRqQ=
 github.com/jzero-io/desc v1.2.0 h1:choR7IQZvjm8jw2ZlUoQdPCqTvvMQiFRCoaEJAMzdLs=
 github.com/jzero-io/desc v1.2.0/go.mod h1:gav1fZ49+rsEjT/5MUNp6ueyNFuX0lDKGyzIM6NrB+E=
 github.com/jzero-io/go_fmt v0.0.0-20250905015347-1a45352494b7 h1:XamNaWUxHlOd7ytrgR1gwR2O0vo02gMKaTroXLXrh0w=
 github.com/jzero-io/go_fmt v0.0.0-20250905015347-1a45352494b7/go.mod h1:Wupl/J9DdDywVAOC5ExsbfkET0aYuNLhZPlpBF8+OnE=
 github.com/jzero-io/jzero v1.4.1 h1:35oLwdj5L9z8RGEal/gIPvg5vPjPqOqJd2dJjf+srWo=
 github.com/jzero-io/jzero v1.4.1/go.mod h1:r2G+vmhWoZ2/EB5YRLegtYxBv7e3Azp3C7FeINgGNRM=
-github.com/jzero-io/jzero-admin/core-engine v0.0.0-20260126064215-8644aa88327d h1:954KhlJ0IIIJpDt8QZX1FN652lMm0x+l0G/gA4VAwRo=
-github.com/jzero-io/jzero-admin/core-engine v0.0.0-20260126064215-8644aa88327d/go.mod h1:+zdAbu+p/c/y/3Jew+9KPjpznFtCr+mwK3Hb6ELLO9U=
 github.com/jzero-io/jzero/cmd/jzero v1.4.1 h1:JY9O8uFpXvz9uo9TfVhQakvYzN3EYZQKBj3H2WdMTAk=
 github.com/jzero-io/jzero/cmd/jzero v1.4.1/go.mod h1:ZlG5XnM0ufSTjlb/WtslpspVGlw02ozgklrpgID04eA=
 github.com/kevinburke/ssh_config v1.2.0 h1:x584FjTGwHzMwvHx18PXxbBVzfnxogHaAReU4gf13a4=
