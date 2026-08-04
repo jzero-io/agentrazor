@@ -8,13 +8,13 @@ export default defineUserConfig({
   locales: {
     "/": {
       lang: "zh-CN",
-      title: "jzero-admin",
-      description: "jzero-admin 文档",
+      title: "agentrazor-admin",
+      description: "agentrazor-admin 文档",
     },
     "/en/": {
       lang: "en-US",
-      title: "jzero-admin",
-      description: "docs for jzero-admin",
+      title: "agentrazor-admin",
+      description: "docs for agentrazor-admin",
     },
   },
 

@@ -1,7 +1,7 @@
 {
-  "name": "jzero-admin",
+  "name": "agentrazor-admin",
   "version": "1.0.0",
-  "description": "jzero-admin docs",
+  "description": "agentrazor-admin docs",
   "license": "MIT",
   "type": "module",
   "scripts": {

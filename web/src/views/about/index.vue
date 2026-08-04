@@ -20,7 +20,7 @@ interface PkgVersionInfo {
 }
 
 const { name, version, dependencies } = {
-  name: 'jzero-admin',
+  name: 'agentrazor-admin',
   version: 'v1.0.0',
   dependencies: {
     jzero: 'v1.0.0',

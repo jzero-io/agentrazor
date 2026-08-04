@@ -1,6 +1,6 @@
 const local: App.I18n.Schema = {
   system: {
-    title: 'jzero-admin',
+    title: 'agentrazor-admin',
     updateTitle: 'System Version Update Notification',
     updateContent: 'A new version of the system has been detected. Do you want to refresh the page immediately?',
     updateConfirm: 'Refresh immediately',
@@ -252,7 +252,7 @@ const local: App.I18n.Schema = {
     },
     about: {
       title: 'About',
-      introduction: `jzero-admin builds the backend system based on jzero scaffolding and is equipped with code generation, and the front end is built based on soybean-admin.`,
+      introduction: `agentrazor-admin builds the backend system based on jzero scaffolding and is equipped with code generation, and the front end is built based on soybean-admin.`,
       projectInfo: {
         title: 'Project Info',
         version: 'Version',
@@ -272,7 +272,7 @@ const local: App.I18n.Schema = {
         title: 'Project News',
         moreNews: 'More News',
          desc1: 'Created the open source project jzero on April 07, 2024!',
-        desc2: 'Created the open source project jzero-admin on October 14, 2024!',
+        desc2: 'Created the open source project agentrazor-admin on October 14, 2024!',
         desc3: 'Continuously improving and perfecting in 2025!',
         desc4: 'Created the open source project jzero-intellij on November 30, 2025!',
         desc5: 'Released jzero v1.0.0 on January 01, 2026!'

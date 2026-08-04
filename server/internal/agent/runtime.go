@@ -29,9 +29,8 @@ type EventHandler func(map[string]any)
 type CodexAppServerOptions struct {
 	Binary             string
 	CodexHome          string
-	Workspace          string
+	AgentrazorHome     string
 	Sandbox            string
-	ServiceName        string
 	DisableApps        bool
 	DisabledMCPServers []string
 	MaxEvents          int
@@ -122,21 +121,11 @@ func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRun
 	default:
 		return nil, fmt.Errorf("unsupported Codex sandbox %q", options.Sandbox)
 	}
-	if options.ServiceName == "" {
-		options.ServiceName = "agentrazor"
-	}
 	if options.MaxEvents <= 0 {
 		options.MaxEvents = 10_000
 	}
 	if options.StartTimeout <= 0 {
 		options.StartTimeout = 15 * time.Second
-	}
-	if options.Workspace != "" {
-		workspace, err := filepath.Abs(options.Workspace)
-		if err != nil {
-			return nil, fmt.Errorf("resolve Codex workspace: %w", err)
-		}
-		options.Workspace = workspace
 	}
 	if options.CodexHome != "" {
 		codexHome, err := filepath.Abs(options.CodexHome)
@@ -148,6 +137,17 @@ func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRun
 		}
 		options.CodexHome = codexHome
 	}
+	if options.AgentrazorHome == "" {
+		options.AgentrazorHome = "data/agentrazor-home"
+	}
+	agentrazorHome, err := filepath.Abs(options.AgentrazorHome)
+	if err != nil {
+		return nil, fmt.Errorf("resolve conversation home: %w", err)
+	}
+	if err := os.MkdirAll(agentrazorHome, 0o700); err != nil {
+		return nil, fmt.Errorf("create conversation home: %w", err)
+	}
+	options.AgentrazorHome = agentrazorHome
 
 	args := []string{"app-server", "--listen", "stdio://"}
 	if options.DisableApps {
@@ -162,9 +162,6 @@ func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRun
 	}
 
 	cmd := exec.Command(options.Binary, args...)
-	if options.Workspace != "" {
-		cmd.Dir = options.Workspace
-	}
 	if options.CodexHome != "" {
 		cmd.Env = isolatedCodexEnvironment(os.Environ(), options.CodexHome)
 	}
@@ -251,10 +248,8 @@ func (r *CodexAppServerRuntime) Resume(ctx context.Context, externalSessionID, p
 
 func (r *CodexAppServerRuntime) startThread(ctx context.Context) (string, error) {
 	result, err := r.request(ctx, "thread/start", map[string]any{
-		"cwd":            nullableString(r.options.Workspace),
 		"approvalPolicy": "never",
 		"sandbox":        r.options.Sandbox,
-		"serviceName":    r.options.ServiceName,
 	})
 	if err != nil {
 		return "", fmt.Errorf("start Codex thread: %w", err)
@@ -304,7 +299,6 @@ func (r *CodexAppServerRuntime) ensureThread(ctx context.Context, threadID strin
 
 	result, err := r.request(ctx, "thread/resume", map[string]any{
 		"threadId":       threadID,
-		"cwd":            nullableString(r.options.Workspace),
 		"approvalPolicy": "never",
 		"sandbox":        r.options.Sandbox,
 	})
@@ -331,6 +325,10 @@ func (r *CodexAppServerRuntime) ensureThread(ctx context.Context, threadID strin
 }
 
 func (r *CodexAppServerRuntime) runTurn(ctx context.Context, threadID, prompt string, emit EventHandler) error {
+	conversationDir, err := r.conversationDir(threadID)
+	if err != nil {
+		return err
+	}
 	execution := &appServerTurn{
 		threadID:  threadID,
 		maxEvents: r.options.MaxEvents,
@@ -344,6 +342,7 @@ func (r *CodexAppServerRuntime) runTurn(ctx context.Context, threadID, prompt st
 
 	result, err := r.request(ctx, "turn/start", map[string]any{
 		"threadId": threadID,
+		"cwd":      conversationDir,
 		"input": []map[string]any{{
 			"type": "text",
 			"text": prompt,
@@ -673,13 +672,6 @@ func emitRuntimeEvent(emit EventHandler, eventType string, params map[string]any
 		"method": strings.ReplaceAll(eventType, ".", "/"),
 		"params": params,
 	})
-}
-
-func nullableString(value string) any {
-	if value == "" {
-		return nil
-	}
-	return value
 }
 
 func stringValue(value any) string {

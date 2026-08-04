@@ -46,7 +46,7 @@ const href = (url: string) => {
         tooltip-content="Github"
         class="color-#010409 xl:block sm:hidden dark:color-#e6edf3"
         icon="simple-icons:github"
-        @click="href('https://github.com/jzero-io/jzero-admin')"
+        @click="href('https://github.com/jzero-io/agentrazor-admin')"
       />
 
       <GlobalSearch />

@@ -16,9 +16,9 @@ export default hopeTheme({
 
   // made by https://gopherize.me
   // favicon.ico made by https://www.bitbug.net
-  logo: "https://oss.jaronnie.com/jzero.svg",
+  logo: "agentrazor.png",
 
-  repo: "jzero-io/jzero-admin",
+  repo: "jzero-io/agentrazor-admin",
 
   docsDir: "docs/src",
 

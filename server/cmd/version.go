@@ -33,7 +33,7 @@ func printVersion() {
 	if Version == "" {
 		Version = "unknown"
 	}
-	versionBuffer.WriteString(fmt.Sprintf("jzero-admin-server version %s %s/%s\n", Version, runtime.GOOS, runtime.GOARCH))
+	versionBuffer.WriteString(fmt.Sprintf("agentrazor server version %s %s/%s\n", Version, runtime.GOOS, runtime.GOARCH))
 
 	versionBuffer.WriteString(fmt.Sprintf("Go version %s\n", runtime.Version()))
 

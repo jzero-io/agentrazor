@@ -8,7 +8,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/rest"
-	coresvc "github.com/jzero-io/jzero-admin/core-engine/svc"
+	coresvc "github.com/jzero-io/agentrazor-admin/core-engine/svc"
 
 	"{{ .Module }}/internal/config"
 	"{{ .Module }}/internal/custom"

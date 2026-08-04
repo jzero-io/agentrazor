@@ -1,6 +1,6 @@
 const local: App.I18n.Schema = {
   system: {
-    title: 'jzero-admin',
+    title: 'agentrazor-admin',
     updateTitle: '系统版本更新通知',
     updateContent: '检测到系统有新版本发布，是否立即刷新页面？',
     updateConfirm: '立即刷新',
@@ -252,7 +252,7 @@ const local: App.I18n.Schema = {
     },
     about: {
       title: '关于',
-      introduction: `jzero-admin 基于 jzero 脚手架搭建后台系统并配备代码生成, 前端基于 soybean-admin 搭建。`,
+      introduction: `agentrazor-admin 基于 jzero 脚手架搭建后台系统并配备代码生成, 前端基于 soybean-admin 搭建。`,
       projectInfo: {
         title: '项目信息',
         version: '版本',
@@ -272,7 +272,7 @@ const local: App.I18n.Schema = {
         title: '项目里程碑',
         moreNews: '更多动态',
         desc1: '2024 年 04 月 07 日创建了开源项目 jzero!',
-        desc2: '2024 年 10 月 14 号创建了开源项目 jzero-admin!',
+        desc2: '2024 年 10 月 14 号创建了开源项目 agentrazor-admin!',
         desc3: '2025 年不断的改进完善ing!',
         desc4: '2025 年 11 月 30 号创建了开源项目 jzero-intellij!',
         desc5: '2026 年 01 月 01 号发布了 jzero v1.0.0!',

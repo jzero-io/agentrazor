@@ -39,20 +39,6 @@ jobs:
           cd web
           pnpm install --frozen-lockfile
           pnpm typecheck
-          VITE_SERVICE_BASE_URL=https://api.jzero-admin-server.jaronnie.com pnpm build
-          VITE_SERVICE_BASE_URL=https://api.jzero-admin-server.jaronnie.com pnpm build --outDir fc3-dist
+          VITE_SERVICE_BASE_URL=https://api.agentrazor-admin-server.jaronnie.com pnpm build
+          VITE_SERVICE_BASE_URL=https://api.agentrazor-admin-server.jaronnie.com pnpm build --outDir fc3-dist
           cd ..
-
-      - name: Upload admin web artifact
-        run: |
-          go install github.com/jaronnie/grum@latest
-          GITHUB_TOKEN=${{ secrets.ACCESS_TOKEN }} grum clone https://github.com/jaronnie/jzero-admin-deploy-web
-          cd jzero-admin-deploy-web
-          git config user.name "dependabot[bot]"
-          git config user.email "49699333+dependabot[bot]@users.noreply.github.com"
-          find . -type f -mindepth 1 ! -path "./vercel.json" ! -path "./.git/*" ! -path "./code/nginx.conf" ! -path "./s.yaml" -exec rm -rf {} +
-          mv ../web/dist/* ./
-          mv ../web/fc3-dist/* ./code/build
-          git add .
-          git diff-index --quiet HEAD || git commit -m "feat(web): update"
-          git push -f

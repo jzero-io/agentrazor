@@ -3,7 +3,7 @@ hooks:
     - go install tool
 
 new:
-  home: .template/jzero-admin-plugin
+  home: .template/agentrazor-plugin
 
 gen:
   hooks:
@@ -17,4 +17,4 @@ gen:
   model-driver: mysql
   model-cache: false
   model-ignore-columns: ["create_time", "update_time"]
-  model-schema: jzero-admin
+  model-schema: agentrazor

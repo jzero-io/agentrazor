@@ -17,6 +17,8 @@ var (
 	ErrInvalidThreadID = errors.New("invalid Codex thread id")
 )
 
+const turnIdleTimeout = 10 * time.Minute
+
 func newRunID() string {
 	return "run_" + uuid.NewString()
 }
@@ -54,24 +56,21 @@ type activeRun struct {
 }
 
 type ThreadService struct {
-	runtime ThreadRuntime
-	timeout time.Duration
-	events  *EventHub
+	runtime     ThreadRuntime
+	idleTimeout time.Duration
+	events      *EventHub
 
 	mu     sync.Mutex
 	runs   map[string]activeRun
 	closed bool
 }
 
-func NewThreadService(runtime ThreadRuntime, timeout time.Duration) *ThreadService {
-	if timeout <= 0 {
-		timeout = 10 * time.Minute
-	}
+func NewThreadService(runtime ThreadRuntime) *ThreadService {
 	return &ThreadService{
-		runtime: runtime,
-		timeout: timeout,
-		events:  NewEventHub(1_000, 256),
-		runs:    make(map[string]activeRun),
+		runtime:     runtime,
+		idleTimeout: turnIdleTimeout,
+		events:      NewEventHub(1_000, 256),
+		runs:        make(map[string]activeRun),
 	}
 }
 
@@ -178,7 +177,7 @@ func (s *ThreadService) Send(threadID, prompt string) (ThreadRun, error) {
 		Prompt:    prompt,
 		CreatedAt: time.Now().UTC(),
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
+	ctx, cancel := context.WithCancel(context.Background())
 	s.runs[threadID] = activeRun{id: run.ID, cancel: cancel}
 	s.mu.Unlock()
 
@@ -188,6 +187,8 @@ func (s *ThreadService) Send(threadID, prompt string) (ThreadRun, error) {
 
 func (s *ThreadService) execute(ctx context.Context, cancel context.CancelFunc, run ThreadRun) {
 	defer cancel()
+	idleTimer := time.AfterFunc(s.idleTimeout, cancel)
+	defer idleTimer.Stop()
 	defer func() {
 		s.mu.Lock()
 		if current, ok := s.runs[run.ThreadID]; ok && current.id == run.ID {
@@ -200,6 +201,7 @@ func (s *ThreadService) execute(ctx context.Context, cancel context.CancelFunc, 
 		"startedAt": time.Now().UTC(),
 	})
 	emit := func(event map[string]any) {
+		idleTimer.Reset(s.idleTimeout)
 		eventType, _ := event["type"].(string)
 		if eventType == "" {
 			eventType = "event"

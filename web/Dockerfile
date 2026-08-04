@@ -1,6 +1,6 @@
 FROM node:20.12.2-bullseye-slim AS builder
 
-WORKDIR /jzero-admin
+WORKDIR /agentrazor-admin
 
 COPY ./ ./
 
@@ -12,4 +12,4 @@ FROM nginx:alpine
 
 WORKDIR /usr/share/nginx/
 
-COPY --from=builder /jzero-admin/dist ./html
+COPY --from=builder /agentrazor-admin/dist ./html

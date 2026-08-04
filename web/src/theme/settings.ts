@@ -51,7 +51,7 @@ export const themeSettings: App.Theme.ThemeSetting = {
   },
   watermark: {
     visible: false,
-    text: 'jzero-admin'
+    text: 'agentrazor-admin'
   },
   tokens: {
     light: {
@@ -85,6 +85,6 @@ export const themeSettings: App.Theme.ThemeSetting = {
 export const overrideThemeSettings: Partial<App.Theme.ThemeSetting> = {
   watermark: {
     visible: false,
-    text: 'jzero-admin'
+    text: 'agentrazor-admin'
   }
 };

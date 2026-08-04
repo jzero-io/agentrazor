@@ -31,22 +31,19 @@ func NewServiceContext(cc configcenter.ConfigCenter[config.Config], route2code f
 	svcCtx.Model = model.NewModel(svcCtx.SqlxConn, modelx.WithCachedConn(modelx.NewConnWithCache(svcCtx.SqlxConn, svcCtx.Cache)))
 	svcCtx.Middleware = NewMiddleware(svcCtx)
 	agentConfig := cc.MustGetConfig().Agent
-	if agentConfig.Enabled {
-		runtime, err := agent.NewCodexAppServerRuntime(agent.CodexAppServerOptions{
-			Binary:             agentConfig.BinaryPath,
-			CodexHome:          agentConfig.CodexHome,
-			Workspace:          agentConfig.Workspace,
-			Sandbox:            agentConfig.Sandbox,
-			ServiceName:        agentConfig.ServiceName,
-			DisableApps:        agentConfig.DisableApps,
-			DisabledMCPServers: agentConfig.DisabledMCPServers,
-			MaxEvents:          10_000,
-			StartTimeout:       time.Duration(agentConfig.StartTimeoutSeconds) * time.Second,
-		})
-		if err != nil {
-			panic(err)
-		}
-		svcCtx.AgentThreads = agent.NewThreadService(runtime, time.Duration(agentConfig.RunTimeoutSeconds)*time.Second)
+	runtime, err := agent.NewCodexAppServerRuntime(agent.CodexAppServerOptions{
+		Binary:             agentConfig.BinaryPath,
+		CodexHome:          agentConfig.CodexHome,
+		AgentrazorHome:     agentConfig.AgentrazorHome,
+		Sandbox:            agentConfig.Sandbox,
+		DisableApps:        agentConfig.DisableApps,
+		DisabledMCPServers: agentConfig.DisabledMCPServers,
+		MaxEvents:          10_000,
+		StartTimeout:       time.Duration(agentConfig.StartTimeoutSeconds) * time.Second,
+	})
+	if err != nil {
+		panic(err)
 	}
+	svcCtx.AgentThreads = agent.NewThreadService(runtime)
 	return svcCtx
 }

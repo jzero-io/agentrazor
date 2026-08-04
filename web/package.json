@@ -1,21 +1,21 @@
 {
-  "name": "jzero-admin",
+  "name": "agentrazor-admin",
   "type": "module",
   "version": "v1.0.0",
   "packageManager": "pnpm@9.14.2+sha512.6e2baf77d06b9362294152c851c4f278ede37ab1eba3a55fda317a4a17b209f4dbb973fb250a77abc463a341fcb1f17f17cfa24091c4eb319cda0d9b84278387",
-  "description": "基于 go 语言 jzero 脚手架和 soybean-admin 搭建的后台管理系统",
+  "description": "基于 go 语言 jzero 脚手架和 soybean-admin 搭建的 agent 后台管理系统",
   "author": {
     "name": "jaronnie",
     "email": "jaron@jaoronnie.com",
     "url": "https://github.com/jzero-io"
   },
   "license": "Apache-2.0",
-  "homepage": "https://github.com/jzero-io/jzero-admin",
+  "homepage": "https://github.com/jzero-io/agentrazor",
   "repository": {
-    "url": "https://github.com/jzero-io/jzero-admin.git"
+    "url": "https://github.com/jzero-io/agentrazor.git"
   },
   "bugs": {
-    "url": "https://github.com/jzero-io/jzero-admin/issues"
+    "url": "https://github.com/jzero-io/agentrazor/issues"
   },
   "keywords": [
     "jzero",

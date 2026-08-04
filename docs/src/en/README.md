@@ -4,4 +4,4 @@ icon: fluent:home-heart-20-filled
 title: Home
 ---
 
-docs for jzero-admin
+docs for agentrazor-admin

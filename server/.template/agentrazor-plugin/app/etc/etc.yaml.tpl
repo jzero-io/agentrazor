@@ -11,7 +11,7 @@ log:
 
 sqlx:
     driverName: "mysql"
-    dataSource: "root:123456@tcp(127.0.0.1:3306)/jzero-admin?charset=utf8mb4&parseTime=True&loc=Local"
+    dataSource: "root:123456@tcp(127.0.0.1:3306)/agentrazor-admin?charset=utf8mb4&parseTime=True&loc=Local"
 
 redis:
     host: "127.0.0.1:6379"

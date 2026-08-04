@@ -8,14 +8,11 @@ type Config struct {
 }
 
 type AgentConf struct {
-	Enabled             bool     `json:",default=true"`
 	BinaryPath          string   `json:",default=codex"`
 	CodexHome           string   `json:",default=data/codex-home"`
-	Workspace           string   `json:",default=.."`
+	AgentrazorHome      string   `json:",default=data/agentrazor-home"`
 	Sandbox             string   `json:",default=read-only,options=read-only|workspace-write|danger-full-access"`
-	ServiceName         string   `json:",default=agentrazor"`
 	DisableApps         bool     `json:",default=true"`
 	DisabledMCPServers  []string `json:",optional"`
 	StartTimeoutSeconds int      `json:",default=15"`
-	RunTimeoutSeconds   int      `json:",default=600"`
 }

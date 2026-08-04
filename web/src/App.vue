@@ -25,7 +25,7 @@ const naiveDateLocale = computed(() => {
 
 const watermarkProps = computed<WatermarkProps>(() => {
   return {
-    content: themeStore.watermark?.text || 'jzero-admin',
+    content: themeStore.watermark?.text || 'agentrazor-admin',
     cross: true,
     fullscreen: true,
     fontSize: 16,

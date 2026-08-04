@@ -29,6 +29,10 @@ func (r *CodexAppServerRuntime) CreateStoredThread(ctx context.Context) (StoredT
 	if err != nil {
 		return StoredThread{}, err
 	}
+	if err := r.createConversationHome(threadID); err != nil {
+		_ = r.DeleteThread(ctx, threadID)
+		return StoredThread{}, err
+	}
 	thread, err := r.ReadStoredThread(ctx, threadID, false)
 	if err == nil {
 		return thread, nil
@@ -58,9 +62,6 @@ func (r *CodexAppServerRuntime) ListStoredThreads(ctx context.Context, archived 
 				"subAgent", "subAgentReview", "subAgentCompact",
 				"subAgentThreadSpawn", "subAgentOther", "unknown",
 			},
-		}
-		if r.options.Workspace != "" {
-			params["cwd"] = r.options.Workspace
 		}
 		if cursor != "" {
 			params["cursor"] = cursor
