@@ -26,7 +26,7 @@ func NewList(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Request) *
 	return &List{Logger: logx.WithContext(ctx), ctx: ctx, svcCtx: svcCtx, r: r}
 }
 
-func (l *List) List() (*types.ListResponse, error) {
+func (l *List) List() (resp *types.ListResponse, err error) {
 	user, err := auth.Info(l.ctx)
 	if err != nil {
 		return nil, err
@@ -44,7 +44,7 @@ func (l *List) List() (*types.ListResponse, error) {
 		}
 		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
 	})
-	resp := &types.ListResponse{Groups: make([]types.ConversationGroup, 0, len(rows))}
+	resp = &types.ListResponse{Groups: make([]types.ConversationGroup, 0, len(rows))}
 	for _, row := range rows {
 		item := types.ConversationGroup{Id: row.Uuid, Name: row.Name, CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: row.UpdatedAt.UTC().Format(time.RFC3339Nano)}
 		if row.PinnedAt.Valid {

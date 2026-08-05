@@ -26,7 +26,7 @@ func NewCreate(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Request)
 	return &Create{Logger: logx.WithContext(ctx), ctx: ctx, svcCtx: svcCtx, r: r}
 }
 
-func (l *Create) Create(req *types.CreateRequest) (*types.ConversationGroup, error) {
+func (l *Create) Create(req *types.CreateRequest) (resp *types.ConversationGroup, err error) {
 	user, err := auth.Info(l.ctx)
 	if err != nil {
 		return nil, err

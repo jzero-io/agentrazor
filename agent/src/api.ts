@@ -167,19 +167,56 @@ export const conversationApi = {
   },
   subscribe(id: string, onEvent: (event: StreamEvent) => void, onError: () => void) {
     const token = getToken();
-    const authQuery = token ? `?token=${encodeURIComponent(token)}` : '';
-    const source = new EventSource(`${apiBase}/api/v1/conversations/${encodeURIComponent(id)}/events${authQuery}`);
-    source.onmessage = message => {
+    // EventSource 无法携带 Authorization 头，改用 fetch 流式读取 SSE，
+    // 这样鉴权与其他接口保持一致（Bearer token 走 Authorization）。
+    const controller = new AbortController();
+    const url = `${apiBase}/api/v1/conversations/${encodeURIComponent(id)}/events`;
+
+    void (async () => {
       try {
-        const response = JSON.parse(message.data) as EventsResponse;
-        if (response.event === 'stream.heartbeat') return;
-        onEvent(JSON.parse(response.data) as StreamEvent);
-      } catch {
-        onError();
+        const response = await fetch(url, {
+          headers: {
+            Accept: 'text/event-stream',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          cache: 'no-store',
+          signal: controller.signal
+        });
+        if (!response.ok || !response.body) {
+          onError();
+          return;
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let sep: number;
+          while ((sep = buffer.indexOf('\n\n')) >= 0 || (sep = buffer.indexOf('\r\n\r\n')) >= 0) {
+            const sepLength = buffer.startsWith('\r\n', sep) ? 4 : 2;
+            const raw = buffer.slice(0, sep);
+            buffer = buffer.slice(sep + sepLength);
+            const dataLine = raw.split('\n').find(line => line.startsWith('data:'));
+            if (!dataLine) continue;
+            const payload = dataLine.slice(5).trim();
+            if (!payload) continue;
+            try {
+              const eventResponse = JSON.parse(payload) as EventsResponse;
+              if (eventResponse.event === 'stream.heartbeat') continue;
+              onEvent(JSON.parse(eventResponse.data) as StreamEvent);
+            } catch {
+              onError();
+            }
+          }
+        }
+      } catch (error) {
+        if ((error as Error)?.name !== 'AbortError') onError();
       }
-    };
-    source.onerror = onError;
-    return () => source.close();
+    })();
+
+    return () => controller.abort();
   }
 };
 

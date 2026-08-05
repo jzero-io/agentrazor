@@ -38,6 +38,7 @@ type (
 	prefix:          /api/v1
 	group:           v1/conversation/group
 	compact_handler: true
+	jwt:             Jwt
 )
 service server {
 	@handler List

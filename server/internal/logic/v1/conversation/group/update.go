@@ -27,7 +27,7 @@ func NewUpdate(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Request)
 	return &Update{Logger: logx.WithContext(ctx), ctx: ctx, svcCtx: svcCtx, r: r}
 }
 
-func (l *Update) Update(req *types.UpdateRequest) (*types.ConversationGroup, error) {
+func (l *Update) Update(req *types.UpdateRequest) (resp *types.ConversationGroup, err error) {
 	user, err := auth.Info(l.ctx)
 	if err != nil {
 		return nil, err
@@ -60,7 +60,7 @@ func (l *Update) Update(req *types.UpdateRequest) (*types.ConversationGroup, err
 	if err != nil {
 		return nil, err
 	}
-	resp := &types.ConversationGroup{Id: row.Uuid, Name: row.Name, CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: row.UpdatedAt.UTC().Format(time.RFC3339Nano)}
+	resp = &types.ConversationGroup{Id: row.Uuid, Name: row.Name, CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: row.UpdatedAt.UTC().Format(time.RFC3339Nano)}
 	if row.PinnedAt.Valid {
 		v := row.PinnedAt.Time.UTC().Format(time.RFC3339Nano)
 		resp.PinnedAt = &v

@@ -131,6 +131,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Handler: v1conversation.CancelTurn(serverCtx),
 				},
 			},
+			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
 			rest.WithPrefix("/api/v1"),
 		)
 
@@ -143,6 +144,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Handler: v1conversation.StreamEvents(serverCtx),
 				},
 			},
+			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
 			rest.WithPrefix("/api/v1"),
 			rest.WithSSE(),
 		)
@@ -171,6 +173,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Handler: v1conversationgroup.Delete(serverCtx),
 				},
 			},
+			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
 			rest.WithPrefix("/api/v1"),
 		)
 	}
