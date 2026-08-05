@@ -935,6 +935,17 @@ html[data-theme='dark'] .conversation-drop-zone.drag-over {
   list-style: none;
 }
 
+.turn-process-summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 0 13px;
+  border-bottom: 1px solid #eceeed;
+  color: #888680;
+  font-size: 17px;
+  line-height: 1.4;
+}
+
 .turn-process > summary::-webkit-details-marker {
   display: none;
 }
@@ -955,7 +966,7 @@ html[data-theme='dark'] .conversation-drop-zone.drag-over {
 }
 
 .turn-process-content {
-  padding: 17px 0 2px;
+  padding: 10px 0 0;
 }
 
 .turn-live-status {
@@ -964,17 +975,37 @@ html[data-theme='dark'] .conversation-drop-zone.drag-over {
   min-height: 28px;
   margin: -12px 0 20px;
   color: #777b7e;
-  font-size: 14px;
+  font-size: 17px;
+}
+
+.turn-live-status .status-pulse {
+  animation: status-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes status-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .process-commentary {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+  font-size: 17px;
+  line-height: 1.75;
+}
+
+.process-commentary p {
+  margin-bottom: 0;
 }
 
 .process-entry {
   margin: 0 0 12px;
   color: #686d71;
-  font-size: 14px;
+  font-size: 17px;
 }
 
 .process-entry > summary,
@@ -995,6 +1026,97 @@ html[data-theme='dark'] .conversation-drop-zone.drag-over {
   width: 17px;
   height: 17px;
   flex: 0 0 auto;
+}
+
+.process-entry .entry-label {
+  flex: 0 0 auto;
+}
+
+.process-entry.skill-read-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #8a9196;
+  font-size: 17px;
+}
+
+.process-entry.skill-read-entry svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+
+.process-entry .entry-command {
+  min-width: 0;
+  overflow: hidden;
+  color: #5b6064;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.process-entry .command-output {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border: 1px solid #e3e6e8;
+  border-radius: 8px;
+  background: #f2f4f5;
+  color: #3f4549;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.process-entry.search-entry .entry-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.process-entry .search-result {
+  margin-top: 8px;
+  color: #5b6064;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.process-entry .file-change {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.process-entry .file-path {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #eef1f2;
+  color: #4a5155;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12.5px;
+  word-break: break-all;
+}
+
+.process-entry,
+.process-commentary {
+  animation: process-item-in 160ms ease-out;
+}
+
+@keyframes process-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .process-entry .activity-body {
@@ -1895,6 +2017,11 @@ html[data-theme='dark'] .confirm-modal-body p {
   color: #9b9b9b;
 }
 
+:root[data-theme="dark"] .turn-process-summary {
+  border-color: #393939;
+  color: #9b9b9b;
+}
+
 :root[data-theme="dark"] .activity-card {
   border-color: #353535;
   color: #b5b5b5;
@@ -1914,6 +2041,25 @@ html[data-theme='dark'] .confirm-modal-body p {
 :root[data-theme="dark"] .process-entry,
 :root[data-theme="dark"] .process-commentary {
   color: #c8c8c8;
+}
+
+:root[data-theme="dark"] .process-entry .entry-command {
+  color: #b6bdc2;
+}
+
+:root[data-theme="dark"] .process-entry .search-result {
+  color: #b6bdc2;
+}
+
+:root[data-theme="dark"] .process-entry .command-output {
+  border-color: #3a3a3a;
+  background: #1d1d1d;
+  color: #c9d1d9;
+}
+
+:root[data-theme="dark"] .process-entry .file-path {
+  background: #2a2a2a;
+  color: #b6bdc2;
 }
 
 :root[data-theme="dark"] .turn-live-status {

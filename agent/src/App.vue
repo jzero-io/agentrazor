@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, ref, watch, type PropType } from 'vue';
 import { Icon } from '@iconify/vue';
 import MarkdownIt from 'markdown-it';
 import hljs from 'highlight.js/lib/common';
@@ -120,6 +120,8 @@ const loadingDetail = ref(false);
 const sending = ref(false);
 const streamingTurn = ref<Turn | null>(null);
 const processingStatus = ref('');
+// 是否已开始输出最终回答：一旦有结果，就不再回退到"正在思考"
+const streamResultSeen = ref(false);
 const elapsedDurationMs = ref(0);
 const stopping = ref(false);
 let turnStartedAtMs = 0;
@@ -514,7 +516,8 @@ async function sendMessage() {
   draft.value = '';
   sending.value = true;
   streamingTurn.value = null;
-  processingStatus.value = '正在处理';
+  processingStatus.value = '正在思考';
+  streamResultSeen.value = false;
   startTurnTimer();
 
   const optimistic: Turn = {
@@ -591,22 +594,35 @@ function upsertStreamingItem(item: ThreadItem) {
 function processingLabel(item?: ThreadItem) {
   if (!item) return '正在处理';
   const toolName = `${item.server || ''} ${item.tool || ''}`.toLowerCase();
+  const truncate = (value: string, max = 48) => value.length > max ? `${value.slice(0, max)}…` : value;
   switch (item.type) {
     case 'reasoning':
       return '正在思考';
     case 'commandExecution':
-      return item.pluginId ? `正在使用 ${item.pluginId}` : '正在运行命令';
+      if (isSkillReadItem(item)) {
+        const skill = skillReadName(item);
+        const display = skill ? humanizeSkillName(skill) : '';
+        return display ? `正在读取 ${display} 技能` : '正在读取技能';
+      }
+      return item.pluginId
+        ? `正在使用 ${item.pluginId}`
+        : item.command ? `正在运行命令：${truncate(item.command)}` : '正在运行命令';
     case 'fileChange':
-      return '正在修改文件';
+      {
+        const paths = (item.changes || []).map(change => (change as Record<string, unknown>).path).filter(Boolean) as string[];
+        return paths.length ? `正在修改文件：${truncate(paths.join('、'))}` : '正在修改文件';
+      }
     case 'webSearch':
-      return '正在搜索网页';
+      return item.query ? `正在搜索：${truncate(item.query)}` : '正在搜索网页';
     case 'imageView':
       return '正在查看图片';
     case 'imageGeneration':
       return '正在生成图片';
     case 'mcpToolCall':
     case 'dynamicToolCall':
-      return toolName.includes('image') ? '正在生成图片' : '正在调用工具';
+      return toolName.includes('image')
+        ? '正在生成图片'
+        : item.tool ? `正在调用工具：${item.tool}` : '正在调用工具';
     case 'collabAgentToolCall':
     case 'subAgentActivity':
       return '正在协作处理';
@@ -615,6 +631,7 @@ function processingLabel(item?: ThreadItem) {
     case 'sleep':
       return '正在等待';
     case 'agentMessage':
+    case 'userMessage':
       return '';
     default:
       return '正在处理';
@@ -653,7 +670,7 @@ function activityTitle(item: ThreadItem) {
 
 function activityIcon(item: ThreadItem) {
   switch (item.type) {
-    case 'commandExecution': return 'solar:terminal-linear';
+    case 'commandExecution': return 'solar:command-linear';
     case 'fileChange': return 'solar:document-add-linear';
     case 'webSearch': return 'solar:magnifer-linear';
     case 'imageGeneration': return 'solar:gallery-add-linear';
@@ -680,8 +697,65 @@ function turnProcessItems(turn: Turn) {
   return turn.items.filter(item =>
     item.type !== 'userMessage'
     && item.type !== 'imageGeneration'
+    && item.type !== 'reasoning'
     && (item.type !== 'agentMessage' || isIntermediateAgentMessage(item))
   );
+}
+
+function turnReasoningItems(turn: Turn) {
+  return turn.items.filter(item => item.type === 'reasoning');
+}
+
+// 真正执行了工具/动作的条目（排除纯文字说明），用于判断任务是否"复杂"
+function turnWorkedItems(turn: Turn) {
+  return turnProcessItems(turn).filter(item => item.type !== 'agentMessage');
+}
+
+// 流式处理中只展示当前活动条目（步骤切换时覆盖），完成后才展示完整过程
+function turnLiveItem(turn: Turn): ThreadItem | null {
+  const process = turn.items.filter(item =>
+    item.type !== 'userMessage'
+    && !(item.type === 'agentMessage' && !isIntermediateAgentMessage(item))
+  );
+  return process.length ? process[process.length - 1] : null;
+}
+
+// 判断命令是否是在读取 skill：使用接口返回的结构化 commandActions
+// （type=read 且 path 指向 skills 目录），而不是解析命令字符串
+function isSkillReadItem(item: ThreadItem): boolean {
+  if (item.type !== 'commandExecution' || !Array.isArray(item.commandActions)) return false;
+  return item.commandActions.some(action =>
+    action?.type === 'read'
+    && typeof action.path === 'string'
+    && action.path.includes('skills')
+  );
+}
+
+// 从 commandActions 的 path 提取技能名（skills/ 后的第一个目录段）
+function skillReadName(item: ThreadItem): string {
+  if (!Array.isArray(item.commandActions)) return '';
+  const action = item.commandActions.find(a =>
+    a?.type === 'read' && typeof a.path === 'string' && a.path.includes('skills')
+  );
+  const match = action?.path?.match(/\/skills\/([^/]+)/);
+  return match ? match[1] : '';
+}
+
+// 完成态展示的过程条目：同一技能的连续读取合并为一条，避免重复
+function turnDisplayItems(turn: Turn): ThreadItem[] {
+  const result: ThreadItem[] = [];
+  let lastSkill = '';
+  for (const item of turnProcessItems(turn)) {
+    if (isSkillReadItem(item)) {
+      const skill = skillReadName(item);
+      if (skill && skill === lastSkill) continue;
+      lastSkill = skill;
+    } else {
+      lastSkill = '';
+    }
+    result.push(item);
+  }
+  return result;
 }
 
 function turnResultItems(turn: Turn) {
@@ -691,12 +765,106 @@ function turnResultItems(turn: Turn) {
   );
 }
 
+// 按 item 类型渲染不同的过程卡片，live 与完成态共用
+const ProcessItemCard = defineComponent({
+  name: 'ProcessItemCard',
+  props: {
+    item: { type: Object as PropType<ThreadItem>, required: true },
+    live: { type: Boolean, default: false }
+  },
+  setup(props) {
+    return () => {
+      const item = props.item;
+      const icon = (name: string) => h(Icon, { icon: name });
+
+      // 思考不单独渲染占位，统一由 live 状态行显示"正在思考"（避免重复）
+      if (item.type === 'reasoning') return null;
+
+      // 中间说明
+      if (item.type === 'agentMessage' && item.text) {
+        return h('div', { class: 'process-commentary markdown-body', innerHTML: renderMarkdown(item.text) });
+      }
+
+      // 命令执行：终端卡片
+      if (item.type === 'commandExecution') {
+        // 读取 skill 的只显示一行提示，不展开命令与输出全文
+        if (isSkillReadItem(item)) {
+          const skill = skillReadName(item);
+          const skillDisplay = skill ? humanizeSkillName(skill) : '';
+          return h('div', { class: 'process-entry skill-read-entry' }, [
+            icon(activityIcon(item)),
+            h('span', { class: 'entry-label' }, `${props.live ? '正在读取' : '读取'}${skillDisplay ? ` ${skillDisplay} 技能` : '技能'}`)
+          ]);
+        }
+        return h('details', { class: 'process-entry command-entry' }, [
+          h('summary', [
+            icon(activityIcon(item)),
+            h('span', { class: 'entry-label' }, props.live ? '正在运行命令' : '运行了命令'),
+            item.command ? h('code', { class: 'entry-command' }, item.command) : null
+          ]),
+          item.aggregatedOutput ? h('pre', { class: 'command-output' }, item.aggregatedOutput) : null
+        ]);
+      }
+
+      // 搜索：查询突出展示
+      if (item.type === 'webSearch') {
+        return h('details', { class: 'process-entry search-entry' }, [
+          h('summary', [
+            icon(activityIcon(item)),
+            h('span', { class: 'entry-label' }, `${props.live ? '正在搜索网页' : '已搜索网页'}${item.query ? `：${cleanSearchQuery(item.query)}` : ''}`)
+          ]),
+          item.result != null ? h('div', { class: 'search-result' }, String(item.result)) : null
+        ]);
+      }
+
+      // 修改文件
+      if (item.type === 'fileChange') {
+        const changes = Array.isArray(item.changes) ? item.changes as Array<Record<string, unknown>> : [];
+        return h('details', { class: 'process-entry file-entry' }, [
+          h('summary', [
+            icon(activityIcon(item)),
+            h('span', { class: 'entry-label' }, changes.length ? `修改 ${changes.length} 个文件` : '修改文件')
+          ]),
+          ...changes.map((change, index) => h('div', { class: 'file-change', key: `${item.id}-${index}` }, [
+            h('span', { class: 'file-path' }, String(change.path || ''))
+          ]))
+        ]);
+      }
+
+      // 工具调用等
+      const detail = activityDetail(item);
+      return h('details', { class: 'process-entry tool-entry' }, [
+        h('summary', [icon(activityIcon(item)), h('span', { class: 'entry-label' }, activityTitle(item))]),
+        detail ? h('pre', { class: 'activity-body' }, detail) : null
+      ]);
+    };
+  }
+});
+
 function formatTurnDuration(durationMs = 0) {
   const totalSeconds = Math.max(0, Math.round(durationMs / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  if (minutes === 0) return `${seconds}s`;
-  return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
+  const parts: string[] = [];
+  if (hours) parts.push(`${hours}小时`);
+  if (minutes) parts.push(`${minutes}分`);
+  if (seconds || parts.length === 0) parts.push(`${seconds}秒`);
+  return parts.join('');
+}
+
+// 技能名美化：jzero-skills → Jzero Skills，与 desktop 展示一致
+function humanizeSkillName(name: string): string {
+  return name
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+// 搜索查询清洗：去掉内部追踪参数（#ws_call_id=...），避免标签出现长尾巴
+function cleanSearchQuery(query: string): string {
+  return query.replace(/#ws_call_id=.*$/, '').trim();
 }
 
 function startTurnTimer(startedAt?: string) {
@@ -726,7 +894,8 @@ async function handleStreamEvent(event: StreamEvent) {
   if (event.type === 'run.started') {
     sending.value = true;
     stopping.value = false;
-    processingStatus.value = '正在处理';
+    processingStatus.value = '正在思考';
+    streamResultSeen.value = false;
     const data = event.data as { startedAt?: string } | undefined;
     if (!turnStartedAtMs) startTurnTimer(data?.startedAt || event.createdAt);
     if (!streamingTurn.value) {
@@ -763,7 +932,13 @@ async function handleStreamEvent(event: StreamEvent) {
       if (Number.isFinite(completedAt) && completedAt > 0) {
         streamingTurn.value.completedAt = new Date(completedAt * 1000).toISOString();
       }
-      if (Array.isArray(turn.items)) streamingTurn.value.items = turn.items as ThreadItem[];
+      if (Array.isArray(turn.items)) {
+        // turn.completed 快照只含 userMessage/agentMessage，合并而非替换，
+        // 保留流式阶段收集的 reasoning 等条目
+        const merged = new Map(streamingTurn.value.items.map(item => [item.id, item]));
+        for (const item of turn.items as ThreadItem[]) merged.set(item.id, item);
+        streamingTurn.value.items = Array.from(merged.values());
+      }
     }
     return;
   }
@@ -783,6 +958,21 @@ async function handleStreamEvent(event: StreamEvent) {
 		if (Number.isFinite(durationMs) && durationMs >= 0) elapsedDurationMs.value = durationMs;
 	}
 
+  if (event.type === 'codex.item.reasoning.textDelta') {
+    const params = (event.data as { params?: { delta?: string; itemId?: string; contentIndex?: number } } | undefined)?.params;
+    const delta = params?.delta ?? '';
+    if (!delta) return;
+    const itemId = params?.itemId || `stream-reasoning-${event.runId || 'active'}`;
+    const item = ensureStreamingItem(itemId, 'reasoning');
+    const content = (Array.isArray(item.content) ? item.content : []) as unknown as string[];
+    const index = Number(params?.contentIndex) || 0;
+    while (content.length <= index) content.push('');
+    content[index] = `${content[index] || ''}${delta}`;
+    item.content = content;
+    await scrollToBottom();
+    return;
+  }
+
   if (event.type === 'codex.item.agentMessage.delta') {
     const params = (event.data as { params?: { delta?: string; itemId?: string } } | undefined)?.params;
     const delta = params?.delta ?? '';
@@ -790,21 +980,39 @@ async function handleStreamEvent(event: StreamEvent) {
     const itemId = params?.itemId || `stream-agent-${event.runId || 'active'}`;
     const item = ensureStreamingItem(itemId, 'agentMessage');
     item.text = `${item.text || ''}${delta}`;
+    if (item.phase === 'final_answer') streamResultSeen.value = true;
     await scrollToBottom();
     return;
   }
 
   if (event.type === 'codex.item.started') {
     const params = (event.data as { params?: { item?: ThreadItem } } | undefined)?.params;
-    if (params?.item) upsertStreamingItem(params.item as ThreadItem);
-    if (!stopping.value) processingStatus.value = processingLabel(params?.item);
+    const streamedItem = params?.item as ThreadItem | undefined;
+    if (streamedItem) {
+      upsertStreamingItem(streamedItem);
+      if (streamedItem.type === 'agentMessage' && streamedItem.phase === 'final_answer') {
+        streamResultSeen.value = true;
+      }
+    }
+    if (!stopping.value) {
+      const label = processingLabel(params?.item);
+      // agentMessage 等空标签不覆盖当前状态，避免执行过程中状态闪空
+      // 已经有结果后，后续 reasoning 不再把状态拉回"正在思考"
+      if (label && !(streamResultSeen.value && params?.item?.type === 'reasoning')) processingStatus.value = label;
+    }
     await scrollToBottom();
     return;
   }
 
   if (event.type === 'codex.item.completed') {
     const params = (event.data as { params?: { item?: ThreadItem } } | undefined)?.params;
-    if (params?.item) upsertStreamingItem(params.item as ThreadItem);
+    if (params?.item) {
+      const completedItem = params.item as ThreadItem;
+      upsertStreamingItem(completedItem);
+      if (completedItem.type === 'agentMessage' && completedItem.phase === 'final_answer') {
+        streamResultSeen.value = true;
+      }
+    }
     await scrollToBottom();
     return;
   }
@@ -813,8 +1021,41 @@ async function handleStreamEvent(event: StreamEvent) {
     stopTurnTimer();
     const completedTurn = streamingTurn.value;
     await Promise.all([refreshDetail(), loadConversations()]);
-    if (completedTurn && detail.value && !detail.value.turns.some(turn => turn.id === completedTurn.id)) {
-      detail.value.turns.push(completedTurn);
+    if (completedTurn && detail.value) {
+      const persisted = detail.value.turns.find(turn => turn.id === completedTurn.id);
+      if (persisted) {
+        // 服务端持久化的 turn 只含 userMessage/agentMessage，工具/命令等过程
+        // 条目在流式阶段按真实时间顺序收集。以流式顺序为骨架交错合并，
+        // 避免命令全部堆到过程说明前面；同 id 或同文本的说明/最终回答
+        // 优先采用服务端版本（带权威 phase）。
+        const persistedById = new Map(persisted.items.map(item => [item.id, item]));
+        const pickPersisted = (streamItem: ThreadItem): ThreadItem | undefined => {
+          if (persistedById.has(streamItem.id)) return persistedById.get(streamItem.id);
+          if (streamItem.type === 'agentMessage' && streamItem.text) {
+            return persisted.items.find(existing =>
+              existing.type === 'agentMessage' && existing.text === streamItem.text
+            );
+          }
+          return undefined;
+        };
+        const merged: ThreadItem[] = [];
+        const usedPersisted = new Set<ThreadItem>();
+        const userMessage = persisted.items.find(item => item.type === 'userMessage');
+        if (userMessage) merged.push(userMessage);
+        for (const streamItem of completedTurn.items) {
+          if (streamItem.type === 'userMessage' || streamItem.type === 'reasoning') continue;
+          const existing = pickPersisted(streamItem);
+          if (existing) usedPersisted.add(existing);
+          merged.push(existing ?? streamItem);
+        }
+        for (const item of persisted.items) {
+          if (item.type === 'userMessage' || usedPersisted.has(item)) continue;
+          merged.push(item);
+        }
+        persisted.items = merged;
+      } else {
+        detail.value.turns.push(completedTurn);
+      }
     }
     sending.value = false;
     streamingTurn.value = null;
@@ -1549,33 +1790,43 @@ watch(
                     <div class="message-content">{{ userItemText(item) }}</div>
                   </article>
 
-                  <details
-                    v-if="turnProcessItems(turn).length || turn.durationMs !== undefined || turn === streamingTurn"
-                    class="turn-process"
-                  >
-                    <summary>
-                      <span>{{ turn === streamingTurn ? '正在处理' : '已处理' }} {{ formatTurnDuration(turn.durationMs ?? elapsedDurationMs) }}</span>
-                    </summary>
+                  <!-- 阶段一：处理中，只显示当前活动（覆盖式），工具卡片只显示摘要 -->
+                  <div v-if="turn === streamingTurn" class="turn-process">
+                    <div v-if="turnWorkedItems(turn).length" class="turn-process-summary">
+                      <span>正在处理 {{ formatTurnDuration(elapsedDurationMs) }}</span>
+                    </div>
                     <div class="turn-process-content">
-                      <template v-for="item in turnProcessItems(turn)" :key="item.id">
-                        <div
-                          v-if="isIntermediateAgentMessage(item) && item.text"
-                          class="process-commentary markdown-body"
-                          v-html="renderMarkdown(item.text)"
-                        />
-                        <div v-else-if="item.type === 'reasoning'" class="process-entry">
-                          <div class="process-entry-title"><Icon :icon="activityIcon(item)" /><span>{{ turn === streamingTurn ? '正在思考' : '已思考' }}</span></div>
-                          <div v-if="reasoningText(item)" class="activity-body markdown-body" v-html="renderMarkdown(reasoningText(item))" />
-                        </div>
-                        <details v-else class="process-entry">
-                          <summary><Icon :icon="activityIcon(item)" /><span>{{ activityTitle(item) }}</span></summary>
-                          <pre v-if="activityDetail(item)" class="activity-body">{{ activityDetail(item) }}</pre>
-                        </details>
+                      <template
+                        v-for="item in [turnLiveItem(turn)].filter((value): value is ThreadItem => Boolean(value))"
+                        :key="item.id"
+                      >
+                        <ProcessItemCard :item="item" live />
                       </template>
                     </div>
-                  </details>
-                  <div v-if="turn === streamingTurn && processingStatus" class="turn-live-status">
-                    <span>{{ processingStatus }}</span>
+                  </div>
+                  <!-- 阶段二：过程说明 + 工具/过程卡片都收进"已处理 Xs"折叠区 -->
+                  <template v-else>
+                    <details
+                      v-if="turnProcessItems(turn).length && turn.durationMs !== undefined"
+                      class="turn-process turn-process-done"
+                    >
+                      <summary>
+                        <span>已处理 {{ formatTurnDuration(turn.durationMs) }}</span>
+                      </summary>
+                      <div class="turn-process-content">
+                        <ProcessItemCard
+                          v-for="item in turnDisplayItems(turn)"
+                          :key="item.id"
+                          :item="item"
+                        />
+                      </div>
+                    </details>
+                  </template>
+                  <div
+                    v-if="turn === streamingTurn && processingStatus && !streamResultSeen && (!turnLiveItem(turn) || turnLiveItem(turn)!.type === 'reasoning')"
+                    class="turn-live-status"
+                  >
+                    <span :class="{ 'status-pulse': processingStatus === '正在思考' }">{{ processingStatus }}</span>
                   </div>
 
                   <template v-for="item in turnResultItems(turn)" :key="item.id">

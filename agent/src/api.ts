@@ -24,6 +24,7 @@ export interface ThreadItem {
   tool?: string;
   server?: string;
   pluginId?: string | null;
+  commandActions?: Array<{ command?: string; name?: string; path?: string; type?: string }>;
   arguments?: unknown;
   result?: unknown;
   query?: string;
