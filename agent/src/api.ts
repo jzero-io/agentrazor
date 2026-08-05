@@ -25,6 +25,7 @@ export interface ThreadItem {
   server?: string;
   pluginId?: string | null;
   commandActions?: Array<{ command?: string; name?: string; path?: string; type?: string }>;
+  skillFileName?: string;
   arguments?: unknown;
   result?: unknown;
   query?: string;

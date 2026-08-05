@@ -613,7 +613,12 @@ function processingLabel(item?: ThreadItem) {
         return paths.length ? `正在修改文件：${truncate(paths.join('、'))}` : '正在修改文件';
       }
     case 'webSearch':
-      return item.query ? `正在搜索：${truncate(item.query)}` : '正在搜索网页';
+      {
+        const isOpenPage = (item.action as { type?: string } | undefined)?.type === 'openPage';
+        return item.query
+          ? `${isOpenPage ? '正在打开网页：' : '正在搜索：'}${truncate(item.query)}`
+          : isOpenPage ? '正在打开网页' : '正在搜索网页';
+      }
     case 'imageView':
       return '正在查看图片';
     case 'imageGeneration':
@@ -741,14 +746,28 @@ function skillReadName(item: ThreadItem): string {
   return match ? match[1] : '';
 }
 
-// 完成态展示的过程条目：同一技能的连续读取合并为一条，避免重复
+// 读取技能时具体读取的文件名（commandActions path 的 basename）
+function skillReadFileName(item: ThreadItem): string {
+  if (!Array.isArray(item.commandActions)) return '';
+  const action = item.commandActions.find(a =>
+    a?.type === 'read' && typeof a.path === 'string' && a.path.includes('skills')
+  );
+  const path = action?.path ?? '';
+  return path.split('/').filter(Boolean).pop() ?? '';
+}
+
+// 展示的过程条目：同一技能的连续读取，第一张显示"读取 X 技能"卡片，
+// 后续的每个文件读取展开为"已读取 xxx.md"，避免重复技能卡片
 function turnDisplayItems(turn: Turn): ThreadItem[] {
   const result: ThreadItem[] = [];
   let lastSkill = '';
   for (const item of turnProcessItems(turn)) {
     if (isSkillReadItem(item)) {
       const skill = skillReadName(item);
-      if (skill && skill === lastSkill) continue;
+      if (skill && skill === lastSkill) {
+        result.push({ ...item, skillFileName: skillReadFileName(item) });
+        continue;
+      }
       lastSkill = skill;
     } else {
       lastSkill = '';
@@ -789,6 +808,13 @@ const ProcessItemCard = defineComponent({
       if (item.type === 'commandExecution') {
         // 读取 skill 的只显示一行提示，不展开命令与输出全文
         if (isSkillReadItem(item)) {
+          // 同一技能的后续文件读取：展开为"已读取 xxx.md"
+          if (item.skillFileName) {
+            return h('div', { class: 'process-entry skill-file-entry' }, [
+              icon(activityIcon(item)),
+              h('span', { class: 'entry-label' }, `已读取 ${item.skillFileName}`)
+            ]);
+          }
           const skill = skillReadName(item);
           const skillDisplay = skill ? humanizeSkillName(skill) : '';
           return h('div', { class: 'process-entry skill-read-entry' }, [
@@ -808,11 +834,15 @@ const ProcessItemCard = defineComponent({
 
       // 搜索：查询突出展示
       if (item.type === 'webSearch') {
+        const isOpenPage = (item.action as { type?: string } | undefined)?.type === 'openPage';
+        const searchLabel = isOpenPage ? '已打开网页' : '已搜索网页';
+        const liveLabel = isOpenPage ? '正在打开网页' : '正在搜索网页';
         return h('details', { class: 'process-entry search-entry' }, [
           h('summary', [
             icon(activityIcon(item)),
-            h('span', { class: 'entry-label' }, `${props.live ? '正在搜索网页' : '已搜索网页'}${item.query ? `：${cleanSearchQuery(item.query)}` : ''}`)
+            h('span', { class: 'entry-label' }, props.live ? liveLabel : searchLabel)
           ]),
+          item.query ? h('div', { class: 'search-result' }, cleanSearchQuery(item.query)) : null,
           item.result != null ? h('div', { class: 'search-result' }, String(item.result)) : null
         ]);
       }
@@ -1790,14 +1820,14 @@ watch(
                     <div class="message-content">{{ userItemText(item) }}</div>
                   </article>
 
-                  <!-- 阶段一：处理中，只显示当前活动（覆盖式），工具卡片只显示摘要 -->
+                  <!-- 阶段一：处理中，结果卡片按到达顺序逐条追加平铺，思考时只显示"正在思考" -->
                   <div v-if="turn === streamingTurn" class="turn-process">
                     <div v-if="turnWorkedItems(turn).length" class="turn-process-summary">
                       <span>正在处理 {{ formatTurnDuration(elapsedDurationMs) }}</span>
                     </div>
                     <div class="turn-process-content">
                       <template
-                        v-for="item in [turnLiveItem(turn)].filter((value): value is ThreadItem => Boolean(value))"
+                        v-for="item in turnDisplayItems(turn)"
                         :key="item.id"
                       >
                         <ProcessItemCard :item="item" live />

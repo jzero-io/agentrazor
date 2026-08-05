@@ -1021,6 +1021,22 @@ html[data-theme='dark'] .conversation-drop-zone.drag-over {
   display: none;
 }
 
+.process-entry > summary::after {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-right: 1.5px solid currentcolor;
+  border-bottom: 1.5px solid currentcolor;
+  content: "";
+  transform: rotate(-45deg);
+  transition: transform 140ms ease;
+}
+
+.process-entry[open] > summary::after {
+  transform: rotate(45deg) translateY(-2px);
+}
+
 .process-entry svg,
 .process-entry-title svg {
   width: 17px;
@@ -1041,6 +1057,21 @@ html[data-theme='dark'] .conversation-drop-zone.drag-over {
 }
 
 .process-entry.skill-read-entry svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+
+.process-entry.skill-file-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 25px;
+  color: #8a9196;
+  font-size: 17px;
+}
+
+.process-entry.skill-file-entry svg {
   width: 17px;
   height: 17px;
   flex: 0 0 auto;
@@ -1080,7 +1111,7 @@ html[data-theme='dark'] .conversation-drop-zone.drag-over {
 .process-entry .search-result {
   margin-top: 8px;
   color: #5b6064;
-  font-size: 13px;
+  font-size: 17px;
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
