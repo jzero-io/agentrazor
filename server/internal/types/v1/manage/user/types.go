@@ -12,9 +12,9 @@ var (
 type AddRequest struct {
 	Username   string   `json:"username"`
 	UserGender string   `json:"userGender,default=1"`
-	NickName   string   `json:"nickName"`
-	UserPhone  string   `json:"userPhone"`
-	UserEmail  string   `json:"userEmail"`
+	NickName   string   `json:"nickName,optional"`
+	UserPhone  string   `json:"userPhone,optional"`
+	UserEmail  string   `json:"userEmail,optional"`
 	Status     string   `json:"status,default=1"`
 	Password   string   `json:"password"`
 	UserRoles  []string `json:"userRoles"`

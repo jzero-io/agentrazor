@@ -386,7 +386,7 @@ async function loadConversations(selectFirst = false) {
   try {
     conversations.value = await conversationApi.list();
     if (selectFirst && !selectedId.value) {
-      const requestedId = new URL(window.location.href).searchParams.get('conversation') || '';
+      const requestedId = conversationIdFromPath(window.location.pathname);
       let preferred = visibleConversations.value.find(item => item.id === requestedId);
       if (!preferred && requestedId) {
         // 列表里还没有这个对话（例如刚创建、还没有消息），单独读取后恢复，
@@ -484,11 +484,15 @@ async function selectConversation(id: string) {
   }
 }
 
+function conversationIdFromPath(pathname: string): string {
+  // /c/:id 以及后续子级路径 /c/:id/<sub> 都从首段解析
+  const match = pathname.match(/^\/c\/([^/]+)/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
 function syncConversationUrl(id: string) {
-  const url = new URL(window.location.href);
-  if (id) url.searchParams.set('conversation', id);
-  else url.searchParams.delete('conversation');
-  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  const path = id ? `/c/${encodeURIComponent(id)}` : '/';
+  window.history.replaceState(window.history.state, '', path);
 }
 
 async function refreshDetail() {

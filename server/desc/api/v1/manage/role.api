@@ -42,7 +42,7 @@ type GetAllResponse {
 type AddRequest {
 	RoleName string `json:"roleName"`
 	RoleCode string `json:"roleCode"`
-	RoleDesc string `json:"roleDesc"`
+	RoleDesc string `json:"roleDesc,optional"`
 	Status   string `json:"status"`
 }
 
@@ -125,4 +125,3 @@ service server {
 	@handler GetHome
 	get /manage/getRoleHome (GetHomeRequest) returns (string)
 }
-

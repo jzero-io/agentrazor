@@ -56,9 +56,6 @@
               "required": [
                 "username",
                 "userGender",
-                "nickName",
-                "userPhone",
-                "userEmail",
                 "status",
                 "password",
                 "userRoles"

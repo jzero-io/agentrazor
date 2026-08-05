@@ -12,7 +12,7 @@ var (
 type AddRequest struct {
 	RoleName string `json:"roleName"`
 	RoleCode string `json:"roleCode"`
-	RoleDesc string `json:"roleDesc"`
+	RoleDesc string `json:"roleDesc,optional"`
 	Status   string `json:"status"`
 }
 
