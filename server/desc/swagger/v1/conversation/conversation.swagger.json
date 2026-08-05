@@ -249,22 +249,32 @@
                   ],
                   "type": "object"
                 },
-                "messages": {
+                "sessionId": {
+                  "type": "string"
+                },
+                "turns": {
                   "items": {
                     "properties": {
-                      "content": {
+                      "completedAt": {
                         "type": "string"
                       },
-                      "createdAt": {
+                      "durationMs": {
+                        "type": "integer"
+                      },
+                      "error": {
                         "type": "string"
                       },
                       "id": {
                         "type": "string"
                       },
-                      "role": {
-                        "type": "string"
+                      "items": {
+                        "items": {
+                          "additionalProperties": {},
+                          "type": "object"
+                        },
+                        "type": "array"
                       },
-                      "runId": {
+                      "startedAt": {
                         "type": "string"
                       },
                       "status": {
@@ -273,18 +283,16 @@
                     },
                     "required": [
                       "id",
-                      "runId",
-                      "role",
-                      "content",
                       "status",
-                      "createdAt"
+                      "startedAt",
+                      "completedAt",
+                      "durationMs",
+                      "error",
+                      "items"
                     ],
                     "type": "object"
                   },
                   "type": "array"
-                },
-                "sessionId": {
-                  "type": "string"
                 }
               },
               "type": "object"
@@ -531,6 +539,46 @@
           }
         ],
         "summary": "发送消息",
+        "tags": [
+          "v1/conversation"
+        ]
+      }
+    },
+    "/api/v1/conversations/{conversation_id}/turn/cancel": {
+      "post": {
+        "consumes": [
+          "application/x-www-form-urlencoded"
+        ],
+        "description": "接口权限编码:v1:conversation:cancelTurn",
+        "operationId": "v1/ConversationCancelTurn",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object"
+            }
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "停止当前 Turn",
         "tags": [
           "v1/conversation"
         ]

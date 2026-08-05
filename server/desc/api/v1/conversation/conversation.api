@@ -24,13 +24,19 @@ type (
 		Prompt    string `json:"prompt"`
 		CreatedAt string `json:"createdAt"`
 	}
-	Message {
-		Id        string `json:"id"`
-		RunId     string `json:"runId"`
-		Role      string `json:"role"`
-		Content   string `json:"content"`
-		Status    string `json:"status"`
-		CreatedAt string `json:"createdAt"`
+	GeneratedImage {
+		Id      string `json:"id"`
+		DataUrl string `json:"dataUrl"`
+		Alt     string `json:"alt"`
+	}
+	Turn {
+		Id          string                   `json:"id"`
+		Status      string                   `json:"status"`
+		StartedAt   *string                  `json:"startedAt,omitempty"`
+		CompletedAt *string                  `json:"completedAt,omitempty"`
+		DurationMs  *int64                   `json:"durationMs,omitempty"`
+		Error       string                   `json:"error,omitempty"`
+		Items       []map[string]interface{} `json:"items"`
 	}
 	ListResponse {
 		Conversations []Conversation `json:"conversations"`
@@ -42,6 +48,7 @@ type (
 		ConversationId string `path:"conversation_id" validate:"required"`
 	}
 	DeleteResponse  {}
+	CancelTurnResponse  {}
 	EventsRequest {
 		ConversationId  string `path:"conversation_id" validate:"required"`
 		LastEventId     string `header:"Last-Event-ID,optional"`
@@ -56,7 +63,7 @@ type (
 	DetailResponse {
 		Conversation Conversation `json:"conversation"`
 		SessionId    string       `json:"sessionId,omitempty"`
-		Messages     []Message    `json:"messages"`
+		Turns        []Turn       `json:"turns"`
 	}
 	UpdateRequest {
 		ConversationId string  `path:"conversation_id" validate:"required"`
@@ -105,6 +112,10 @@ service server {
 	@doc "发送消息"
 	@handler SendMessage
 	post /conversations/:conversation_id/messages (SendMessageRequest) returns (SendMessageResponse)
+
+	@doc "停止当前 Turn"
+	@handler CancelTurn
+	post /conversations/:conversation_id/turn/cancel (PathRequest) returns (CancelTurnResponse)
 }
 
 @server (

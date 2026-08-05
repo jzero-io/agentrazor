@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Icon } from '@iconify/vue';
+import MarkdownIt from 'markdown-it';
+import hljs from 'highlight.js/lib/common';
+import 'highlight.js/styles/github.css';
+import githubDarkTheme from 'highlight.js/styles/github-dark.css?raw';
 import {
   NButton,
   NConfigProvider,
   NDropdown,
   NEmpty,
+  NImage,
   NInput,
   NModal,
   NScrollbar,
@@ -17,7 +22,7 @@ import {
   dateZhCN
 } from 'naive-ui';
 import { authApi, clearToken, conversationApi, conversationGroupApi, getToken, setAuthErrorHandler, setToken } from './api';
-import type { Conversation, ConversationDetail, Message, StreamEvent, UserInfo } from './api';
+import type { Conversation, ConversationDetail, StreamEvent, ThreadItem, Turn, UserInfo } from './api';
 
 interface SidebarViewState {
   sidebarCollapsed?: boolean;
@@ -29,6 +34,73 @@ interface SidebarViewState {
 
 const SIDEBAR_VIEW_KEY = 'agentrazor_sidebar_view';
 const CONVERSATION_LIST_DROP_TARGET = 'conversation-list';
+
+// 深色模式使用 GitHub Dark 主题：把主题选择器作用域限制在 [data-theme="dark"] 下
+function scopeCssSelectors(css: string, scope: string): string {
+  const rules: string[] = [];
+  let buffer = '';
+  for (const line of css.split('\n')) {
+    buffer += `${line}\n`;
+    if (!line.includes('}')) continue;
+    const rule = buffer;
+    buffer = '';
+    const openBrace = rule.indexOf('{');
+    if (openBrace < 0) {
+      rules.push(rule);
+      continue;
+    }
+    const selectors = rule.slice(0, openBrace);
+    const body = rule.slice(openBrace);
+    const scoped = selectors
+      .split(',')
+      .map(selector => `${scope} ${selector.trim()}`)
+      .join(', ');
+    rules.push(`${scoped}${body}`);
+  }
+  if (buffer.trim()) rules.push(buffer);
+  return rules.join('');
+}
+
+const darkThemeStyle = document.createElement('style');
+darkThemeStyle.textContent = scopeCssSelectors(githubDarkTheme, ':root[data-theme="dark"]');
+document.head.appendChild(darkThemeStyle);
+
+const markdown = new MarkdownIt({
+  html: false,
+  breaks: true,
+  linkify: true
+});
+markdown.renderer.rules.link_open = (tokens, index, options, _env, renderer) => {
+  tokens[index].attrSet('target', '_blank');
+  tokens[index].attrSet('rel', 'noopener noreferrer');
+  return renderer.renderToken(tokens, index, options);
+};
+
+markdown.renderer.rules.fence = (tokens, index) => {
+  const token = tokens[index];
+  const info = (token.info || '').trim();
+  const lang = info.split(/\s+/)[0]?.toLowerCase() || '';
+  const label = lang ? hljs.getLanguage(lang)?.name || lang : 'text';
+  let code = '';
+  try {
+    code = lang && hljs.getLanguage(lang)
+      ? hljs.highlight(token.content, { language: lang, ignoreIllegals: true }).value
+      : markdown.utils.escapeHtml(token.content);
+  } catch {
+    code = markdown.utils.escapeHtml(token.content);
+  }
+  return [
+    '<div class="code-block">',
+    `<div class="code-block-head"><span class="code-lang">${markdown.utils.escapeHtml(label)}</span></div>`,
+    `<pre><code class="hljs${lang ? ` language-${lang}` : ''}">${code}</code></pre>`,
+    '</div>'
+  ].join('');
+};
+
+function renderMarkdown(content: string) {
+  return markdown.render(content);
+}
+
 function loadSidebarViewState(): SidebarViewState {
   try {
     return JSON.parse(localStorage.getItem(SIDEBAR_VIEW_KEY) || '{}') as SidebarViewState;
@@ -46,7 +118,12 @@ const draft = ref('');
 const loadingList = ref(false);
 const loadingDetail = ref(false);
 const sending = ref(false);
-const streamingMessage = ref<Message | null>(null);
+const streamingTurn = ref<Turn | null>(null);
+const processingStatus = ref('');
+const elapsedDurationMs = ref(0);
+const stopping = ref(false);
+let turnStartedAtMs = 0;
+let turnTimer: number | undefined;
 const sidebarCollapsed = ref(savedSidebarView.sidebarCollapsed ?? false);
 const renameVisible = ref(false);
 const renameValue = ref('');
@@ -139,14 +216,18 @@ const activeConversation = computed(() =>
 );
 const isArchivedActive = computed(() => activeConversation.value?.status === 'archived');
 const userMessages = computed(() =>
-  (detail.value?.messages || []).filter(item => item.role === 'user')
+  (detail.value?.turns || []).flatMap(turn => turn.items.filter(item => item.type === 'userMessage'))
 );
+const renderedTurns = computed(() => [
+  ...(detail.value?.turns || []),
+  ...(streamingTurn.value ? [streamingTurn.value] : [])
+]);
 const canSend = computed(() => Boolean(draft.value.trim() && selectedId.value && !sending.value));
 const isNewChat = computed(() =>
   Boolean(selectedId.value)
-  && !detail.value?.messages?.length
+  && !detail.value?.turns?.length
   && !sending.value
-  && !streamingMessage.value
+  && !streamingTurn.value
 );
 const userInitial = computed(() => currentUser.value?.username.trim().slice(0, 2).toUpperCase() || 'AR');
 const isDarkAppearance = computed(() =>
@@ -306,9 +387,29 @@ async function loadConversations(selectFirst = false) {
     conversations.value = await conversationApi.list();
     if (selectFirst && !selectedId.value) {
       const requestedId = new URL(window.location.href).searchParams.get('conversation') || '';
-      const preferred = visibleConversations.value.find(item => item.id === requestedId)
-        || visibleConversations.value[0];
-      if (preferred) await selectConversation(preferred.id);
+      let preferred = visibleConversations.value.find(item => item.id === requestedId);
+      if (!preferred && requestedId) {
+        // 列表里还没有这个对话（例如刚创建、还没有消息），单独读取后恢复，
+        // 避免刷新后直接跳到第一行对话。
+        try {
+          const detail = await conversationApi.get(requestedId);
+          if (detail?.conversation) {
+            preferred = detail.conversation;
+            const exists = conversations.value.some(item => item.id === preferred!.id);
+            if (!exists) {
+              const index = conversations.value.findIndex(
+                item => (item.updatedAt || '') < (preferred!.updatedAt || '')
+              );
+              if (index < 0) conversations.value.push(preferred);
+              else conversations.value.splice(index, 0, preferred);
+            }
+          }
+        } catch {
+          preferred = undefined;
+        }
+      }
+      const fallback = preferred || visibleConversations.value[0];
+      if (fallback) await selectConversation(fallback.id);
       else syncConversationUrl('');
     }
   } catch (error) {
@@ -369,8 +470,11 @@ async function selectConversation(id: string) {
   selectedId.value = id;
   syncConversationUrl(id);
   detail.value = null;
-  streamingMessage.value = null;
+  streamingTurn.value = null;
   sending.value = false;
+  processingStatus.value = '';
+  stopTurnTimer();
+  stopping.value = false;
   closeStream?.();
   closeStream = undefined;
   streamEventCutoff = Date.now();
@@ -392,11 +496,11 @@ async function refreshDetail() {
   loadingDetail.value = true;
   try {
     detail.value = await conversationApi.get(selectedId.value);
-    await scrollToBottom();
   } catch (error) {
     showError(error);
   } finally {
     loadingDetail.value = false;
+    void scrollToBottom();
   }
 }
 
@@ -405,17 +509,21 @@ async function sendMessage() {
   if (!canSend.value || !content) return;
   draft.value = '';
   sending.value = true;
-  streamingMessage.value = null;
+  streamingTurn.value = null;
+  processingStatus.value = '正在处理';
+  startTurnTimer();
 
-  const optimistic: Message = {
+  const optimistic: Turn = {
     id: `local-${Date.now()}`,
-    runId: '',
-    role: 'user',
-    content,
-    status: 'queued',
-    createdAt: new Date().toISOString()
+    status: 'inProgress',
+    startedAt: new Date().toISOString(),
+    items: [{
+      id: `local-user-${Date.now()}`,
+      type: 'userMessage',
+      content: [{ type: 'text', text: content }]
+    }]
   };
-  detail.value?.messages.push(optimistic);
+  streamingTurn.value = optimistic;
   await scrollToBottom();
 
   try {
@@ -428,10 +536,182 @@ async function sendMessage() {
     await conversationApi.send(selectedId.value, content);
   } catch (error) {
     draft.value = content;
-    detail.value?.messages.splice(detail.value.messages.indexOf(optimistic), 1);
+    streamingTurn.value = null;
     sending.value = false;
+    stopTurnTimer();
+    if (!stopping.value) processingStatus.value = '';
+    stopping.value = false;
     showError(error);
   }
+}
+
+async function cancelTurn() {
+  if (!selectedId.value || !sending.value || stopping.value) return;
+  stopping.value = true;
+  processingStatus.value = '正在停止';
+  try {
+    await conversationApi.cancelTurn(selectedId.value);
+  } catch (error) {
+    stopping.value = false;
+    processingStatus.value = '正在处理';
+    showError(error);
+  }
+}
+
+function ensureStreamingItem(id: string, type: string) {
+  if (!streamingTurn.value) {
+    streamingTurn.value = { id: '', status: 'inProgress', items: [] };
+  }
+  let item = streamingTurn.value.items.find(value => value.id === id);
+  if (!item) {
+    item = { id, type };
+    streamingTurn.value.items.push(item);
+  }
+  return item;
+}
+
+function upsertStreamingItem(item: ThreadItem) {
+  if (!streamingTurn.value) {
+    streamingTurn.value = { id: '', status: 'inProgress', items: [] };
+  }
+  let index = streamingTurn.value.items.findIndex(value => value.id === item.id);
+  if (index < 0 && item.type === 'userMessage') {
+    index = streamingTurn.value.items.findIndex(value =>
+      value.type === 'userMessage' && value.id.startsWith('local-user-')
+    );
+  }
+  if (index >= 0) streamingTurn.value.items[index] = item;
+  else streamingTurn.value.items.push(item);
+}
+
+function processingLabel(item?: ThreadItem) {
+  if (!item) return '正在处理';
+  const toolName = `${item.server || ''} ${item.tool || ''}`.toLowerCase();
+  switch (item.type) {
+    case 'reasoning':
+      return '正在思考';
+    case 'commandExecution':
+      return item.pluginId ? `正在使用 ${item.pluginId}` : '正在运行命令';
+    case 'fileChange':
+      return '正在修改文件';
+    case 'webSearch':
+      return '正在搜索网页';
+    case 'imageView':
+      return '正在查看图片';
+    case 'imageGeneration':
+      return '正在生成图片';
+    case 'mcpToolCall':
+    case 'dynamicToolCall':
+      return toolName.includes('image') ? '正在生成图片' : '正在调用工具';
+    case 'collabAgentToolCall':
+    case 'subAgentActivity':
+      return '正在协作处理';
+    case 'contextCompaction':
+      return '正在整理上下文';
+    case 'sleep':
+      return '正在等待';
+    case 'agentMessage':
+      return '';
+    default:
+      return '正在处理';
+  }
+}
+
+function userItemText(item: ThreadItem) {
+  if (!Array.isArray(item.content)) return '';
+  return item.content
+    .filter(part => typeof part === 'object' && part?.type === 'text')
+    .map(part => typeof part === 'object' ? part.text || '' : '')
+    .filter(Boolean)
+    .join('\n');
+}
+
+function reasoningText(item: ThreadItem) {
+  const values = [...(item.summary || []), ...(Array.isArray(item.content) ? item.content.filter(value => typeof value === 'string') : [])];
+  return values.join('\n\n');
+}
+
+function activityTitle(item: ThreadItem) {
+  switch (item.type) {
+    case 'commandExecution': return item.pluginId ? `使用 ${item.pluginId}` : '运行命令';
+    case 'fileChange': return '修改文件';
+    case 'webSearch': return item.query ? `搜索：${item.query}` : '搜索网页';
+    case 'imageView': return '查看图片';
+    case 'imageGeneration': return '生成图片';
+    case 'mcpToolCall': return `调用 ${item.server || 'MCP'} · ${item.tool || '工具'}`;
+    case 'dynamicToolCall': return `调用 ${item.tool || '工具'}`;
+    case 'collabAgentToolCall': return '协作处理';
+    case 'contextCompaction': return '整理上下文';
+    case 'plan': return '计划';
+    default: return item.type;
+  }
+}
+
+function activityIcon(item: ThreadItem) {
+  switch (item.type) {
+    case 'commandExecution': return 'solar:terminal-linear';
+    case 'fileChange': return 'solar:document-add-linear';
+    case 'webSearch': return 'solar:magnifer-linear';
+    case 'imageGeneration': return 'solar:gallery-add-linear';
+    case 'reasoning': return 'solar:lightbulb-bolt-linear';
+    default: return 'solar:widget-5-linear';
+  }
+}
+
+function activityDetail(item: ThreadItem) {
+  if (item.type === 'commandExecution') return [item.command, item.aggregatedOutput].filter(Boolean).join('\n\n');
+  if (item.type === 'plan') return item.text || '';
+  if (item.type === 'fileChange') return JSON.stringify(item.changes || [], null, 2);
+  if (item.type === 'mcpToolCall' || item.type === 'dynamicToolCall') {
+    return JSON.stringify({ arguments: item.arguments, result: item.result }, null, 2);
+  }
+  return '';
+}
+
+function isIntermediateAgentMessage(item: ThreadItem) {
+  return item.type === 'agentMessage' && item.phase === 'commentary';
+}
+
+function turnProcessItems(turn: Turn) {
+  return turn.items.filter(item =>
+    item.type !== 'userMessage'
+    && item.type !== 'imageGeneration'
+    && (item.type !== 'agentMessage' || isIntermediateAgentMessage(item))
+  );
+}
+
+function turnResultItems(turn: Turn) {
+  return turn.items.filter(item =>
+    item.type === 'imageGeneration'
+    || item.type === 'agentMessage' && !isIntermediateAgentMessage(item)
+  );
+}
+
+function formatTurnDuration(durationMs = 0) {
+  const totalSeconds = Math.max(0, Math.round(durationMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes === 0) return `${seconds}s`;
+  return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
+}
+
+function startTurnTimer(startedAt?: string) {
+  const parsed = startedAt ? Date.parse(startedAt) : Number.NaN;
+  turnStartedAtMs = Number.isFinite(parsed) ? parsed : Date.now();
+  // 正在处理时从 1s 开始计时，避免刚启动时显示 0s
+  elapsedDurationMs.value = Math.max(1000, Date.now() - turnStartedAtMs);
+  if (turnTimer !== undefined) window.clearInterval(turnTimer);
+  turnTimer = window.setInterval(() => {
+    elapsedDurationMs.value = Math.max(1000, Date.now() - turnStartedAtMs);
+  }, 1000);
+}
+
+function stopTurnTimer() {
+  if (turnTimer !== undefined) window.clearInterval(turnTimer);
+  turnTimer = undefined;
+  const duration = turnStartedAtMs ? Math.max(0, Date.now() - turnStartedAtMs) : undefined;
+  turnStartedAtMs = 0;
+  return duration;
 }
 
 async function handleStreamEvent(event: StreamEvent) {
@@ -441,41 +721,101 @@ async function handleStreamEvent(event: StreamEvent) {
 
   if (event.type === 'run.started') {
     sending.value = true;
-    streamingMessage.value = {
-      id: '',
-      runId: event.runId || '',
-      role: 'assistant',
-      content: '',
-      status: 'streaming',
-      createdAt: new Date().toISOString()
-    };
+    stopping.value = false;
+    processingStatus.value = '正在处理';
+    const data = event.data as { startedAt?: string } | undefined;
+    if (!turnStartedAtMs) startTurnTimer(data?.startedAt || event.createdAt);
+    if (!streamingTurn.value) {
+      streamingTurn.value = { id: event.runId || '', status: 'inProgress', items: [] };
+    }
     await scrollToBottom();
     return;
   }
+
+  if (event.type === 'codex.turn.started') {
+    const turn = (event.data as { params?: { turn?: Record<string, unknown> } } | undefined)?.params?.turn;
+    if (turn) {
+      if (!streamingTurn.value) streamingTurn.value = { id: '', status: 'inProgress', items: [] };
+      streamingTurn.value.id = String(turn.id || streamingTurn.value.id);
+      streamingTurn.value.status = String(turn.status || 'inProgress');
+      const startedAt = Number(turn.startedAt);
+      if (Number.isFinite(startedAt) && startedAt > 0) {
+        streamingTurn.value.startedAt = new Date(startedAt * 1000).toISOString();
+        startTurnTimer(streamingTurn.value.startedAt);
+      }
+    }
+    return;
+  }
+
+  if (event.type === 'codex.turn.completed') {
+    const turn = (event.data as { params?: { turn?: Record<string, unknown> } } | undefined)?.params?.turn;
+    if (turn) {
+      if (!streamingTurn.value) streamingTurn.value = { id: '', status: 'completed', items: [] };
+      streamingTurn.value.id = String(turn.id || streamingTurn.value.id);
+      streamingTurn.value.status = String(turn.status || 'completed');
+      const durationMs = Number(turn.durationMs);
+      if (Number.isFinite(durationMs) && durationMs >= 0) streamingTurn.value.durationMs = durationMs;
+      const completedAt = Number(turn.completedAt);
+      if (Number.isFinite(completedAt) && completedAt > 0) {
+        streamingTurn.value.completedAt = new Date(completedAt * 1000).toISOString();
+      }
+      if (Array.isArray(turn.items)) streamingTurn.value.items = turn.items as ThreadItem[];
+    }
+    return;
+  }
+
+	if (event.type.includes('task_started')) {
+		const data = event.data as { params?: Record<string, unknown> } | undefined;
+		const payload = ((data?.params?.msg || data?.params?.payload || data?.params) ?? {}) as Record<string, unknown>;
+		const startedAt = Number(payload.started_at);
+		if (Number.isFinite(startedAt) && startedAt > 0) startTurnTimer(new Date(startedAt * 1000).toISOString());
+		return;
+	}
+
+	if (event.type.includes('task_complete')) {
+		const data = event.data as { params?: Record<string, unknown> } | undefined;
+		const payload = ((data?.params?.msg || data?.params?.payload || data?.params) ?? {}) as Record<string, unknown>;
+		const durationMs = Number(payload.duration_ms);
+		if (Number.isFinite(durationMs) && durationMs >= 0) elapsedDurationMs.value = durationMs;
+	}
 
   if (event.type === 'codex.item.agentMessage.delta') {
     const params = (event.data as { params?: { delta?: string; itemId?: string } } | undefined)?.params;
     const delta = params?.delta ?? '';
     if (!delta) return;
-    if (!streamingMessage.value) {
-      streamingMessage.value = {
-        id: params?.itemId || '',
-        runId: event.runId || '',
-        role: 'assistant',
-        content: '',
-        status: 'streaming',
-        createdAt: new Date().toISOString()
-      };
-    }
-    streamingMessage.value.content += delta;
+    const itemId = params?.itemId || `stream-agent-${event.runId || 'active'}`;
+    const item = ensureStreamingItem(itemId, 'agentMessage');
+    item.text = `${item.text || ''}${delta}`;
+    await scrollToBottom();
+    return;
+  }
+
+  if (event.type === 'codex.item.started') {
+    const params = (event.data as { params?: { item?: ThreadItem } } | undefined)?.params;
+    if (params?.item) upsertStreamingItem(params.item as ThreadItem);
+    if (!stopping.value) processingStatus.value = processingLabel(params?.item);
+    await scrollToBottom();
+    return;
+  }
+
+  if (event.type === 'codex.item.completed') {
+    const params = (event.data as { params?: { item?: ThreadItem } } | undefined)?.params;
+    if (params?.item) upsertStreamingItem(params.item as ThreadItem);
     await scrollToBottom();
     return;
   }
 
   if (event.type === 'run.completed' || event.type === 'run.failed') {
+    stopTurnTimer();
+    const completedTurn = streamingTurn.value;
     await Promise.all([refreshDetail(), loadConversations()]);
+    if (completedTurn && detail.value && !detail.value.turns.some(turn => turn.id === completedTurn.id)) {
+      detail.value.turns.push(completedTurn);
+    }
     sending.value = false;
-    streamingMessage.value = null;
+    streamingTurn.value = null;
+    processingStatus.value = '';
+    stopping.value = false;
   }
 }
 
@@ -529,7 +869,7 @@ async function archiveConversation(item: Conversation) {
       selectedId.value = '';
       syncConversationUrl('');
       detail.value = null;
-      streamingMessage.value = null;
+      streamingTurn.value = null;
     }
     await loadConversations(wasSelected);
   } catch (error) {
@@ -555,7 +895,7 @@ async function deleteConversation() {
     selectedId.value = '';
     syncConversationUrl('');
     detail.value = null;
-    streamingMessage.value = null;
+    streamingTurn.value = null;
     await loadConversations(true);
   } catch (error) {
     showError(error);
@@ -595,7 +935,14 @@ function showError(error: unknown) {
 
 async function scrollToBottom() {
   await nextTick();
-  messagePane.value?.scrollTo({ top: messagePane.value.scrollHeight, behavior: 'smooth' });
+  // 首次进入对话时消息面板可能还没渲染出来，轮询等待它挂载后再滚动
+  let pane = messagePane.value || document.querySelector('.message-pane');
+  for (let i = 0; i < 80 && !pane; i++) {
+    await new Promise(resolve => setTimeout(resolve, 50));
+    pane = messagePane.value || document.querySelector('.message-pane');
+  }
+  if (!pane) return;
+  pane.scrollTo({ top: pane.scrollHeight, behavior: 'auto' });
 }
 
 function messagePreview(content: string) {
@@ -617,7 +964,7 @@ async function bootstrap() {
     selectedId.value = '';
     syncConversationUrl('');
     detail.value = null;
-    streamingMessage.value = null;
+    streamingTurn.value = null;
     closeStream?.();
   });
   try {
@@ -663,7 +1010,7 @@ function logout() {
   syncConversationUrl('');
   detail.value = null;
   conversations.value = [];
-  streamingMessage.value = null;
+  streamingTurn.value = null;
   sending.value = false;
 }
 
@@ -799,6 +1146,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('blur', hideConversationPreview);
   colorSchemeMedia.removeEventListener('change', handleSystemAppearanceChange);
   closeStream?.();
+  stopTurnTimer();
 });
 watch(isDarkAppearance, value => {
   document.documentElement.dataset.theme = value ? 'dark' : 'light';
@@ -1153,7 +1501,18 @@ watch(
               @keydown="handleComposerKeydown"
             />
             <div class="composer-footer">
-              <n-button type="primary" circle :disabled="!canSend" @click="sendMessage">
+              <n-button
+                v-if="sending"
+                type="primary"
+                circle
+                :loading="stopping"
+                aria-label="停止当前任务"
+                title="停止当前任务"
+                @click="cancelTurn"
+              >
+                <template #icon><Icon icon="solar:stop-bold" /></template>
+              </n-button>
+              <n-button v-else type="primary" circle :disabled="!canSend" @click="sendMessage">
                 <template #icon><Icon icon="solar:arrow-up-linear" /></template>
               </n-button>
             </div>
@@ -1166,36 +1525,83 @@ watch(
               v-for="(item, index) in userMessages"
               :key="item.id"
               class="preview-tick"
-              :aria-label="`跳转到第 ${index + 1} 条用户消息：${messagePreview(item.content)}`"
-              :title="messagePreview(item.content)"
-              :data-preview="messagePreview(item.content)"
+              :aria-label="`跳转到第 ${index + 1} 条用户消息：${messagePreview(userItemText(item))}`"
+              :title="messagePreview(userItemText(item))"
+              :data-preview="messagePreview(userItemText(item))"
               @click="jumpToMessage(item.id)"
             />
           </nav>
           <section ref="messagePane" class="message-pane">
             <n-spin :show="loadingDetail">
               <div class="message-column">
-                <article
-                  v-for="item in detail?.messages || []"
-                  :key="item.id"
-                  :id="`message-${item.id}`"
-                  tabindex="-1"
-                  class="message"
-                  :class="item.role"
-                >
-                  <div v-if="item.role === 'assistant'" class="avatar">
-                    <img src="/agentrazor-icon.png" alt="AgentRazor" />
-                  </div>
-                  <div class="message-content">{{ item.content }}</div>
-                </article>
+                <section v-for="turn in renderedTurns" :key="turn.id" class="turn" :data-status="turn.status">
+                  <article
+                    v-for="item in turn.items.filter(value => value.type === 'userMessage')"
+                    :key="item.id"
+                    :id="`message-${item.id}`"
+                    tabindex="-1"
+                    class="message user"
+                  >
+                    <div class="message-content">{{ userItemText(item) }}</div>
+                  </article>
 
-                <article v-if="streamingMessage || sending" class="message assistant">
-                  <div class="avatar"><img src="/agentrazor-icon.png" alt="AgentRazor" /></div>
-                  <div class="message-content">
-                    <template v-if="streamingMessage?.content">{{ streamingMessage.content }}<span class="stream-cursor" /></template>
-                    <div v-else class="thinking"><i /><i /><i /><span>正在处理</span></div>
+                  <details
+                    v-if="turnProcessItems(turn).length || turn.durationMs !== undefined || turn === streamingTurn"
+                    class="turn-process"
+                  >
+                    <summary>
+                      <span>{{ turn === streamingTurn ? '正在处理' : '已处理' }} {{ formatTurnDuration(turn.durationMs ?? elapsedDurationMs) }}</span>
+                    </summary>
+                    <div class="turn-process-content">
+                      <template v-for="item in turnProcessItems(turn)" :key="item.id">
+                        <div
+                          v-if="isIntermediateAgentMessage(item) && item.text"
+                          class="process-commentary markdown-body"
+                          v-html="renderMarkdown(item.text)"
+                        />
+                        <div v-else-if="item.type === 'reasoning'" class="process-entry">
+                          <div class="process-entry-title"><Icon :icon="activityIcon(item)" /><span>{{ turn === streamingTurn ? '正在思考' : '已思考' }}</span></div>
+                          <div v-if="reasoningText(item)" class="activity-body markdown-body" v-html="renderMarkdown(reasoningText(item))" />
+                        </div>
+                        <details v-else class="process-entry">
+                          <summary><Icon :icon="activityIcon(item)" /><span>{{ activityTitle(item) }}</span></summary>
+                          <pre v-if="activityDetail(item)" class="activity-body">{{ activityDetail(item) }}</pre>
+                        </details>
+                      </template>
+                    </div>
+                  </details>
+                  <div v-if="turn === streamingTurn && processingStatus" class="turn-live-status">
+                    <span>{{ processingStatus }}</span>
                   </div>
-                </article>
+
+                  <template v-for="item in turnResultItems(turn)" :key="item.id">
+                    <article v-if="item.type === 'agentMessage'" class="message assistant">
+                      <div class="message-content">
+                        <div
+                          v-if="item.text"
+                          class="markdown-body"
+                          :class="{ 'streaming-markdown': turn === streamingTurn && turn.status === 'inProgress' }"
+                          v-html="renderMarkdown(item.text)"
+                        />
+                      </div>
+                    </article>
+
+                    <article v-else-if="item.type === 'imageGeneration'" class="activity-card image-item">
+                      <div class="activity-heading"><Icon :icon="activityIcon(item)" /><span>{{ activityTitle(item) }}</span></div>
+                      <n-image
+                        v-if="item.dataUrl"
+                        class="generated-image"
+                        :src="item.dataUrl"
+                        :alt="item.alt || String(item.result || '生成的图片')"
+                        object-fit="contain"
+                        lazy
+                      />
+                    </article>
+
+                  </template>
+
+                  <article v-if="turn.error" class="turn-error">{{ turn.error }}</article>
+                </section>
               </div>
             </n-spin>
           </section>
@@ -1211,7 +1617,18 @@ watch(
                 @keydown="handleComposerKeydown"
               />
               <div class="composer-footer">
-                <n-button type="primary" circle :disabled="!canSend" @click="sendMessage">
+                <n-button
+                  v-if="sending"
+                  type="primary"
+                  circle
+                  :loading="stopping"
+                  aria-label="停止当前任务"
+                  title="停止当前任务"
+                  @click="cancelTurn"
+                >
+                  <template #icon><Icon icon="solar:stop-bold" /></template>
+                </n-button>
+                <n-button v-else type="primary" circle :disabled="!canSend" @click="sendMessage">
                   <template #icon><Icon icon="solar:arrow-up-linear" /></template>
                 </n-button>
               </div>

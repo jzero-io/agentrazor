@@ -2,9 +2,12 @@ package conversation
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -123,7 +126,7 @@ func buildDetail(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 	detail := &types.DetailResponse{
 		Conversation: toConversation(thread),
 		SessionId:    thread.ID,
-		Messages:     make([]types.Message, 0, len(thread.Turns)*2),
+		Turns:        make([]types.Turn, 0, len(thread.Turns)),
 	}
 	assignments, err := groupAssignments(ctx, svcCtx, uuid)
 	if err != nil {
@@ -133,81 +136,81 @@ func buildDetail(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 		detail.Conversation.GroupId = &groupID
 	}
 	for _, turn := range thread.Turns {
-		createdAt := turn.CreatedAt
-		if createdAt.IsZero() {
-			createdAt = thread.CreatedAt
-		}
-		var userParts []string
-		var assistantParts []string
-		var userID, assistantID string
+		items := make([]map[string]any, 0, len(turn.Items))
 		for _, item := range turn.Items {
-			switch stringValue(item["type"]) {
-			case "userMessage":
-				if userID == "" {
-					userID = stringValue(item["id"])
-				}
-				if text := itemText(item); text != "" {
-					userParts = append(userParts, text)
-				}
-			case "agentMessage":
-				if assistantID == "" {
-					assistantID = stringValue(item["id"])
-				}
-				if text := itemText(item); text != "" {
-					assistantParts = append(assistantParts, text)
+			copyItem := make(map[string]any, len(item)+2)
+			for key, value := range item {
+				copyItem[key] = value
+			}
+			if stringValue(item["type"]) == "imageGeneration" {
+				if image, ok := generatedImage(item, svcCtx.MustGetConfig().Agent.CodexHome, conversationID); ok {
+					copyItem["dataUrl"] = image.DataUrl
+					copyItem["alt"] = image.Alt
 				}
 			}
+			items = append(items, copyItem)
 		}
-		if text := strings.Join(userParts, "\n"); text != "" {
-			if userID == "" {
-				userID = turn.ID + ":user"
-			}
-			detail.Messages = append(detail.Messages, types.Message{
-				Id: userID, RunId: turn.ID, Role: "user", Content: text,
-				Status: turn.Status, CreatedAt: formatTime(createdAt),
-			})
+		var startedAt, completedAt *string
+		if !turn.CreatedAt.IsZero() {
+			value := formatTime(turn.CreatedAt)
+			startedAt = &value
 		}
-		assistantText := strings.Join(assistantParts, "\n\n")
-		if assistantText == "" && turn.Error != "" {
-			assistantText = turn.Error
+		if turn.CompletedAt != nil {
+			value := formatTime(*turn.CompletedAt)
+			completedAt = &value
 		}
-		if assistantText != "" {
-			if assistantID == "" {
-				assistantID = turn.ID + ":assistant"
-			}
-			completedAt := createdAt
-			if turn.CompletedAt != nil {
-				completedAt = *turn.CompletedAt
-			}
-			detail.Messages = append(detail.Messages, types.Message{
-				Id: assistantID, RunId: turn.ID, Role: "assistant", Content: assistantText,
-				Status: turn.Status, CreatedAt: formatTime(completedAt),
-			})
-		}
+		detail.Turns = append(detail.Turns, types.Turn{
+			Id: turn.ID, Status: turn.Status, StartedAt: startedAt, CompletedAt: completedAt,
+			DurationMs: turn.DurationMs, Error: turn.Error, Items: items,
+		})
 	}
 	return detail, nil
 }
 
-func itemText(item map[string]any) string {
-	if text := strings.TrimSpace(stringValue(item["text"])); text != "" {
-		return text
+const maxGeneratedImageSize = 10 << 20
+
+func generatedImage(item map[string]any, codexHome, conversationID string) (types.GeneratedImage, bool) {
+	path := strings.TrimSpace(stringValue(item["savedPath"]))
+	if path == "" {
+		return types.GeneratedImage{}, false
 	}
-	content, ok := item["content"].([]any)
-	if !ok {
-		return strings.TrimSpace(stringValue(item["content"]))
+	root, err := filepath.Abs(filepath.Join(codexHome, "generated_images", conversationID))
+	if err != nil {
+		return types.GeneratedImage{}, false
 	}
-	parts := make([]string, 0, len(content))
-	for _, value := range content {
-		switch typed := value.(type) {
-		case string:
-			parts = append(parts, typed)
-		case map[string]any:
-			if text := stringValue(typed["text"]); text != "" {
-				parts = append(parts, text)
-			}
-		}
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return types.GeneratedImage{}, false
 	}
-	return strings.TrimSpace(strings.Join(parts, "\n"))
+	resolvedPath, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return types.GeneratedImage{}, false
+	}
+	relative, err := filepath.Rel(resolvedRoot, resolvedPath)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return types.GeneratedImage{}, false
+	}
+	info, err := os.Stat(resolvedPath)
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maxGeneratedImageSize {
+		return types.GeneratedImage{}, false
+	}
+	data, err := os.ReadFile(resolvedPath)
+	if err != nil {
+		return types.GeneratedImage{}, false
+	}
+	contentType := http.DetectContentType(data)
+	if !strings.HasPrefix(contentType, "image/") {
+		return types.GeneratedImage{}, false
+	}
+	alt := strings.TrimSpace(stringValue(item["revisedPrompt"]))
+	if alt == "" {
+		alt = "生成的图片"
+	}
+	return types.GeneratedImage{
+		Id:      stringValue(item["id"]),
+		DataUrl: "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(data),
+		Alt:     alt,
+	}, true
 }
 
 func stringValue(value any) string {

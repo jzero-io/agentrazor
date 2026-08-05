@@ -263,10 +263,13 @@ func decodeStoredThread(raw map[string]any, archived bool) StoredThread {
 			turn := StoredTurn{
 				ID:        stringValue(turnRaw["id"]),
 				Status:    stringValue(turnRaw["status"]),
-				CreatedAt: timeValue(turnRaw["createdAt"]),
+				CreatedAt: timeValue(turnRaw["startedAt"]),
 			}
 			if completed := timeValue(turnRaw["completedAt"]); !completed.IsZero() {
 				turn.CompletedAt = &completed
+			}
+			if duration, ok := int64Value(turnRaw["durationMs"]); ok && duration >= 0 {
+				turn.DurationMs = &duration
 			}
 			if detail, ok := turnRaw["error"].(map[string]any); ok {
 				turn.Error = stringValue(detail["message"])
@@ -285,6 +288,19 @@ func decodeStoredThread(raw map[string]any, archived bool) StoredThread {
 		}
 	}
 	return thread
+}
+
+func int64Value(value any) (int64, bool) {
+	switch typed := value.(type) {
+	case float64:
+		return int64(typed), true
+	case int64:
+		return typed, true
+	case int:
+		return int64(typed), true
+	default:
+		return 0, false
+	}
 }
 
 func boolValue(value any) bool {

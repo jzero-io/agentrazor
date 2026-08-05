@@ -124,6 +124,12 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Path:    "/conversations/:conversation_id/messages",
 					Handler: v1conversation.SendMessage(serverCtx),
 				},
+				{
+
+					Method:  http.MethodPost,
+					Path:    "/conversations/:conversation_id/turn/cancel",
+					Handler: v1conversation.CancelTurn(serverCtx),
+				},
 			},
 			rest.WithPrefix("/api/v1"),
 		)

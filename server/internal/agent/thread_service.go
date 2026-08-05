@@ -40,6 +40,7 @@ type StoredTurn struct {
 	Items       []map[string]any
 	CreatedAt   time.Time
 	CompletedAt *time.Time
+	DurationMs  *int64
 	Error       string
 }
 
@@ -226,6 +227,23 @@ func (s *ThreadService) execute(ctx context.Context, cancel context.CancelFunc, 
 
 func (s *ThreadService) Subscribe(threadID string, afterID int64) *Subscription {
 	return s.events.Subscribe(threadID, afterID)
+}
+
+func (s *ThreadService) Cancel(threadID string) error {
+	if err := validateThreadID(threadID); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return ErrServiceStopped
+	}
+	run, ok := s.runs[threadID]
+	s.mu.Unlock()
+	if ok {
+		run.cancel()
+	}
+	return nil
 }
 
 func (s *ThreadService) Close() error {

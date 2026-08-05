@@ -122,6 +122,25 @@ func SendMessage(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
+// 停止当前 Turn
+func CancelTurn(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req types.PathRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+			return
+		}
+
+		l := conversation.NewCancelTurn(r.Context(), svcCtx, r)
+		resp, err := l.CancelTurn(&req)
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.OkJsonCtx(r.Context(), w, resp)
+		}
+	}
+}
+
 // 订阅会话与 Agent 流式事件
 func StreamEvents(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

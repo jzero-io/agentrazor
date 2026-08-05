@@ -9,19 +9,52 @@ export interface Conversation {
   updatedAt: string;
 }
 
-export interface Message {
+export interface ThreadItem {
   id: string;
-  runId: string;
-  role: 'user' | 'assistant';
-  content: string;
+  type: string;
+  text?: string;
+  phase?: string | null;
+  content?: Array<{ type?: string; text?: string; url?: string; path?: string }> | string[];
+  summary?: string[];
+  command?: string;
+  aggregatedOutput?: string | null;
+  cwd?: string;
+  exitCode?: number | null;
+  status?: string;
+  tool?: string;
+  server?: string;
+  pluginId?: string | null;
+  arguments?: unknown;
+  result?: unknown;
+  query?: string;
+  changes?: Array<Record<string, unknown>>;
+  durationMs?: number | null;
+  dataUrl?: string;
+  alt?: string;
+  savedPath?: string | null;
+  [key: string]: unknown;
+}
+
+export interface Turn {
+  id: string;
   status: string;
-  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  durationMs?: number;
+  error?: string;
+  items: ThreadItem[];
+}
+
+export interface GeneratedImage {
+  id: string;
+  dataUrl: string;
+  alt: string;
 }
 
 export interface ConversationDetail {
   conversation: Conversation;
   sessionId?: string;
-  messages: Message[];
+  turns: Turn[];
 }
 
 export interface StreamEvent {
@@ -125,6 +158,11 @@ export const conversationApi = {
     return request(`/api/v1/conversations/${encodeURIComponent(id)}/messages`, {
       method: 'POST',
       body: JSON.stringify({ content })
+    });
+  },
+  cancelTurn(id: string) {
+    return request<null>(`/api/v1/conversations/${encodeURIComponent(id)}/turn/cancel`, {
+      method: 'POST'
     });
   },
   subscribe(id: string, onEvent: (event: StreamEvent) => void, onError: () => void) {

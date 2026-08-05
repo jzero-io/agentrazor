@@ -9,6 +9,9 @@ var (
 	_ = time.Now()
 )
 
+type CancelTurnResponse struct {
+}
+
 type Conversation struct {
 	Id         string  `json:"id"`
 	Title      string  `json:"title"`
@@ -30,7 +33,7 @@ type DeleteResponse struct {
 type DetailResponse struct {
 	Conversation Conversation `json:"conversation"`
 	SessionId    string       `json:"sessionId,omitempty"`
-	Messages     []Message    `json:"messages"`
+	Turns        []Turn       `json:"turns"`
 }
 
 type EventsRequest struct {
@@ -46,17 +49,14 @@ type EventsResponse struct {
 	CreatedAt string `json:"createdAt"`
 }
 
-type ListResponse struct {
-	Conversations []Conversation `json:"conversations"`
+type GeneratedImage struct {
+	Id      string `json:"id"`
+	DataUrl string `json:"dataUrl"`
+	Alt     string `json:"alt"`
 }
 
-type Message struct {
-	Id        string `json:"id"`
-	RunId     string `json:"runId"`
-	Role      string `json:"role"`
-	Content   string `json:"content"`
-	Status    string `json:"status"`
-	CreatedAt string `json:"createdAt"`
+type ListResponse struct {
+	Conversations []Conversation `json:"conversations"`
 }
 
 type PathRequest struct {
@@ -78,6 +78,16 @@ type SendMessageResponse struct {
 	ConversationId string `json:"conversationId"`
 	SessionId      string `json:"sessionId"`
 	Run            Run    `json:"run"`
+}
+
+type Turn struct {
+	Id          string                   `json:"id"`
+	Status      string                   `json:"status"`
+	StartedAt   *string                  `json:"startedAt,omitempty"`
+	CompletedAt *string                  `json:"completedAt,omitempty"`
+	DurationMs  *int64                   `json:"durationMs,omitempty"`
+	Error       string                   `json:"error,omitempty"`
+	Items       []map[string]interface{} `json:"items"`
 }
 
 type UpdateRequest struct {
