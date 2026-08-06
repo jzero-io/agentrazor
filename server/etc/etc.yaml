@@ -7,6 +7,10 @@ rest:
     port: 8001
     timeout: 20000
 
+jwt:
+    accessExpire: 1800
+    refreshExpire: 2592000
+
 log:
     encoding: plain
     level: info

@@ -21,7 +21,7 @@ import {
   zhCN,
   dateZhCN
 } from 'naive-ui';
-import { authApi, clearToken, conversationApi, conversationGroupApi, getToken, setAuthErrorHandler, setToken } from './api';
+import { authApi, clearRefreshToken, clearToken, conversationApi, conversationGroupApi, getToken, setAuthErrorHandler, setRefreshToken, setToken } from './api';
 import type { Conversation, ConversationDetail, StreamEvent, ThreadItem, Turn, UserInfo } from './api';
 
 interface SidebarViewState {
@@ -1260,8 +1260,9 @@ async function submitLogin() {
   if (!username || !password) return;
   loginLoading.value = true;
   try {
-    const { token } = await authApi.pwdLogin(username, password);
+    const { token, refreshToken } = await authApi.pwdLogin(username, password);
     setToken(token);
+    setRefreshToken(refreshToken);
     currentUser.value = await authApi.getUserInfo();
     await loadConversationGroups();
     loginVisible.value = false;
@@ -1278,6 +1279,7 @@ async function submitLogin() {
 function logout() {
   userMenuVisible.value = false;
   clearToken();
+  clearRefreshToken();
   currentUser.value = null;
   conversationGroups.value = [];
   closeStream?.();

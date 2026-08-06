@@ -84,6 +84,7 @@ interface EventsResponse {
 const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
 const TOKEN_KEY = 'agentrazor_token';
+const REFRESH_TOKEN_KEY = 'agentrazor_refresh_token';
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY) || '';
 }
@@ -93,6 +94,15 @@ export function setToken(token: string) {
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
+export function getRefreshToken() {
+  return localStorage.getItem(REFRESH_TOKEN_KEY) || '';
+}
+export function setRefreshToken(refreshToken: string) {
+  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+}
+export function clearRefreshToken() {
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+}
 
 // authErrorHandler is invoked when a request returns 401, so the UI can reset
 // to the logged-out state.
@@ -101,7 +111,49 @@ export function setAuthErrorHandler(fn: (() => void) | null) {
   authErrorHandler = fn;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+// 刷新 token 的并发单飞：多个请求同时 401 时只发起一次刷新，成功后一起重试
+let refreshTokenPromise: Promise<boolean> | null = null;
+
+async function refreshAccessToken(): Promise<boolean> {
+  if (!refreshTokenPromise) {
+    refreshTokenPromise = (async () => {
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) return false;
+      try {
+        const response = await fetch(`${apiBase}/api/v1/auth/refreshToken`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken })
+        });
+        const body = (await response.json().catch(() => null)) as Envelope<LoginResponse> | LoginResponse | null;
+        const envelope = body !== null && isEnvelope<LoginResponse>(body) ? body : null;
+        // 40102 = refresh token 过期，属于登录态失效，不做续期
+        if (envelope?.code === 40102) return false;
+        const data = envelope ? envelope.data : (body as LoginResponse | null);
+        if (!data || !data.token || !data.refreshToken) return false;
+        setToken(data.token);
+        setRefreshToken(data.refreshToken);
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+    refreshTokenPromise.finally(() => {
+      setTimeout(() => {
+        refreshTokenPromise = null;
+      }, 1000);
+    });
+  }
+  return refreshTokenPromise;
+}
+
+function expireSession() {
+  clearToken();
+  clearRefreshToken();
+  authErrorHandler?.();
+}
+
+async function request<T>(path: string, init?: RequestInit, retried = false): Promise<T> {
   const token = getToken();
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
@@ -111,22 +163,30 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init?.headers
     }
   });
-  if (response.status === 401) {
-    clearToken();
-    authErrorHandler?.();
+  const body = (await response.json().catch(() => null)) as Envelope<T> | T | null;
+  const envelope = body !== null && isEnvelope<T>(body) ? body : null;
+  // 鉴权失败：HTTP 401（未来兼容）或业务码 40101（access token 过期，可刷新）
+  const authFailed = response.status === 401 || envelope?.code === 40101;
+  if (authFailed) {
+    // 先尝试用 refreshToken 续期，成功则带新 token 重试一次
+    if (!retried && (await refreshAccessToken())) {
+      return request<T>(path, init, true);
+    }
+    expireSession();
     throw new Error('登录已过期，请重新登录');
   }
-  const body = (await response.json()) as Envelope<T> | T;
   if (!response.ok) {
     throw new Error(`请求失败（${response.status}）`);
   }
-  if (isEnvelope<T>(body)) {
-    if (body.code !== 200) {
-      throw new Error(body.msg || '服务请求失败');
+  if (envelope) {
+    if (envelope.code !== 200) {
+      // 40102 = refresh token 过期，登录态失效，直接登出
+      if (envelope.code === 40102) expireSession();
+      throw new Error(envelope.msg || '服务请求失败');
     }
-    return body.data;
+    return envelope.data;
   }
-  return body;
+  return body as T;
 }
 
 function isEnvelope<T>(body: Envelope<T> | T): body is Envelope<T> {
@@ -168,14 +228,31 @@ export const conversationApi = {
     });
   },
   subscribe(id: string, onEvent: (event: StreamEvent) => void, onError: () => void) {
-    const token = getToken();
     // EventSource 无法携带 Authorization 头，改用 fetch 流式读取 SSE，
     // 这样鉴权与其他接口保持一致（Bearer token 走 Authorization）。
     const controller = new AbortController();
     const url = `${apiBase}/api/v1/conversations/${encodeURIComponent(id)}/events`;
+    // 断线重试标记：一次断开最多自动重连一次，避免死循环
+    let retried = false;
 
-    void (async () => {
+    // 断线后静默重连：先刷新 token（可能已过期），再用新 token 重新连接
+    const reconnect = async (): Promise<boolean> => {
+      if (controller.signal.aborted || retried) return false;
+      retried = true;
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (!getRefreshToken()) return false;
+      if (!(await refreshAccessToken())) {
+        expireSession();
+        return false;
+      }
+      await connect();
+      return true;
+    };
+
+    const connect = async (): Promise<void> => {
+      if (controller.signal.aborted) return;
       try {
+        const token = getToken();
         const response = await fetch(url, {
           headers: {
             Accept: 'text/event-stream',
@@ -184,10 +261,16 @@ export const conversationApi = {
           cache: 'no-store',
           signal: controller.signal
         });
-        if (!response.ok || !response.body) {
-          onError();
+        // 鉴权失败时服务端返回 HTTP 200 + JSON envelope（如 code 40101），
+        // 用 Content-Type 区分：SSE 是 text/event-stream，失败响应是 JSON
+        const contentType = response.headers.get('content-type') || '';
+        if (!response.ok || !response.body || !contentType.includes('text/event-stream')) {
+          if (await reconnect()) return;
+          if (!controller.signal.aborted) onError();
           return;
         }
+        // 连接成功，重置重试标记：后续再次断开仍可自动重连
+        retried = false;
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
@@ -213,11 +296,18 @@ export const conversationApi = {
             }
           }
         }
+        // 流结束（服务端空闲回收/重启等）：自动重连保持事件不中断
+        if (await reconnect()) return;
+        if (!controller.signal.aborted) onError();
       } catch (error) {
-        if ((error as Error)?.name !== 'AbortError') onError();
+        if ((error as Error)?.name !== 'AbortError') {
+          if (await reconnect()) return;
+          if (!controller.signal.aborted) onError();
+        }
       }
-    })();
+    };
 
+    void connect();
     return () => controller.abort();
   }
 };
