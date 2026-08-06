@@ -126,6 +126,7 @@ const stopping = ref(false);
 let turnStartedAtMs = 0;
 let turnTimer: number | undefined;
 const sidebarCollapsed = ref(savedSidebarView.sidebarCollapsed ?? false);
+const mobileSidebarOpen = ref(false);
 const renameVisible = ref(false);
 const renameValue = ref('');
 const messagePane = ref<HTMLElement>();
@@ -143,6 +144,8 @@ const confirmLoading = ref(false);
 let confirmAction: (() => Promise<void>) | undefined;
 const settingsVisible = ref(false);
 const settingsSection = ref<'appearance' | 'archives'>('appearance');
+// 手机端设置侧栏的导航展开/收缩（默认展开）
+const settingsNavExpanded = ref(true);
 const userMenuVisible = ref(false);
 const pinnedExpanded = ref(savedSidebarView.pinnedExpanded ?? true);
 const groupsExpanded = ref(savedSidebarView.groupsExpanded ?? true);
@@ -374,42 +377,118 @@ async function updateConversationGroup(item: Conversation, groupId: string) {
   }
 }
 
-function startConversationDrag(item: Conversation, event: DragEvent) {
+// 拖拽实现：鼠标走 Pointer 事件，触屏走长按 + touchmove（原生 HTML5 DnD 不支持触屏，
+// 且 touch-action 会被浏览器当滚动吞掉手势，所以触屏用 preventDefault 接管）
+let pointerDragStart: { item: Conversation; x: number; y: number } | null = null;
+let dragGhostEl: HTMLElement | null = null;
+let touchDrag: { item: Conversation; x: number; y: number; activated: boolean } | null = null;
+let touchLongPressTimer: number | undefined;
+
+function onConversationPointerDown(item: Conversation, event: PointerEvent) {
+  if (event.button !== 0 || event.pointerType === 'touch') return;
+  pointerDragStart = { item, x: event.clientX, y: event.clientY };
+}
+
+function activateDrag(item: Conversation, x: number, y: number) {
   draggedConversationId.value = item.id;
   conversationDropTarget.value = '';
   hideConversationPreview();
-  if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', item.id);
+  document.body.classList.add('is-dragging');
+  dragGhostEl = document.createElement('div');
+  dragGhostEl.className = 'conversation-drag-ghost';
+  dragGhostEl.textContent = item.title;
+  document.body.appendChild(dragGhostEl);
+  updateDragGhost(x, y);
+}
+
+function updateDragGhost(x: number, y: number) {
+  if (dragGhostEl) {
+    dragGhostEl.style.left = `${x + 12}px`;
+    dragGhostEl.style.top = `${y + 10}px`;
   }
 }
 
-function setConversationDropTarget(target: string, event: DragEvent) {
-  if (!draggedConversationId.value) return;
-  event.preventDefault();
-  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-  conversationDropTarget.value = target;
+function updateDropTarget(x: number, y: number) {
+  const zone = document.elementFromPoint(x, y)
+    ?.closest?.('.conversation-drop-zone') as HTMLElement | null | undefined;
+  conversationDropTarget.value = zone ? String(zone.dataset.groupId ?? '') : '';
 }
 
-async function dropConversation(targetGroupId: string, event: DragEvent) {
-  event.preventDefault();
-  const conversationId = draggedConversationId.value || event.dataTransfer?.getData('text/plain') || '';
-  const item = conversations.value.find(conversation => conversation.id === conversationId);
-  if (!item || (item.groupId || '') === targetGroupId) {
-    endConversationDrag();
-    return;
+function finishDrag(item: Conversation) {
+  const targetGroupId = conversationDropTarget.value;
+  conversationDropTarget.value = '';
+  draggedConversationId.value = '';
+  if (dragGhostEl) {
+    dragGhostEl.remove();
+    dragGhostEl = null;
   }
+  document.body.classList.remove('is-dragging');
+  if (!targetGroupId && targetGroupId !== '') return;
+  if ((item.groupId || '') === targetGroupId) return;
   if (targetGroupId) {
     const group = conversationGroups.value.find(candidate => candidate.id === targetGroupId);
     if (group) group.collapsed = false;
   }
-  await updateConversationGroup(item, targetGroupId);
-  endConversationDrag();
+  void updateConversationGroup(item, targetGroupId);
 }
 
-function endConversationDrag() {
-  draggedConversationId.value = '';
-  conversationDropTarget.value = '';
+function onDragPointerMove(event: PointerEvent) {
+  if (!pointerDragStart) return;
+  const dx = event.clientX - pointerDragStart.x;
+  const dy = event.clientY - pointerDragStart.y;
+  if (!draggedConversationId.value) {
+    // 移动超过阈值才算拖拽，避免影响点击
+    if (Math.hypot(dx, dy) < 8) return;
+    activateDrag(pointerDragStart.item, event.clientX, event.clientY);
+  }
+  updateDragGhost(event.clientX, event.clientY);
+  updateDropTarget(event.clientX, event.clientY);
+}
+
+function onDragPointerUp() {
+  if (!pointerDragStart) return;
+  const item = pointerDragStart.item;
+  pointerDragStart = null;
+  finishDrag(item);
+}
+
+// 触屏：长按激活拖拽，激活后 touchmove 阻止页面滚动，保证手势不丢
+function onRowTouchStart(item: Conversation, event: TouchEvent) {
+  if (event.touches.length !== 1) return;
+  const touch = event.touches[0];
+  touchDrag = { item, x: touch.clientX, y: touch.clientY, activated: false };
+  touchLongPressTimer = window.setTimeout(() => {
+    if (touchDrag && !touchDrag.activated) {
+      touchDrag.activated = true;
+      activateDrag(touchDrag.item, touchDrag.x, touchDrag.y);
+    }
+  }, 350);
+}
+
+function onWindowTouchMove(event: TouchEvent) {
+  if (!touchDrag || event.touches.length !== 1) return;
+  const touch = event.touches[0];
+  const dx = touch.clientX - touchDrag.x;
+  const dy = touch.clientY - touchDrag.y;
+  if (!touchDrag.activated) {
+    // 长按前就移动：取消拖拽，恢复正常滚动
+    if (Math.hypot(dx, dy) > 8) {
+      window.clearTimeout(touchLongPressTimer);
+      touchDrag = null;
+    }
+    return;
+  }
+  event.preventDefault();
+  updateDragGhost(touch.clientX, touch.clientY);
+  updateDropTarget(touch.clientX, touch.clientY);
+}
+
+function onWindowTouchEnd() {
+  if (!touchDrag) return;
+  window.clearTimeout(touchLongPressTimer);
+  const item = touchDrag.item;
+  touchDrag = null;
+  finishDrag(item);
 }
 
 async function loadConversations(selectFirst = false) {
@@ -464,6 +543,12 @@ async function createConversation() {
   }
 }
 
+function openMobileSidebar() {
+  // 移动端抽屉：确保侧栏内容展开（桌面端折叠状态不影响抽屉显示）
+  if (sidebarCollapsed.value) sidebarCollapsed.value = false;
+  mobileSidebarOpen.value = true;
+}
+
 async function createConversationInGroup(group: ConversationGroup) {
   if (!currentUser.value) {
     loginVisible.value = true;
@@ -514,6 +599,7 @@ function archiveGroupConversations(group: ConversationGroup) {
 }
 
 async function selectConversation(id: string) {
+  mobileSidebarOpen.value = false;
   if (!id || id === selectedId.value && detail.value) return;
   selectedId.value = id;
   syncConversationUrl(id);
@@ -1345,6 +1431,7 @@ async function submitLogin() {
 }
 
 function logout() {
+  mobileSidebarOpen.value = false;
   userMenuVisible.value = false;
   clearToken();
   clearRefreshToken();
@@ -1361,9 +1448,11 @@ function logout() {
 }
 
 function openSettings() {
+  mobileSidebarOpen.value = false;
   userMenuVisible.value = false;
   settingsReturnPath.value = location.pathname;
   settingsSection.value = 'appearance';
+  settingsNavExpanded.value = true;
   settingsVisible.value = true;
   void loadConversations();
 }
@@ -1500,13 +1589,27 @@ function handleDocumentPointerOver(event: PointerEvent) {
 onMounted(() => {
   document.addEventListener('pointerdown', handleDocumentPointerDown);
   document.addEventListener('pointerover', handleDocumentPointerOver);
+  window.addEventListener('pointermove', onDragPointerMove);
+  window.addEventListener('pointerup', onDragPointerUp);
+  window.addEventListener('touchmove', onWindowTouchMove, { passive: false });
+  window.addEventListener('touchend', onWindowTouchEnd);
+  window.addEventListener('touchcancel', onWindowTouchEnd);
   window.addEventListener('blur', hideConversationPreview);
   colorSchemeMedia.addEventListener('change', handleSystemAppearanceChange);
   void bootstrap();
+  // 防止登录恢复流程异常卡死导致一直白屏：超时后强制结束启动态
+  window.setTimeout(() => {
+    if (authChecking.value) authChecking.value = false;
+  }, 10000);
 });
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleDocumentPointerDown);
   document.removeEventListener('pointerover', handleDocumentPointerOver);
+  window.removeEventListener('pointermove', onDragPointerMove);
+  window.removeEventListener('pointerup', onDragPointerUp);
+  window.removeEventListener('touchmove', onWindowTouchMove);
+  window.removeEventListener('touchend', onWindowTouchEnd);
+  window.removeEventListener('touchcancel', onWindowTouchEnd);
   window.removeEventListener('blur', hideConversationPreview);
   colorSchemeMedia.removeEventListener('change', handleSystemAppearanceChange);
   closeStream?.();
@@ -1539,9 +1642,11 @@ watch([settingsVisible, settingsSection], () => {
 
 <template>
   <n-config-provider :locale="zhCN" :date-locale="dateZhCN" :theme="activeTheme" :theme-overrides="themeOverrides">
-    <div v-if="authChecking" class="app-boot-screen" aria-label="正在恢复登录状态" />
+    <div v-if="authChecking" class="app-boot-screen" aria-label="正在恢复登录状态">
+      <div class="app-boot-spinner"><Icon icon="solar:refresh-linear" /></div>
+    </div>
     <div v-else class="app-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
-      <aside class="sidebar">
+      <aside class="sidebar" :class="{ 'mobile-open': mobileSidebarOpen }">
         <div class="brand">
           <div class="brand-mark"><img src="/agentrazor-icon.png" alt="" /></div>
           <div v-if="!sidebarCollapsed" class="brand-copy">
@@ -1573,9 +1678,8 @@ watch([settingsVisible, settingsSection], () => {
                     :key="item.id"
                     class="conversation-row previewable-conversation-row"
                     :class="{ selected: item.id === selectedId, dragging: item.id === draggedConversationId }"
-                    draggable="true"
-                    @dragstart="startConversationDrag(item, $event)"
-                    @dragend="endConversationDrag"
+                    @pointerdown="onConversationPointerDown(item, $event)"
+                    @touchstart="onRowTouchStart(item, $event)"
                     @mouseenter="showConversationPreview(item, $event)"
                     @mouseleave="hideConversationPreview"
                   >
@@ -1624,8 +1728,7 @@ watch([settingsVisible, settingsSection], () => {
                 :key="group.id"
                 class="conversation-group custom-group conversation-drop-zone"
                 :class="{ 'drag-over': conversationDropTarget === group.id }"
-                @dragover="setConversationDropTarget(group.id, $event)"
-                @drop.stop="dropConversation(group.id, $event)"
+                :data-group-id="group.id"
               >
                 <div class="custom-group-heading">
                   <button class="conversation-group-toggle" @click="toggleGroup(group)">
@@ -1663,9 +1766,8 @@ watch([settingsVisible, settingsSection], () => {
                     :key="item.id"
                     class="conversation-row grouped-conversation previewable-conversation-row"
                     :class="{ selected: item.id === selectedId, dragging: item.id === draggedConversationId }"
-                    draggable="true"
-                    @dragstart="startConversationDrag(item, $event)"
-                    @dragend="endConversationDrag"
+                    @pointerdown="onConversationPointerDown(item, $event)"
+                    @touchstart="onRowTouchStart(item, $event)"
                     @mouseenter="showConversationPreview(item, $event)"
                     @mouseleave="hideConversationPreview"
                   >
@@ -1703,8 +1805,7 @@ watch([settingsVisible, settingsSection], () => {
               <div
                 class="conversation-group conversation-list-group conversation-drop-zone"
                 :class="{ 'drag-over': conversationDropTarget === CONVERSATION_LIST_DROP_TARGET }"
-                @dragover="setConversationDropTarget(CONVERSATION_LIST_DROP_TARGET, $event)"
-                @drop.stop="dropConversation('', $event)"
+                data-group-id=""
               >
                 <div class="conversation-list-heading">
                   <button class="conversation-group-toggle" @click="conversationsExpanded = !conversationsExpanded">
@@ -1726,9 +1827,8 @@ watch([settingsVisible, settingsSection], () => {
                     :key="item.id"
                     class="conversation-row previewable-conversation-row"
                     :class="{ selected: item.id === selectedId, dragging: item.id === draggedConversationId }"
-                    draggable="true"
-                    @dragstart="startConversationDrag(item, $event)"
-                    @dragend="endConversationDrag"
+                    @pointerdown="onConversationPointerDown(item, $event)"
+                    @touchstart="onRowTouchStart(item, $event)"
                     @mouseenter="showConversationPreview(item, $event)"
                     @mouseleave="hideConversationPreview"
                   >
@@ -1811,6 +1911,12 @@ watch([settingsVisible, settingsSection], () => {
       </aside>
 
       <div
+        v-if="mobileSidebarOpen"
+        class="sidebar-backdrop"
+        @click="mobileSidebarOpen = false"
+      />
+
+      <div
         v-if="conversationPreview && !sidebarCollapsed"
         class="conversation-hover-card"
         :style="{ top: `${conversationPreviewTop}px` }"
@@ -1828,6 +1934,9 @@ watch([settingsVisible, settingsSection], () => {
 
       <main class="main-panel">
         <header class="topbar">
+          <n-button quaternary circle class="mobile-menu-button" @click="openMobileSidebar">
+            <template #icon><Icon icon="solar:sidebar-minimalistic-outline" /></template>
+          </n-button>
           <n-button v-if="sidebarCollapsed" quaternary circle class="topbar-sidebar-toggle" @click="sidebarCollapsed = false">
             <template #icon><Icon icon="solar:sidebar-minimalistic-outline" /></template>
           </n-button>
@@ -2118,7 +2227,7 @@ watch([settingsVisible, settingsSection], () => {
       </div>
     </n-modal>
 
-    <section v-if="settingsVisible" class="settings-shell">
+    <section v-if="settingsVisible" class="settings-shell" :class="{ 'settings-nav-collapsed': !settingsNavExpanded }">
       <aside class="settings-sidebar">
         <button class="settings-back" type="button" @click="settingsVisible = false">
           <Icon icon="solar:arrow-left-linear" />
@@ -2130,16 +2239,30 @@ watch([settingsVisible, settingsSection], () => {
             <Icon icon="solar:sun-2-linear" />
             <span>外观</span>
           </button>
-          <button :class="{ active: settingsSection === 'archives' }" @click="openArchiveSettings">
+          <button :class="{ active: settingsSection === 'archives' }" @click="openArchiveSettings()">
             <Icon icon="solar:archive-linear" />
             <span>已归档对话</span>
           </button>
         </nav>
       </aside>
 
+      <div
+        v-if="settingsNavExpanded"
+        class="settings-backdrop"
+        @click="settingsNavExpanded = false"
+      />
+
       <main class="settings-content">
         <section v-if="settingsSection === 'appearance'" class="settings-content-inner appearance-page">
           <header class="settings-page-header">
+            <button
+              class="settings-menu-button"
+              type="button"
+              aria-label="打开设置菜单"
+              @click="settingsNavExpanded = true"
+            >
+              <Icon icon="solar:sidebar-minimalistic-outline" />
+            </button>
             <div>
               <h1>外观</h1>
               <p>选择 AgentRazor 的显示方式。</p>
@@ -2163,6 +2286,14 @@ watch([settingsVisible, settingsSection], () => {
 
         <section v-else class="settings-content-inner archives-page">
           <header class="settings-page-header archive-page-header">
+            <button
+              class="settings-menu-button"
+              type="button"
+              aria-label="打开设置菜单"
+              @click="settingsNavExpanded = true"
+            >
+              <Icon icon="solar:sidebar-minimalistic-outline" />
+            </button>
             <div>
               <h1>已归档的对话</h1>
               <p>归档对话不能查看内容，恢复后才会重新出现在主页面。</p>
