@@ -33,6 +33,8 @@ var RoutesCodesMap = map[string]string{
 	"POST:/api/v1/conversation-groups":                        "v1:conversation:group:create",
 	"DELETE:/api/v1/conversation-groups/:group_id":            "v1:conversation:group:delete",
 	"PATCH:/api/v1/conversation-groups/:group_id":             "v1:conversation:group:update",
+	"POST:/api/v1/conversation-groups/:group_id/archive-conversations": "v1:conversation:group:archiveConversations",
+	"POST:/api/v1/conversation-groups/:group_id/delete-archived-conversations": "v1:conversation:group:deleteArchivedConversations",
 	"POST:/api/v1/manage/addMenu":                             "v1:manage:menu:add",
 	"POST:/api/v1/manage/deleteMenu":                          "v1:manage:menu:delete",
 	"POST:/api/v1/manage/editMenu":                            "v1:manage:menu:edit",

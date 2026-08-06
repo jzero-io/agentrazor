@@ -335,6 +335,16 @@ export const conversationGroupApi = {
       method: 'PATCH', body: JSON.stringify(patch)
     });
   },
+  archiveConversations(id: string) {
+    return request<null>(`/api/v1/conversation-groups/${encodeURIComponent(id)}/archive-conversations`, {
+      method: 'POST'
+    });
+  },
+  deleteArchivedConversations(id: string) {
+    return request<null>(`/api/v1/conversation-groups/${encodeURIComponent(id)}/delete-archived-conversations`, {
+      method: 'POST'
+    });
+  },
   remove(id: string) {
     return request<null>(`/api/v1/conversation-groups/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }

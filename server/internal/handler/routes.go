@@ -172,6 +172,16 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Path:    "/conversation-groups/:group_id",
 					Handler: v1conversationgroup.Delete(serverCtx),
 				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/conversation-groups/:group_id/archive-conversations",
+					Handler: v1conversationgroup.ArchiveConversations(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/conversation-groups/:group_id/delete-archived-conversations",
+					Handler: v1conversationgroup.DeleteArchivedConversations(serverCtx),
+				},
 			},
 			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
 			rest.WithPrefix("/api/v1"),

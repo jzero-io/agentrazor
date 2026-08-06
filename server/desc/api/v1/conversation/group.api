@@ -27,6 +27,8 @@ type (
 		GroupId string `path:"group_id" validate:"required"`
 	}
 	DeleteResponse  {}
+	ArchiveConversationsResponse {}
+	DeleteArchivedConversationsResponse {}
 	UpdateRequest {
 		GroupId string  `path:"group_id" validate:"required"`
 		Name    *string `json:"name,optional" validate:"omitempty,max=40"`
@@ -52,5 +54,12 @@ service server {
 
 	@handler Delete
 	delete /conversation-groups/:group_id (PathRequest) returns (DeleteResponse)
-}
 
+	@doc "归档分组内所有对话"
+	@handler ArchiveConversations
+	post /conversation-groups/:group_id/archive-conversations (PathRequest) returns (ArchiveConversationsResponse)
+
+	@doc "删除分组内所有已归档对话"
+	@handler DeleteArchivedConversations
+	post /conversation-groups/:group_id/delete-archived-conversations (PathRequest) returns (DeleteArchivedConversationsResponse)
+}

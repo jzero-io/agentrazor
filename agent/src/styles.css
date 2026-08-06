@@ -268,6 +268,7 @@ textarea {
   min-width: 0;
   flex: 1;
   color: #333639;
+  font-size: 16px;
 }
 
 .custom-group-heading .conversation-group-toggle span {
@@ -1655,10 +1656,19 @@ html[data-theme='dark'] .confirm-modal-body p {
   border-radius: 11px;
   color: #24343b;
   background: transparent;
-  font-size: 13px;
+  font-size: 16px;
   cursor: pointer;
   text-align: left;
   transition: background 140ms ease;
+}
+
+.user-menu-trigger .user-name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .user-menu-trigger:hover {
@@ -1794,9 +1804,24 @@ html[data-theme='dark'] .confirm-modal-body p {
   margin-bottom: 26px;
 }
 
-.archive-page-list {
+.archive-list.archive-page-list {
   max-height: none;
   gap: 10px;
+}
+
+.archive-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 12px 0 10px;
+}
+
+.archive-section-title {
+  margin: 0 2px;
+  color: #899399;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .archive-page-list .archive-item {

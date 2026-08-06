@@ -15,6 +15,9 @@ var (
 	ErrServiceStopped  = errors.New("agent service is stopped")
 	ErrThreadArchived  = errors.New("agent thread is archived")
 	ErrInvalidThreadID = errors.New("invalid Codex thread id")
+	// ErrThreadNotFound 表示会话在业务库有记录，但 Codex thread 已不存在
+	// （读不到也无法 resume，通常是孤儿数据）。
+	ErrThreadNotFound = errors.New("agent thread not found")
 )
 
 const turnIdleTimeout = 10 * time.Minute

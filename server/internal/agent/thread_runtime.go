@@ -100,6 +100,10 @@ func (r *CodexAppServerRuntime) ReadStoredThread(ctx context.Context, threadID s
 		// which read fine directly. See openai/codex#27395.
 		if _, resumeErr := r.ensureThread(ctx, threadID); resumeErr == nil {
 			thread, err = r.readThread(ctx, threadID, includeTurns)
+		} else if threadMissingError(resumeErr) {
+			// 业务库有记录但 Codex thread 已不存在（resume 报 "no rollout
+			// found"）：按"会话不存在"处理，避免把原始 RPC 错误抛给前端。
+			return StoredThread{}, ErrThreadNotFound
 		}
 	}
 	if err != nil && includeTurns {
@@ -139,6 +143,15 @@ func (r *CodexAppServerRuntime) readThread(ctx context.Context, threadID string,
 		return StoredThread{}, errors.New("Codex thread/read response did not contain a thread id")
 	}
 	return thread, nil
+}
+
+// threadMissingError reports whether err is the app-server -32600 RPC error
+// raised while loading a missing thread. At this point readThread has already
+// failed (so the thread is not simply archived — archived threads read fine),
+// and the remaining -32600 resume failure is "no rollout found".
+func threadMissingError(err error) bool {
+	var rpcErr *RPCError
+	return errors.As(err, &rpcErr) && rpcErr.Code == -32600
 }
 
 func (r *CodexAppServerRuntime) SetThreadName(ctx context.Context, threadID, name string) error {

@@ -25,6 +25,12 @@ type CreateRequest struct {
 type DeleteResponse struct {
 }
 
+type ArchiveConversationsResponse struct {
+}
+
+type DeleteArchivedConversationsResponse struct {
+}
+
 type ListResponse struct {
 	Groups []ConversationGroup `json:"groups"`
 }

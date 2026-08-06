@@ -121,6 +121,10 @@ func buildDetail(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 	}
 	thread, err := svcCtx.AgentThreads.Get(ctx, conversationID)
 	if err != nil {
+		// 业务库有记录但 Codex thread 已不存在（孤儿数据）：按"会话不存在"处理
+		if errors.Is(err, agentdomain.ErrThreadNotFound) {
+			return nil, errConversationNotOwned
+		}
 		return nil, err
 	}
 	detail := &types.DetailResponse{

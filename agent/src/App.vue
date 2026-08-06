@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, ref, watch, type PropType } from 'vue';
+import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type PropType } from 'vue';
 import { Icon } from '@iconify/vue';
 import MarkdownIt from 'markdown-it';
 import hljs from 'highlight.js/lib/common';
@@ -110,7 +110,6 @@ function loadSidebarViewState(): SidebarViewState {
 }
 const savedSidebarView = loadSidebarViewState();
 
-const { message: toast } = createDiscreteApi(['message']);
 const conversations = ref<Conversation[]>([]);
 const selectedId = ref('');
 const detail = ref<ConversationDetail | null>(null);
@@ -213,6 +212,23 @@ const filteredArchivedConversations = computed(() => {
     ? archivedConversations.value.filter(item => item.title.toLowerCase().includes(query))
     : archivedConversations.value;
 });
+// 已归档对话按所属分组归类展示
+const archivedConversationSections = computed(() => {
+  const byGroup = new Map<string | undefined, Conversation[]>();
+  for (const item of filteredArchivedConversations.value) {
+    const key = item.groupId || undefined;
+    if (!byGroup.has(key)) byGroup.set(key, []);
+    byGroup.get(key)!.push(item);
+  }
+  const sections: { title: string; groupId?: string; items: Conversation[] }[] = [];
+  for (const group of conversationGroups.value) {
+    const items = byGroup.get(group.id);
+    if (items?.length) sections.push({ title: group.name, groupId: group.id, items });
+  }
+  const ungrouped = byGroup.get(undefined);
+  if (ungrouped?.length) sections.push({ title: '未分组', items: ungrouped });
+  return sections;
+});
 const activeConversation = computed(() =>
   conversations.value.find(item => item.id === selectedId.value)
 );
@@ -237,17 +253,30 @@ const isDarkAppearance = computed(() =>
 );
 const activeTheme = computed(() => isDarkAppearance.value ? darkTheme : null);
 
+// toast/message 跟随主题：深色模式下弹层不再出现白底
+const toastProviderProps = reactive({
+  theme: activeTheme.value,
+  themeOverrides
+});
+const { message: toast } = createDiscreteApi(['message'], {
+  configProviderProps: toastProviderProps
+});
+
 const renderIcon = (icon: string) => () => h(Icon, { icon });
 const menuOptions = computed(() => {
   const conv = activeConversation.value;
   if (!conv) return [];
   const archived = conv.status === 'archived';
-  return [
+  const options = [
     { label: '重命名', key: 'rename', icon: renderIcon('solar:pen-2-outline'), disabled: archived },
     { label: conv.pinnedAt ? '取消置顶' : '置顶', key: 'pin', icon: renderIcon('solar:pin-bold') },
-    { label: archived ? '取消归档' : '归档', key: 'archive', icon: renderIcon('solar:archive-linear') },
-    { label: '删除', key: 'delete', icon: renderIcon('solar:trash-bin-trash-linear') }
+    { label: archived ? '取消归档' : '归档', key: 'archive', icon: renderIcon('solar:archive-linear') }
   ];
+  // 只有归档的对话才能删除：未归档时直接不显示删除项
+  if (archived) {
+    options.push({ label: '删除', key: 'delete', icon: renderIcon('solar:trash-bin-trash-linear') });
+  }
+  return options;
 });
 
 function conversationsInGroup(groupId: string) {
@@ -455,6 +484,7 @@ async function createConversationInGroup(group: ConversationGroup) {
 function handleGroupAction(group: ConversationGroup, key: string) {
   if (key === 'rename') openRenameGroup(group);
   if (key === 'pin') void toggleGroupPinned(group);
+  if (key === 'archiveConversations') archiveGroupConversations(group);
   if (key === 'delete') deleteGroup(group);
 }
 
@@ -465,6 +495,22 @@ async function toggleGroupPinned(group: ConversationGroup) {
   } catch (error) {
     showError(error);
   }
+}
+
+function archiveGroupConversations(group: ConversationGroup) {
+  openConfirm(
+    '归档分组对话',
+    `归档「${group.name}」中的所有对话？归档后可随时在“已归档”设置中恢复。`,
+    '归档',
+    async () => {
+      try {
+        await conversationGroupApi.archiveConversations(group.id);
+        await Promise.all([loadConversationGroups(), loadConversations()]);
+      } catch (error) {
+        showError(error);
+      }
+    }
+  );
 }
 
 async function selectConversation(id: string) {
@@ -492,8 +538,22 @@ function conversationIdFromPath(pathname: string): string {
   return match ? decodeURIComponent(match[1]) : '';
 }
 
+// 打开设置前所在的路径，关闭设置时回到这里
+const settingsReturnPath = ref('/');
+
+// 设置页是独立路径：/settings/appearance（外观）、/settings/archives（已归档）
+function syncSettingsUrl() {
+  const path = settingsVisible.value
+    ? settingsSection.value === 'archives' ? '/settings/archives' : '/settings/appearance'
+    : settingsReturnPath.value || '/';
+  window.history.replaceState(window.history.state, '', path);
+}
+
 function syncConversationUrl(id: string) {
   const path = id ? `/c/${encodeURIComponent(id)}` : '/';
+  settingsReturnPath.value = path;
+  // 设置页打开时 URL 保持设置路径，不覆盖
+  if (settingsVisible.value) return;
   window.history.replaceState(window.history.state, '', path);
 }
 
@@ -1233,9 +1293,12 @@ function jumpToMessage(id: string) {
 }
 
 async function bootstrap() {
+  // 先记住 URL 上的设置页路径（/settings、/settings/archives）
+  const settingsPath = window.location.pathname.match(/^\/settings(?:\/([^/]+))?/);
   setAuthErrorHandler(() => {
     currentUser.value = null;
     conversations.value = [];
+    settingsVisible.value = false;
     selectedId.value = '';
     syncConversationUrl('');
     detail.value = null;
@@ -1246,6 +1309,11 @@ async function bootstrap() {
     if (getToken()) {
       currentUser.value = await authApi.getUserInfo();
       await Promise.all([loadConversationGroups(), loadConversations(true)]);
+      // 刷新后从 URL 恢复设置页
+      if (settingsPath) {
+        settingsSection.value = settingsPath[1] === 'archives' ? 'archives' : 'appearance';
+        settingsVisible.value = true;
+      }
     }
   } catch {
     currentUser.value = null;
@@ -1280,6 +1348,7 @@ function logout() {
   userMenuVisible.value = false;
   clearToken();
   clearRefreshToken();
+  settingsVisible.value = false;
   currentUser.value = null;
   conversationGroups.value = [];
   closeStream?.();
@@ -1293,6 +1362,7 @@ function logout() {
 
 function openSettings() {
   userMenuVisible.value = false;
+  settingsReturnPath.value = location.pathname;
   settingsSection.value = 'appearance';
   settingsVisible.value = true;
   void loadConversations();
@@ -1364,6 +1434,23 @@ function confirmDeleteAllArchived() {
   );
 }
 
+function confirmDeleteGroupArchived(section: { title: string; groupId?: string; items: Conversation[] }) {
+  if (!section.groupId || !section.items.length) return;
+  openConfirm(
+    '删除分组归档对话',
+    `确定永久删除「${section.title}」下的全部 ${section.items.length} 个归档对话吗？此操作不可撤销。`,
+    '全部删除',
+    async () => {
+      try {
+        await conversationGroupApi.deleteArchivedConversations(section.groupId!);
+        await loadConversations();
+      } catch (error) {
+        showError(error);
+      }
+    }
+  );
+}
+
 function openConfirm(title: string, content: string, positiveText: string, action: () => Promise<void>) {
   confirmTitle.value = title;
   confirmContent.value = content;
@@ -1427,6 +1514,7 @@ onBeforeUnmount(() => {
 });
 watch(isDarkAppearance, value => {
   document.documentElement.dataset.theme = value ? 'dark' : 'light';
+  toastProviderProps.theme = activeTheme.value;
 }, { immediate: true });
 watch(
   [sidebarCollapsed, pinnedExpanded, groupsExpanded, conversationsExpanded, conversationGroups],
@@ -1444,6 +1532,9 @@ watch(
   },
   { deep: true }
 );
+watch([settingsVisible, settingsSection], () => {
+  syncSettingsUrl();
+});
 </script>
 
 <template>
@@ -1455,7 +1546,6 @@ watch(
           <div class="brand-mark"><img src="/agentrazor-icon.png" alt="" /></div>
           <div v-if="!sidebarCollapsed" class="brand-copy">
             <strong>AgentRazor</strong>
-            <span>Agent Workspace</span>
           </div>
           <n-button v-if="!sidebarCollapsed" quaternary circle class="collapse-button" @click="sidebarCollapsed = true">
             <template #icon>
@@ -1551,24 +1641,20 @@ watch(
                       </template>
                       新增对话
                     </n-tooltip>
-                    <n-tooltip trigger="hover" placement="top">
-                      <template #trigger>
-                        <n-dropdown
-                          trigger="click"
-                          placement="right-start"
-                          :options="[
-                            { label: group.pinnedAt ? '取消置顶' : '置顶分组', key: 'pin', icon: renderIcon(group.pinnedAt ? 'solar:pin-bold' : 'solar:pin-linear') },
-                            { label: '重命名分组', key: 'rename', icon: renderIcon('solar:pen-2-linear') },
-                            { type: 'divider', key: 'divider' },
-                            { label: '删除分组', key: 'delete', icon: renderIcon('solar:trash-bin-trash-linear') }
-                          ]"
-                          @select="key => handleGroupAction(group, String(key))"
-                        >
-                          <button type="button" aria-label="更多分组操作"><Icon icon="solar:menu-dots-bold" /></button>
-                        </n-dropdown>
-                      </template>
-                      更多操作
-                    </n-tooltip>
+                    <n-dropdown
+                      trigger="click"
+                      placement="right-start"
+                      :options="[
+                        { label: group.pinnedAt ? '取消置顶' : '置顶分组', key: 'pin', icon: renderIcon(group.pinnedAt ? 'solar:pin-bold' : 'solar:pin-linear') },
+                        { label: '重命名分组', key: 'rename', icon: renderIcon('solar:pen-2-linear') },
+                        { label: '归档对话', key: 'archiveConversations', icon: renderIcon('solar:archive-linear') },
+                        { type: 'divider', key: 'divider' },
+                        { label: '删除分组', key: 'delete', icon: renderIcon('solar:trash-bin-trash-linear') }
+                      ]"
+                      @select="key => handleGroupAction(group, String(key))"
+                    >
+                      <button type="button" aria-label="更多分组操作"><Icon icon="solar:menu-dots-bold" /></button>
+                    </n-dropdown>
                   </div>
                 </div>
                 <template v-if="!group.collapsed">
@@ -2089,19 +2175,33 @@ watch(
             <template #prefix><Icon icon="solar:magnifer-linear" /></template>
           </n-input>
           <n-spin :show="loadingList">
-            <div v-if="filteredArchivedConversations.length" class="archive-list archive-page-list">
-              <div v-for="item in filteredArchivedConversations" :key="item.id" class="archive-item">
-                <div class="archive-item-copy">
-                  <strong>{{ item.title }}</strong>
-                  <span>{{ formatConversationDate(item.updatedAt) }}</span>
+            <div v-if="archivedConversationSections.length" class="archive-list archive-page-list">
+              <template v-for="section in archivedConversationSections" :key="section.title">
+                <div class="archive-section-head">
+                  <h2 class="archive-section-title">{{ section.title }}</h2>
+                  <n-button
+                    v-if="section.groupId"
+                    text
+                    type="error"
+                    size="small"
+                    @click="confirmDeleteGroupArchived(section)"
+                  >
+                    全部删除
+                  </n-button>
                 </div>
-                <n-button quaternary circle type="error" aria-label="删除" @click="confirmDeleteArchived(item)">
-                  <template #icon><Icon icon="solar:trash-bin-trash-linear" /></template>
-                </n-button>
-                <n-button secondary @click="restoreArchived(item)">取消归档</n-button>
-              </div>
+                <div v-for="item in section.items" :key="item.id" class="archive-item">
+                  <div class="archive-item-copy">
+                    <strong>{{ item.title }}</strong>
+                    <span>{{ formatConversationDate(item.updatedAt) }}</span>
+                  </div>
+                  <n-button quaternary circle type="error" aria-label="删除" @click="confirmDeleteArchived(item)">
+                    <template #icon><Icon icon="solar:trash-bin-trash-linear" /></template>
+                  </n-button>
+                  <n-button secondary @click="restoreArchived(item)">取消归档</n-button>
+                </div>
+              </template>
             </div>
-            <div v-else class="archive-empty">
+            <div v-if="!archivedConversationSections.length" class="archive-empty">
               {{ archiveQuery.trim() ? '没有匹配的归档对话' : '暂无已归档对话' }}
             </div>
           </n-spin>
