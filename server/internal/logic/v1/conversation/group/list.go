@@ -36,21 +36,11 @@ func (l *List) List() (resp *types.ListResponse, err error) {
 		return nil, err
 	}
 	sort.SliceStable(rows, func(i, j int) bool {
-		if rows[i].PinnedAt.Valid != rows[j].PinnedAt.Valid {
-			return rows[i].PinnedAt.Valid
-		}
-		if rows[i].PinnedAt.Valid {
-			return rows[i].PinnedAt.Time.After(rows[j].PinnedAt.Time)
-		}
-		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
+		return rows[i].CreateTime.Before(rows[j].CreateTime)
 	})
 	resp = &types.ListResponse{Groups: make([]types.ConversationGroup, 0, len(rows))}
 	for _, row := range rows {
-		item := types.ConversationGroup{Id: row.Uuid, Name: row.Name, CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: row.UpdatedAt.UTC().Format(time.RFC3339Nano)}
-		if row.PinnedAt.Valid {
-			v := row.PinnedAt.Time.UTC().Format(time.RFC3339Nano)
-			item.PinnedAt = &v
-		}
+		item := types.ConversationGroup{Id: row.Uuid, Name: row.Name, CreatedAt: row.CreateTime.UTC().Format(time.RFC3339Nano), UpdatedAt: row.UpdateTime.UTC().Format(time.RFC3339Nano)}
 		resp.Groups = append(resp.Groups, item)
 	}
 	return resp, nil

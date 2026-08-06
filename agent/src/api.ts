@@ -315,7 +315,6 @@ export const conversationApi = {
 export interface ConversationGroup {
   id: string;
   name: string;
-  pinnedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -330,7 +329,7 @@ export const conversationGroupApi = {
       method: 'POST', body: JSON.stringify({ name })
     });
   },
-  update(id: string, patch: { name?: string; pinned?: boolean }) {
+  update(id: string, patch: { name?: string }) {
     return request<ConversationGroup>(`/api/v1/conversation-groups/${encodeURIComponent(id)}`, {
       method: 'PATCH', body: JSON.stringify(patch)
     });

@@ -125,13 +125,7 @@ func groupsByUser(ctx context.Context, svcCtx *svc.ServiceContext, userUUID stri
 		return nil, err
 	}
 	sort.SliceStable(rows, func(i, j int) bool {
-		if rows[i].PinnedAt.Valid != rows[j].PinnedAt.Valid {
-			return rows[i].PinnedAt.Valid
-		}
-		if rows[i].PinnedAt.Valid {
-			return rows[i].PinnedAt.Time.After(rows[j].PinnedAt.Time)
-		}
-		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
+		return rows[i].CreateTime.Before(rows[j].CreateTime)
 	})
 	return rows, nil
 }

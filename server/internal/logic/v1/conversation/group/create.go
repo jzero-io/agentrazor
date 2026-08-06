@@ -43,5 +43,5 @@ func (l *Create) Create(req *types.CreateRequest) (resp *types.ConversationGroup
 	if err != nil {
 		return nil, err
 	}
-	return &types.ConversationGroup{Id: row.Uuid, Name: row.Name, CreatedAt: row.CreatedAt.UTC().Format("2006-01-02T15:04:05.999999999Z07:00"), UpdatedAt: row.UpdatedAt.UTC().Format("2006-01-02T15:04:05.999999999Z07:00")}, nil
+	return &types.ConversationGroup{Id: row.Uuid, Name: row.Name, CreatedAt: row.CreateTime.UTC().Format("2006-01-02T15:04:05.999999999Z07:00"), UpdatedAt: row.UpdateTime.UTC().Format("2006-01-02T15:04:05.999999999Z07:00")}, nil
 }

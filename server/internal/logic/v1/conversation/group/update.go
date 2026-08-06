@@ -44,13 +44,6 @@ func (l *Update) Update(req *types.UpdateRequest) (resp *types.ConversationGroup
 		}
 		values[string(conversationgroupmodel.Name)] = name
 	}
-	if req.Pinned != nil {
-		if *req.Pinned {
-			values[string(conversationgroupmodel.PinnedAt)] = time.Now().UTC()
-		} else {
-			values[string(conversationgroupmodel.PinnedAt)] = nil
-		}
-	}
 	if len(values) > 0 {
 		if err := l.svcCtx.Model.ConversationGroup.UpdateFieldsByCondition(l.ctx, nil, values, condition.NewChain().Equal(conversationgroupmodel.Uuid, req.GroupId).Equal(conversationgroupmodel.UserUuid, user.Uuid).Build()...); err != nil {
 			return nil, err
@@ -60,10 +53,6 @@ func (l *Update) Update(req *types.UpdateRequest) (resp *types.ConversationGroup
 	if err != nil {
 		return nil, err
 	}
-	resp = &types.ConversationGroup{Id: row.Uuid, Name: row.Name, CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: row.UpdatedAt.UTC().Format(time.RFC3339Nano)}
-	if row.PinnedAt.Valid {
-		v := row.PinnedAt.Time.UTC().Format(time.RFC3339Nano)
-		resp.PinnedAt = &v
-	}
+	resp = &types.ConversationGroup{Id: row.Uuid, Name: row.Name, CreatedAt: row.CreateTime.UTC().Format(time.RFC3339Nano), UpdatedAt: row.UpdateTime.UTC().Format(time.RFC3339Nano)}
 	return resp, nil
 }

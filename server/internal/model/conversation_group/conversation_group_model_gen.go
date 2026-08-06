@@ -26,12 +26,11 @@ var (
 )
 
 const (
-	Uuid      condition.Field = "uuid"
-	UserUuid  condition.Field = "user_uuid"
-	Name      condition.Field = "name"
-	PinnedAt  condition.Field = "pinned_at"
-	CreatedAt condition.Field = "created_at"
-	UpdatedAt condition.Field = "updated_at"
+	Uuid       condition.Field = "uuid"
+	UserUuid   condition.Field = "user_uuid"
+	Name       condition.Field = "name"
+	CreateTime condition.Field = "create_time"
+	UpdateTime condition.Field = "update_time"
 )
 
 func initConversationGroupVars(flavor sqlbuilder.Flavor) {
@@ -75,12 +74,11 @@ type (
 	}
 
 	ConversationGroup struct {
-		Uuid      string       `db:"uuid"`
-		UserUuid  string       `db:"user_uuid"`
-		Name      string       `db:"name"`
-		PinnedAt  sql.NullTime `db:"pinned_at"`
-		CreatedAt time.Time    `db:"created_at"`
-		UpdatedAt time.Time    `db:"updated_at"`
+		Uuid       string    `db:"uuid"`
+		UserUuid   string    `db:"user_uuid"`
+		Name       string    `db:"name"`
+		CreateTime time.Time `db:"create_time"`
+		UpdateTime time.Time `db:"update_time"`
 	}
 )
 
@@ -159,7 +157,7 @@ func (m *defaultConversationGroupModel) Insert(ctx context.Context, session sqlx
 	statement, args := sqlbuilder.NewInsertBuilder().
 		InsertInto(m.table).
 		Cols(conversationGroupRowsExpectAutoSet).
-		Values(data.Uuid, data.UserUuid, data.Name, data.PinnedAt, data.CreatedAt, data.UpdatedAt).BuildWithFlavor(m.flavor)
+		Values(data.Uuid, data.UserUuid, data.Name).BuildWithFlavor(m.flavor)
 	if session != nil {
 		return session.ExecCtx(ctx, statement, args...)
 	}
@@ -172,7 +170,7 @@ func (m *defaultConversationGroupModel) InsertV2(ctx context.Context, session sq
 	statement, args = sqlbuilder.NewInsertBuilder().
 		InsertInto(m.table).
 		Cols(conversationGroupRowsExpectAutoSet).
-		Values(data.Uuid, data.UserUuid, data.Name, data.PinnedAt, data.CreatedAt, data.UpdatedAt).BuildWithFlavor(m.flavor)
+		Values(data.Uuid, data.UserUuid, data.Name).BuildWithFlavor(m.flavor)
 
 	var err error
 	if session != nil {
@@ -195,14 +193,11 @@ func (m *defaultConversationGroupModel) Update(ctx context.Context, session sqlx
 	if slices.Contains(conversationGroupRowsExpectAutoFieldNames, condition.QuoteWithFlavor(m.flavor, "name")) {
 		assigns = append(assigns, sb.Assign(condition.QuoteWithFlavor(m.flavor, "name"), data.Name))
 	}
-	if slices.Contains(conversationGroupRowsExpectAutoFieldNames, condition.QuoteWithFlavor(m.flavor, "pinned_at")) {
-		assigns = append(assigns, sb.Assign(condition.QuoteWithFlavor(m.flavor, "pinned_at"), data.PinnedAt))
+	if slices.Contains(conversationGroupRowsExpectAutoFieldNames, condition.QuoteWithFlavor(m.flavor, "create_time")) {
+		assigns = append(assigns, sb.Assign(condition.QuoteWithFlavor(m.flavor, "create_time"), data.CreateTime))
 	}
-	if slices.Contains(conversationGroupRowsExpectAutoFieldNames, condition.QuoteWithFlavor(m.flavor, "created_at")) {
-		assigns = append(assigns, sb.Assign(condition.QuoteWithFlavor(m.flavor, "created_at"), data.CreatedAt))
-	}
-	if slices.Contains(conversationGroupRowsExpectAutoFieldNames, condition.QuoteWithFlavor(m.flavor, "updated_at")) {
-		assigns = append(assigns, sb.Assign(condition.QuoteWithFlavor(m.flavor, "updated_at"), data.UpdatedAt))
+	if slices.Contains(conversationGroupRowsExpectAutoFieldNames, condition.QuoteWithFlavor(m.flavor, "update_time")) {
+		assigns = append(assigns, sb.Assign(condition.QuoteWithFlavor(m.flavor, "update_time"), data.UpdateTime))
 	}
 
 	sb.Set(assigns...)
@@ -247,7 +242,7 @@ func (m *customConversationGroupModel) BulkInsert(ctx context.Context, session s
 	sb.Cols(conversationGroupRowsExpectAutoSet)
 
 	for _, data := range datas {
-		sb.Values(data.Uuid, data.UserUuid, data.Name, data.PinnedAt, data.CreatedAt, data.UpdatedAt)
+		sb.Values(data.Uuid, data.UserUuid, data.Name)
 	}
 
 	statement, args := sb.BuildWithFlavor(m.flavor)

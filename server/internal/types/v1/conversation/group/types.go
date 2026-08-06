@@ -12,14 +12,12 @@ var (
 type ConversationGroup struct {
 	Id        string  `json:"id"`
 	Name      string  `json:"name"`
-	PinnedAt  *string `json:"pinnedAt,omitempty"`
 	CreatedAt string  `json:"createdAt"`
 	UpdatedAt string  `json:"updatedAt"`
 }
 
 type CreateRequest struct {
-	Name   string `json:"name" validate:"required,max=40"`
-	Pinned *bool  `json:"pinned,optional"`
+	Name string `json:"name" validate:"required,max=40"`
 }
 
 type DeleteResponse struct {
@@ -42,5 +40,4 @@ type PathRequest struct {
 type UpdateRequest struct {
 	GroupId string  `path:"group_id" validate:"required"`
 	Name    *string `json:"name,optional" validate:"omitempty,max=40"`
-	Pinned  *bool   `json:"pinned,optional"`
 }

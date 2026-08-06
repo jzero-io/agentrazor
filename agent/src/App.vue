@@ -154,7 +154,6 @@ const archiveQuery = ref('');
 interface ConversationGroup {
   id: string;
   name: string;
-  pinnedAt?: string;
   collapsed: boolean;
 }
 const conversationGroups = ref<ConversationGroup[]>([]);
@@ -315,7 +314,6 @@ async function loadConversationGroups() {
     conversationGroups.value = groups.map(group => ({
       id: group.id,
       name: group.name,
-      pinnedAt: group.pinnedAt,
       collapsed: previous.get(group.id) ?? savedSidebarView.collapsedGroups?.[group.id] ?? false
     }));
   } catch (error) {
@@ -568,18 +566,8 @@ async function createConversationInGroup(group: ConversationGroup) {
 
 function handleGroupAction(group: ConversationGroup, key: string) {
   if (key === 'rename') openRenameGroup(group);
-  if (key === 'pin') void toggleGroupPinned(group);
   if (key === 'archiveConversations') archiveGroupConversations(group);
   if (key === 'delete') deleteGroup(group);
-}
-
-async function toggleGroupPinned(group: ConversationGroup) {
-  try {
-    await conversationGroupApi.update(group.id, { pinned: !group.pinnedAt });
-    await loadConversationGroups();
-  } catch (error) {
-    showError(error);
-  }
 }
 
 function archiveGroupConversations(group: ConversationGroup) {
@@ -1748,7 +1736,6 @@ watch([settingsVisible, settingsSection], () => {
                       trigger="click"
                       placement="right-start"
                       :options="[
-                        { label: group.pinnedAt ? '取消置顶' : '置顶分组', key: 'pin', icon: renderIcon(group.pinnedAt ? 'solar:pin-bold' : 'solar:pin-linear') },
                         { label: '重命名分组', key: 'rename', icon: renderIcon('solar:pen-2-linear') },
                         { label: '归档对话', key: 'archiveConversations', icon: renderIcon('solar:archive-linear') },
                         { type: 'divider', key: 'divider' },
