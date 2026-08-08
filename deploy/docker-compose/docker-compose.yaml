@@ -24,7 +24,7 @@ services:
       - TZ=Asia/Shanghai
       - VITE_SERVICE_BASE_URL=http://127.0.0.1
     ports:
-      - "80:80"
+      - "8443:80"
   agent:
     build:
       context: ../../agent
@@ -36,7 +36,7 @@ services:
     environment:
       - TZ=Asia/Shanghai
     ports:
-      - "5174:80"
+      - "80:80"
   postgres:
     image: postgres
     restart: always
