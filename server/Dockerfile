@@ -21,7 +21,19 @@ RUN --mount=type=cache,target=/go/pkg CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARC
 
 FROM alpine:latest
 
-RUN apk add --no-cache tzdata
+ARG TARGETARCH
+
+RUN apk add --no-cache ca-certificates curl tar tzdata \
+    && case "$TARGETARCH" in \
+         amd64) codex_arch="x86_64" ;; \
+         arm64) codex_arch="aarch64" ;; \
+         *) echo "unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSL "https://github.com/openai/codex/releases/latest/download/codex-${codex_arch}-unknown-linux-musl.tar.gz" -o /tmp/codex.tar.gz \
+    && tar -xzf /tmp/codex.tar.gz -C /usr/local/bin \
+    && mv "/usr/local/bin/codex-${codex_arch}-unknown-linux-musl" /usr/local/bin/codex \
+    && chmod +x /usr/local/bin/codex \
+    && rm -f /tmp/codex.tar.gz
 
 WORKDIR /dist
 

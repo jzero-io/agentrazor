@@ -3,26 +3,15 @@ services:
     build:
       context: ../../server
     restart: always
+    depends_on:
+      - postgres
+    volumes:
+      - ./server/data:/dist/data
     environment:
       - TZ=Asia/Shanghai
-
-      # 使用 sqlite
-      - DRIVER_NAME=sqlite
+      - DRIVER_NAME=pgx
       - DATASOURCE=postgres://root:123456@postgres:5432/agentrazor
-
-#      # 使用 mysql
-#      - DRIVER_NAME=mysql
-#      - DATASOURCE=root:123456@tcp(mysql:3306)/agentrazor?charset=utf8mb4&parseTime=True&loc=Local
-
-#      # 使用 postgres
-#      - DRIVER_NAME=pgx
-#      - DATASOURCE=postgres://root:123456@postgres:5432/agentrazor
-
-      # 使用 miniredis(内存)
-      - REDIS_MINI_REDIS=true
-
-#      # 使用 redis
-#      - REDIS_HOST=redis:6379
+      - REDIS_HOST=redis:6379
   web:
     build:
       context: ../../web
@@ -36,6 +25,18 @@ services:
       - VITE_SERVICE_BASE_URL=http://127.0.0.1
     ports:
       - "80:80"
+  agent:
+    build:
+      context: ../../agent
+    restart: always
+    depends_on:
+      - server
+    volumes:
+      - ./nginx:/etc/nginx/conf.d
+    environment:
+      - TZ=Asia/Shanghai
+    ports:
+      - "5174:80"
   postgres:
     image: postgres
     restart: always
@@ -46,23 +47,9 @@ services:
       POSTGRES_USER: root
       POSTGRES_DB: agentrazor
     volumes:
-      - ./postgres/data:/var/lib/postgres/data
+      - ./postgres/data:/var/lib/postgresql
     ports:
       - "5432:5432"
-  mysql:
-    image: mysql:8.0
-    restart: always
-    container_name: agentrazor-mysql
-    environment:
-      - TZ=Asia/Shanghai
-      - MYSQL_ROOT_PASSWORD=123456
-      - MYSQL_ROOT_USER=root
-      - MYSQL_DATABASE=agentrazor
-    volumes:
-      - ./mysql/config:/etc/mysql/conf.d
-      - ./mysql/data:/var/lib/mysql
-    ports:
-      - "3306:3306"
   redis:
     image: redis:latest
     restart: always
