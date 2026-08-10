@@ -2,11 +2,20 @@
 package plugins
 
 import (
+	serverless0 "crypto_tracing/serverless"
+
 	"github.com/zeromicro/go-zero/rest"
 
+	"github.com/jzero-io/agentrazor/server/internal/handler"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 )
 
 func LoadPlugins(server *rest.Server, svcCtx *svc.ServiceContext) {
+
+	{
+		serverless := serverless0.New(svcCtx.ServiceContext)
+		serverless.HandlerFunc(server, serverless.SvcCtx)
+		handler.RegisterRoute2Code(serverless.RouteCodesMap)
+	}
 
 }

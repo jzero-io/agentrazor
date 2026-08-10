@@ -9,6 +9,7 @@ import (
 	"github.com/jzero-io/jzero/core/stores/condition"
 	"github.com/zeromicro/go-zero/core/logx"
 
+	agentdomain "github.com/jzero-io/agentrazor/server/internal/agent"
 	conversationmodel "github.com/jzero-io/agentrazor/server/internal/model/conversation"
 	conversationgroupmodel "github.com/jzero-io/agentrazor/server/internal/model/conversation_group"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
@@ -40,15 +41,7 @@ func (l *List) List() (resp *types.ListResponse, err error) {
 	if err != nil {
 		return nil, err
 	}
-	owned, err := conversationIDsByUser(l.ctx, l.svcCtx, uuid)
-	if err != nil {
-		return nil, err
-	}
-	ownedSet := make(map[string]struct{}, len(owned))
-	for _, id := range owned {
-		ownedSet[id] = struct{}{}
-	}
-	conversations, err := l.svcCtx.AgentThreads.List(l.ctx)
+	owned, err := conversationsByUser(l.ctx, l.svcCtx, uuid)
 	if err != nil {
 		return nil, err
 	}
@@ -56,26 +49,67 @@ func (l *List) List() (resp *types.ListResponse, err error) {
 	if err != nil {
 		return nil, err
 	}
-	response := &types.ListResponse{
-		Conversations: make([]types.Conversation, 0, len(owned)),
+
+	threads, err := l.listOwnedThreads(owned)
+	if err != nil {
+		return nil, err
 	}
-	sort.SliceStable(conversations, func(i, j int) bool {
-		if conversations[i].IsPinned != conversations[j].IsPinned {
-			return conversations[i].IsPinned
+	order := conversationOrder(owned)
+	sort.SliceStable(threads, func(i, j int) bool {
+		if threads[i].IsPinned != threads[j].IsPinned {
+			return threads[i].IsPinned
 		}
-		return conversations[i].UpdatedAt.After(conversations[j].UpdatedAt)
+		left, right := order[threads[i].ID], order[threads[j].ID]
+		if !left.CreateTime.Equal(right.CreateTime) {
+			return left.CreateTime.After(right.CreateTime)
+		}
+		return threads[i].ID > threads[j].ID
 	})
-	for _, current := range conversations {
-		if _, ok := ownedSet[current.ID]; !ok {
-			continue
-		}
-		mapped := toConversation(current)
-		if groupID := assignments[current.ID]; groupID != "" {
+
+	response := &types.ListResponse{Conversations: make([]types.Conversation, 0, len(threads))}
+	for _, thread := range threads {
+		mapped := toConversation(thread)
+		setConversationActiveRun(&mapped, l.svcCtx.AgentThreads, thread.ID)
+		if groupID := assignments[thread.ID]; groupID != "" {
 			mapped.GroupId = &groupID
 		}
 		response.Conversations = append(response.Conversations, mapped)
 	}
 	return response, nil
+}
+
+func (l *List) listOwnedThreads(owned []*conversationmodel.Conversation) ([]agentdomain.StoredThread, error) {
+	listed, err := l.svcCtx.AgentThreads.List(l.ctx)
+	if err != nil {
+		return nil, err
+	}
+	ownedSet := make(map[string]struct{}, len(owned))
+	for _, row := range owned {
+		ownedSet[row.Id] = struct{}{}
+	}
+	byID := make(map[string]agentdomain.StoredThread, len(listed))
+	for _, thread := range listed {
+		if _, ok := ownedSet[thread.ID]; ok {
+			byID[thread.ID] = thread
+		}
+	}
+	threads := make([]agentdomain.StoredThread, 0, len(owned))
+	for _, row := range owned {
+		id := row.Id
+		thread, ok := byID[id]
+		if !ok {
+			var err error
+			thread, err = l.svcCtx.AgentThreads.Metadata(l.ctx, id)
+			if errors.Is(err, agentdomain.ErrThreadNotFound) {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+		}
+		threads = append(threads, thread)
+	}
+	return threads, nil
 }
 
 func conversationUser(ctx context.Context, svcCtx *svc.ServiceContext, conversationID string) (string, bool, error) {
@@ -89,17 +123,18 @@ func conversationUser(ctx context.Context, svcCtx *svc.ServiceContext, conversat
 	return row.UserUuid, true, nil
 }
 
-func conversationIDsByUser(ctx context.Context, svcCtx *svc.ServiceContext, userUUID string) ([]string, error) {
-	rows, err := svcCtx.Model.Conversation.FindFieldsByCondition(ctx, nil, []condition.Field{conversationmodel.Id},
+func conversationsByUser(ctx context.Context, svcCtx *svc.ServiceContext, userUUID string) ([]*conversationmodel.Conversation, error) {
+	return svcCtx.Model.Conversation.FindFieldsByCondition(ctx, nil,
+		[]condition.Field{conversationmodel.Id, conversationmodel.CreateTime, conversationmodel.UpdateTime},
 		condition.NewChain().Equal(conversationmodel.UserUuid, userUUID).Build()...)
-	if err != nil {
-		return nil, err
-	}
-	ids := make([]string, 0, len(rows))
+}
+
+func conversationOrder(rows []*conversationmodel.Conversation) map[string]*conversationmodel.Conversation {
+	result := make(map[string]*conversationmodel.Conversation, len(rows))
 	for _, row := range rows {
-		ids = append(ids, row.Id)
+		result[row.Id] = row
 	}
-	return ids, nil
+	return result
 }
 
 func groupAssignments(ctx context.Context, svcCtx *svc.ServiceContext, userUUID string) (map[string]string, error) {

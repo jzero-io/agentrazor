@@ -23,6 +23,20 @@ import {
 } from 'naive-ui';
 import { authApi, clearRefreshToken, clearToken, conversationApi, conversationGroupApi, getToken, setAuthErrorHandler, setRefreshToken, setToken } from './api';
 import type { Conversation, ConversationDetail, StreamEvent, ThreadItem, Turn, UserInfo } from './api';
+import {
+  activityIcon,
+  activityTitle,
+  completedProcessSummary,
+  formatTurnDuration,
+  processDisplayItems,
+  showCompletedProcessSummary,
+  streamingProcessSummary,
+  turnActiveProcessItem,
+  turnProcessItems,
+  turnResultItems,
+  turnWorkedItems,
+  type ProcessDisplayItem
+} from './processDisplay';
 
 interface SidebarViewState {
   sidebarCollapsed?: boolean;
@@ -117,14 +131,20 @@ const draft = ref('');
 const loadingList = ref(false);
 const loadingDetail = ref(false);
 const sending = ref(false);
+const sendingRequest = ref(false);
+const creatingConversation = ref(false);
 const streamingTurn = ref<Turn | null>(null);
-const processingStatus = ref('');
+const processingConversationIds = ref(new Set<string>());
+const activeTurnsByConversation = new Map<string, Turn>();
+const streamResultSeenConversationIds = new Set<string>();
 // 是否已开始输出最终回答：一旦有结果，就不再回退到"正在思考"
 const streamResultSeen = ref(false);
 const elapsedDurationMs = ref(0);
 const stopping = ref(false);
 let turnStartedAtMs = 0;
 let turnTimer: number | undefined;
+const locallyStoppedRunIds = new Set<string>();
+const locallyStoppedSessionIds = new Set<string>();
 const sidebarCollapsed = ref(savedSidebarView.sidebarCollapsed ?? false);
 const mobileSidebarOpen = ref(false);
 const renameVisible = ref(false);
@@ -181,8 +201,9 @@ const appearanceOptions: Array<{ key: Appearance; label: string; icon: string }>
   { key: 'light', label: '浅色', icon: 'solar:sun-2-linear' },
   { key: 'dark', label: '深色', icon: 'solar:moon-linear' }
 ];
-let closeStream: (() => void) | undefined;
-let streamEventCutoff = 0;
+const streamClosers = new Map<string, () => void>();
+let conversationSelectionToken = 0;
+let creatingConversationTask: Promise<void> | null = null;
 
 const themeOverrides = {
   common: {
@@ -243,7 +264,20 @@ const renderedTurns = computed(() => [
   ...(detail.value?.turns || []),
   ...(streamingTurn.value ? [streamingTurn.value] : [])
 ]);
-const canSend = computed(() => Boolean(draft.value.trim() && selectedId.value && !sending.value));
+const canSend = computed(() => Boolean(draft.value.trim() && selectedId.value && !creatingConversation.value && !sendingRequest.value && !isConversationRunning(selectedId.value)));
+const composerActionPending = computed(() => creatingConversation.value || sendingRequest.value || stopping.value);
+const composerActionDisabled = computed(() => sending.value ? stopping.value : !canSend.value);
+const composerActionLabel = computed(() => {
+  if (stopping.value) return '正在停止';
+  if (sending.value) return '停止当前任务';
+  if (composerActionPending.value) return '发送中';
+  return '发送消息';
+});
+const composerActionIcon = computed(() => {
+  if (stopping.value || !sending.value && composerActionPending.value) return 'solar:refresh-linear';
+  if (sending.value) return 'solar:stop-bold';
+  return 'solar:arrow-up-linear';
+});
 const isNewChat = computed(() =>
   Boolean(selectedId.value)
   && !detail.value?.turns?.length
@@ -255,16 +289,6 @@ const isDarkAppearance = computed(() =>
   appearance.value === 'dark' || appearance.value === 'system' && systemDark.value
 );
 const activeTheme = computed(() => isDarkAppearance.value ? darkTheme : null);
-
-interface ProcessDisplayItem {
-  item: ThreadItem;
-  label: string;
-  icon: string;
-  detail: string;
-  live: boolean;
-  expandable: boolean;
-  className: string;
-}
 
 // toast/message 跟随主题：深色模式下弹层不再出现白底
 const toastProviderProps = reactive({
@@ -297,7 +321,9 @@ function conversationsInGroup(groupId: string) {
     .filter(item => item.groupId === groupId && !item.pinnedAt)
     .sort((left, right) => {
       if (Boolean(left.pinnedAt) !== Boolean(right.pinnedAt)) return left.pinnedAt ? -1 : 1;
-      return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+      const createDiff = new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+      if (createDiff !== 0) return createDiff;
+      return right.id.localeCompare(left.id);
     });
 }
 
@@ -306,8 +332,97 @@ function conversationGroupName(item: Conversation) {
   return conversationGroups.value.find(group => group.id === item.groupId)?.name || '';
 }
 
+function revealConversationSection(item: Conversation) {
+  if (item.pinnedAt) {
+    pinnedExpanded.value = true;
+    return;
+  }
+
+  if (item.groupId) {
+    groupsExpanded.value = true;
+    const group = conversationGroups.value.find(value => value.id === item.groupId);
+    if (group) group.collapsed = false;
+    return;
+  }
+
+  conversationsExpanded.value = true;
+}
+
+function setConversationProcessing(id: string, processing: boolean) {
+  if (!id) return;
+  const next = new Set(processingConversationIds.value);
+  if (processing) next.add(id);
+  else next.delete(id);
+  processingConversationIds.value = next;
+}
+
+function clearConversationProcessing(ids: string[]) {
+  if (!ids.length) return;
+  const removed = new Set(ids);
+  const next = new Set([...processingConversationIds.value].filter(id => !removed.has(id)));
+  processingConversationIds.value = next;
+}
+
+function isConversationRunning(id: string) {
+  return processingConversationIds.value.has(id)
+    || Boolean(conversations.value.find(item => item.id === id)?.running);
+}
+
 function isConversationProcessing(item: Conversation) {
-  return item.id === selectedId.value && (sending.value || Boolean(streamingTurn.value));
+  return item.running || processingConversationIds.value.has(item.id);
+}
+
+function applyConversationList(next: Conversation[]) {
+  const nextIds = new Set(next.map(item => item.id));
+  const runningIds = new Set(next.filter(item => item.running).map(item => item.id));
+  for (const id of processingConversationIds.value) {
+    if (nextIds.has(id) && (streamClosers.has(id) || id === selectedId.value && sending.value)) {
+      runningIds.add(id);
+    }
+  }
+  processingConversationIds.value = runningIds;
+  conversations.value = next;
+  for (const item of next) {
+    if (item.running) ensureConversationStream(item.id);
+  }
+  closeIdleConversationStreams();
+}
+
+function upsertConversationListItem(item: Conversation) {
+  const running = item.running || processingConversationIds.value.has(item.id);
+  const index = conversations.value.findIndex(value => value.id === item.id);
+  if (index >= 0) conversations.value[index] = { ...conversations.value[index], ...item, running };
+  else conversations.value.unshift({ ...item, running });
+  setConversationProcessing(item.id, running);
+}
+
+function closeConversationStream(id: string) {
+  const close = streamClosers.get(id);
+  if (!close) return;
+  streamClosers.delete(id);
+  close();
+}
+
+function closeAllConversationStreams() {
+  for (const close of streamClosers.values()) close();
+  streamClosers.clear();
+}
+
+function ensureConversationStream(id: string, afterId = 0) {
+  if (!id || streamClosers.has(id)) return;
+  const close = conversationApi.subscribe(
+    id,
+    afterId,
+    event => void handleStreamEvent(event),
+    () => closeConversationStream(id)
+  );
+  streamClosers.set(id, close);
+}
+
+function closeIdleConversationStreams(activeId = selectedId.value) {
+  for (const id of [...streamClosers.keys()]) {
+    if (id !== activeId && !processingConversationIds.value.has(id)) closeConversationStream(id);
+  }
 }
 
 function showConversationPreview(item: Conversation, event: MouseEvent) {
@@ -507,7 +622,7 @@ function onWindowTouchEnd() {
 async function loadConversations(selectFirst = false) {
   loadingList.value = true;
   try {
-    conversations.value = await conversationApi.list();
+    applyConversationList(await conversationApi.list());
     if (selectFirst && !selectedId.value) {
       const requestedId = conversationIdFromPath(window.location.pathname);
       let preferred = visibleConversations.value.find(item => item.id === requestedId);
@@ -518,14 +633,7 @@ async function loadConversations(selectFirst = false) {
           const detail = await conversationApi.get(requestedId);
           if (detail?.conversation) {
             preferred = detail.conversation;
-            const exists = conversations.value.some(item => item.id === preferred!.id);
-            if (!exists) {
-              const index = conversations.value.findIndex(
-                item => (item.updatedAt || '') < (preferred!.updatedAt || '')
-              );
-              if (index < 0) conversations.value.push(preferred);
-              else conversations.value.splice(index, 0, preferred);
-            }
+            upsertConversationListItem(preferred);
           }
         } catch {
           preferred = undefined;
@@ -543,17 +651,26 @@ async function loadConversations(selectFirst = false) {
 }
 
 async function createConversation() {
+  if (creatingConversationTask || sendingRequest.value) return;
   if (!currentUser.value) {
     loginVisible.value = true;
     return;
   }
-  try {
-    const created = await conversationApi.create();
-    conversations.value.unshift(created);
-    await selectConversation(created.id);
-  } catch (error) {
-    showError(error);
-  }
+  creatingConversation.value = true;
+  creatingConversationTask = (async () => {
+    try {
+      const created = await conversationApi.create();
+      upsertConversationListItem(created);
+      conversationsExpanded.value = true;
+      await selectConversation(created.id);
+    } catch (error) {
+      showError(error);
+    } finally {
+      creatingConversation.value = false;
+      creatingConversationTask = null;
+    }
+  })();
+  await creatingConversationTask;
 }
 
 function openMobileSidebar() {
@@ -563,20 +680,29 @@ function openMobileSidebar() {
 }
 
 async function createConversationInGroup(group: ConversationGroup) {
+  if (creatingConversationTask || sendingRequest.value) return;
   if (!currentUser.value) {
     loginVisible.value = true;
     return;
   }
-  try {
-    const created = await conversationApi.create();
-    const grouped = await conversationApi.update(created.id, { groupId: group.id });
-    conversations.value.unshift(grouped);
-    group.collapsed = false;
-    await selectConversation(grouped.id);
-  } catch (error) {
-    showError(error);
-    await loadConversations();
-  }
+  creatingConversation.value = true;
+  creatingConversationTask = (async () => {
+    try {
+      const created = await conversationApi.create();
+      const grouped = await conversationApi.update(created.id, { groupId: group.id });
+      upsertConversationListItem(grouped);
+      groupsExpanded.value = true;
+      group.collapsed = false;
+      await selectConversation(grouped.id);
+    } catch (error) {
+      showError(error);
+      await loadConversations();
+    } finally {
+      creatingConversation.value = false;
+      creatingConversationTask = null;
+    }
+  })();
+  await creatingConversationTask;
 }
 
 function handleGroupAction(group: ConversationGroup, key: string) {
@@ -592,7 +718,9 @@ function archiveGroupConversations(group: ConversationGroup) {
     '归档',
     async () => {
       try {
+        const archivedIds = conversations.value.filter(item => item.groupId === group.id).map(item => item.id);
         await conversationGroupApi.archiveConversations(group.id);
+        clearConversationProcessing(archivedIds);
         await Promise.all([loadConversationGroups(), loadConversations()]);
       } catch (error) {
         showError(error);
@@ -604,18 +732,19 @@ function archiveGroupConversations(group: ConversationGroup) {
 async function selectConversation(id: string) {
   mobileSidebarOpen.value = false;
   if (!id || id === selectedId.value && detail.value) return;
+
+  const token = ++conversationSelectionToken;
+  resetActiveTurn();
+
   selectedId.value = id;
   syncConversationUrl(id);
   detail.value = null;
-  resetActiveTurn();
-  closeStream?.();
-  closeStream = undefined;
   autoScrollEnabled.value = true;
-  streamEventCutoff = Date.now();
+
   const snapshot = await refreshDetail({ forceScroll: true });
-  if (selectedId.value === id) {
-    closeStream = conversationApi.subscribe(id, snapshot?.eventCursor ?? 0, handleStreamEvent, () => undefined);
-  }
+  if (conversationSelectionToken !== token || selectedId.value !== id) return;
+  ensureConversationStream(id, snapshot?.eventCursor ?? 0);
+  closeIdleConversationStreams(id);
 }
 
 function conversationIdFromPath(pathname: string): string {
@@ -649,11 +778,11 @@ interface RefreshDetailOptions {
 }
 
 interface BeginActiveTurnOptions {
+  sessionId?: string;
   turn?: Turn;
   id?: string;
   status?: string;
   startedAt?: string;
-  label?: string;
   resetResultSeen?: boolean;
   restartTimer?: boolean;
 }
@@ -683,36 +812,86 @@ function isActiveTurn(turn: Turn) {
   return normalized === 'inprogress' || normalized === 'running' || normalized === 'pending';
 }
 
+function markRestoredRunningTurn(turn: Turn) {
+  return { ...turn, restoredRunning: true } as Turn & { restoredRunning: boolean };
+}
+
+function isRestoredRunningTurn(turn: Turn) {
+  return Boolean((turn as Turn & { restoredRunning?: boolean }).restoredRunning);
+}
+
+function showStreamingThinking(turn: Turn) {
+  return !streamResultSeen.value && !turnActiveProcessItem(turn);
+}
+
+function showStreamingProcess(turn: Turn) {
+  return Boolean(turnActiveProcessItem(turn));
+}
+
+function cloneTurnForStream(turn: Turn) {
+  return { ...turn, items: [...(turn.items || [])] };
+}
+
+function cachedActiveTurn(sessionId: string) {
+  return activeTurnsByConversation.get(sessionId) || null;
+}
+
+function activeTurnResultSeen(turn: Turn) {
+  return turn.items.some(item => item.type === 'agentMessage' && item.phase === 'final_answer');
+}
+
 function beginActiveTurn(options: BeginActiveTurnOptions = {}) {
+  const sessionId = options.sessionId || selectedId.value;
+  const selected = sessionId === selectedId.value;
   const current = options.turn
-    ? { ...options.turn, items: [...(options.turn.items || [])] }
-    : streamingTurn.value || { id: options.id || '', status: options.status || 'inProgress', items: [] };
+    ? cloneTurnForStream(options.turn)
+    : cachedActiveTurn(sessionId)
+      || (selected ? streamingTurn.value : null)
+      || { id: options.id || '', status: options.status || 'inProgress', items: [] };
   if (options.id) current.id = options.id;
   if (options.status) current.status = options.status;
   if (options.startedAt) current.startedAt = options.startedAt;
+  if (sessionId) activeTurnsByConversation.set(sessionId, current);
+
+  if (options.resetResultSeen) streamResultSeenConversationIds.delete(sessionId);
+  else if (activeTurnResultSeen(current)) streamResultSeenConversationIds.add(sessionId);
+
+  if (!selected) return current;
+
   streamingTurn.value = current;
   sending.value = true;
   stopping.value = false;
-  if (options.resetResultSeen) streamResultSeen.value = false;
-  else streamResultSeen.value = streamResultSeen.value || current.items.some(item => item.type === 'agentMessage' && item.phase === 'final_answer');
+  streamResultSeen.value = streamResultSeenConversationIds.has(sessionId);
   if (options.restartTimer || !turnStartedAtMs) startTurnTimer(current.startedAt || options.startedAt);
-  if (options.label !== undefined) {
-    processingStatus.value = options.label;
-  } else if (!processingStatus.value && !streamResultSeen.value) {
-    processingStatus.value = processingLabel(turnActiveProcessItem(current) || undefined);
-  }
+  return current;
 }
 
-function resetActiveTurn() {
+function activeTurnError(error: unknown) {
+  return error instanceof Error && error.message.includes('active turn');
+}
+
+function resetActiveTurn(options: { clearCache?: boolean } = {}) {
+  if (options.clearCache && selectedId.value) {
+    activeTurnsByConversation.delete(selectedId.value);
+    streamResultSeenConversationIds.delete(selectedId.value);
+  }
   streamingTurn.value = null;
   sending.value = false;
   stopping.value = false;
-  processingStatus.value = '';
   streamResultSeen.value = false;
   stopTurnTimer();
 }
 
+function activeTurnStartedAt(snapshot: ConversationDetail, turn?: Turn) {
+  return snapshot.conversation.runningStartedAt
+    || turn?.startedAt
+    || snapshot.conversation.updatedAt
+    || snapshot.conversation.createdAt
+    || '';
+}
+
 function restoreActiveTurn(snapshot: ConversationDetail, enabled: boolean) {
+  upsertConversationListItem(snapshot.conversation);
   const turns = snapshot.turns || [];
   let activeIndex = -1;
   if (enabled) {
@@ -723,135 +902,228 @@ function restoreActiveTurn(snapshot: ConversationDetail, enabled: boolean) {
       }
     }
   }
+  const cachedTurn = cachedActiveTurn(snapshot.conversation.id);
   if (activeIndex < 0) {
     detail.value = snapshot;
+    setConversationProcessing(snapshot.conversation.id, snapshot.conversation.running);
+    if (enabled && snapshot.conversation.running) {
+      const activeTurn = cachedTurn || markRestoredRunningTurn({
+        id: '',
+        status: 'inProgress',
+        startedAt: activeTurnStartedAt(snapshot),
+        items: []
+      });
+      beginActiveTurn({
+        sessionId: snapshot.conversation.id,
+        turn: activeTurn,
+        resetResultSeen: !cachedTurn,
+        restartTimer: true
+      });
+    }
     return;
   }
 
-  const activeTurn = turns[activeIndex];
+  setConversationProcessing(snapshot.conversation.id, true);
+  const detailActiveTurn = snapshot.conversation.running && !turnWorkedItems(turns[activeIndex]).length
+    ? markRestoredRunningTurn(turns[activeIndex])
+    : turns[activeIndex];
+  const activeTurn = cachedTurn
+    ? { ...cachedTurn, items: mergeTurnItems(cachedTurn.items, detailActiveTurn.items) }
+    : detailActiveTurn;
   detail.value = {
     ...snapshot,
     turns: turns.filter((_, index) => index !== activeIndex)
   };
   beginActiveTurn({
+    sessionId: snapshot.conversation.id,
     turn: activeTurn,
-    startedAt: activeTurn.startedAt || snapshot.conversation.updatedAt || snapshot.conversation.createdAt
+    startedAt: activeTurnStartedAt(snapshot, activeTurn),
+    restartTimer: true
   });
 }
 
 async function sendMessage() {
   const content = draft.value.trim();
-  if (!canSend.value || !content) return;
-  draft.value = '';
-  autoScrollEnabled.value = true;
+  if (!content || sendingRequest.value) return;
 
-  const optimistic: Turn = {
-    id: `local-${Date.now()}`,
-    status: 'inProgress',
-    startedAt: new Date().toISOString(),
-    items: [{
-      id: `local-user-${Date.now()}`,
-      type: 'userMessage',
-      content: [{ type: 'text', text: content }]
-    }]
-  };
-  beginActiveTurn({ turn: optimistic, label: '正在思考', resetResultSeen: true, restartTimer: true });
-  await scrollToBottom({ force: true });
+  sendingRequest.value = true;
+  autoScrollEnabled.value = true;
+  let conversationId = selectedId.value;
 
   try {
-    if (activeConversation.value?.title === '新对话') {
-      const title = content.replace(/\s+/g, ' ').slice(0, 28);
-      const updated = await conversationApi.update(selectedId.value, { title });
-      replaceConversation(updated);
-      if (detail.value) detail.value.conversation = updated;
+    if (creatingConversationTask) await creatingConversationTask;
+    conversationId = selectedId.value;
+    if (!conversationId || isConversationRunning(conversationId)) return;
+
+    draft.value = '';
+    ensureConversationStream(conversationId, detail.value?.conversation.id === conversationId ? detail.value.eventCursor : 0);
+    const sent = await conversationApi.send(conversationId, content);
+    setConversationProcessing(conversationId, true);
+    if (sent.conversation) replaceConversation(sent.conversation);
+    if (selectedId.value === conversationId) {
+      if (sent.conversation && detail.value?.conversation.id === conversationId) {
+        detail.value.conversation = sent.conversation;
+      }
+      const confirmedTurn: Turn = {
+        id: sent.run?.id || `run-${Date.now()}`,
+        status: 'inProgress',
+        startedAt: sent.run?.createdAt || new Date().toISOString(),
+        items: [{
+          id: `local-user-${sent.run?.id || Date.now()}`,
+          type: 'userMessage',
+          content: [{ type: 'text', text: content }]
+        }]
+      };
+      beginActiveTurn({ turn: confirmedTurn, resetResultSeen: true, restartTimer: true });
+      await scrollToBottom({ force: true });
     }
-    await conversationApi.send(selectedId.value, content);
   } catch (error) {
-    draft.value = content;
-    resetActiveTurn();
+    if (selectedId.value === conversationId) draft.value = content;
+    if (activeTurnError(error)) {
+      setConversationProcessing(conversationId, true);
+      ensureConversationStream(conversationId, detail.value?.conversation.id === conversationId ? detail.value.eventCursor : 0);
+      if (selectedId.value === conversationId) await refreshDetail();
+      return;
+    }
+    setConversationProcessing(conversationId, false);
+    if (selectedId.value === conversationId) resetActiveTurn();
     showError(error);
+  } finally {
+    sendingRequest.value = false;
   }
 }
 
 async function cancelTurn() {
-  if (!selectedId.value || !sending.value || stopping.value) return;
+  const conversationId = selectedId.value;
+  if (!conversationId || !isConversationRunning(conversationId) || stopping.value) return;
   stopping.value = true;
-  processingStatus.value = '正在停止';
+  finalizeStoppedTurn(conversationId);
   try {
-    await conversationApi.cancelTurn(selectedId.value);
+    await conversationApi.cancelTurn(conversationId);
   } catch (error) {
-    stopping.value = false;
-    processingStatus.value = '正在处理';
+    locallyStoppedSessionIds.delete(conversationId);
+    setConversationProcessing(conversationId, false);
     showError(error);
   }
 }
 
-function ensureStreamingItem(id: string, type: string) {
-  beginActiveTurn();
-  let item = streamingTurn.value!.items.find(value => value.id === id);
+function handleComposerAction() {
+  if (sending.value) {
+    void cancelTurn();
+    return;
+  }
+  void sendMessage();
+}
+
+function mergeTurnItems(current: ThreadItem[], incoming: ThreadItem[], options: { skipIncomingReasoning?: boolean } = {}) {
+  if (!incoming.length) return current;
+
+  const currentById = new Map(current.map(item => [item.id, item]));
+  const pickCurrent = (incomingItem: ThreadItem): ThreadItem | undefined => {
+    const byId = currentById.get(incomingItem.id);
+    if (byId) return byId;
+    if (incomingItem.type === 'agentMessage' && incomingItem.text) {
+      return current.find(item => item.type === 'agentMessage' && item.text === incomingItem.text);
+    }
+    return undefined;
+  };
+
+  const merged: ThreadItem[] = [];
+  const usedCurrent = new Set<ThreadItem>();
+  const userMessage = incoming.find(item => item.type === 'userMessage')
+    ?? current.find(item => item.type === 'userMessage');
+  if (userMessage) {
+    merged.push(userMessage);
+    const currentUser = current.find(item => item.type === 'userMessage');
+    if (currentUser) usedCurrent.add(currentUser);
+  }
+
+  for (const incomingItem of incoming) {
+    if (incomingItem.type === 'userMessage') continue;
+    if (options.skipIncomingReasoning && incomingItem.type === 'reasoning') continue;
+    const currentItem = pickCurrent(incomingItem);
+    if (currentItem) usedCurrent.add(currentItem);
+    merged.push(currentItem ?? incomingItem);
+  }
+
+  for (const currentItem of current) {
+    if (currentItem.type === 'userMessage' || usedCurrent.has(currentItem)) continue;
+    merged.push(currentItem);
+  }
+  return merged;
+}
+
+function mergeTurnForDisplay(target: Turn, source: Turn, keepStatus = false) {
+  if (!keepStatus) target.status = source.status;
+  if (source.durationMs !== undefined) target.durationMs = source.durationMs;
+  if (source.completedAt) target.completedAt = source.completedAt;
+  target.items = mergeTurnItems(target.items, source.items, { skipIncomingReasoning: true });
+}
+
+function finishActiveTurn(status: 'completed' | 'failed' | 'stopped', sessionId = selectedId.value) {
+  const selected = sessionId === selectedId.value;
+  const durationMs = selected ? stopTurnTimer() : undefined;
+  const finishedTurn = (sessionId ? activeTurnsByConversation.get(sessionId) : null) || (selected ? streamingTurn.value : null);
+  if (!finishedTurn) {
+    if (selected) resetActiveTurn();
+    return null;
+  }
+
+  finishedTurn.status = status;
+  if (finishedTurn.durationMs === undefined && durationMs !== undefined) finishedTurn.durationMs = durationMs;
+  if (status === 'stopped') {
+    if (finishedTurn.id) locallyStoppedRunIds.add(finishedTurn.id);
+    if (sessionId) locallyStoppedSessionIds.add(sessionId);
+  }
+  if (sessionId) {
+    setConversationProcessing(sessionId, false);
+    activeTurnsByConversation.delete(sessionId);
+    streamResultSeenConversationIds.delete(sessionId);
+  }
+
+  if (selected && detail.value?.conversation.id === sessionId) {
+    const persisted = detail.value.turns.find(turn => turn.id === finishedTurn.id);
+    if (persisted) mergeTurnForDisplay(persisted, finishedTurn, status === 'stopped');
+    else detail.value.turns.push({ ...finishedTurn, items: [...finishedTurn.items] });
+  }
+
+  if (selected) {
+    streamingTurn.value = null;
+    sending.value = false;
+    stopping.value = false;
+    streamResultSeen.value = false;
+  }
+  return finishedTurn;
+}
+
+function finalizeStoppedTurn(sessionId = selectedId.value) {
+  finishActiveTurn('stopped', sessionId);
+}
+
+function ensureStreamingItem(sessionId: string, id: string, type: string) {
+  const turn = beginActiveTurn({ sessionId });
+  let item = turn.items.find(value => value.id === id);
   if (!item) {
     item = { id, type };
-    streamingTurn.value!.items.push(item);
+    turn.items.push(item);
   }
   return item;
 }
 
-function upsertStreamingItem(item: ThreadItem) {
-  beginActiveTurn();
-  let index = streamingTurn.value!.items.findIndex(value => value.id === item.id);
-  if (index < 0 && item.type === 'userMessage') {
-    index = streamingTurn.value!.items.findIndex(value =>
-      value.type === 'userMessage' && value.id.startsWith('local-user-')
-    );
+function upsertStreamingItem(sessionId: string, item: ThreadItem) {
+  const turn = beginActiveTurn({ sessionId });
+  if (item.type === 'userMessage') {
+    turn.items = mergeTurnItems(turn.items, [item]);
+    if (sessionId === selectedId.value) streamingTurn.value = turn;
+    return;
   }
-  if (index >= 0) streamingTurn.value!.items[index] = item;
-  else streamingTurn.value!.items.push(item);
-}
-
-function processingLabel(item?: ThreadItem) {
-  if (!item) return '正在处理';
-  const toolName = `${item.server || ''} ${item.tool || ''}`.toLowerCase();
-  const truncate = (value: string, max = 48) => value.length > max ? `${value.slice(0, max)}…` : value;
-  switch (item.type) {
-    case 'reasoning':
-      return '正在思考';
-    case 'commandExecution':
-      if (isSkillReadItem(item)) {
-        const skill = skillReadName(item);
-        const display = skill ? humanizeSkillName(skill) : '';
-        return display ? `正在读取 ${display} 技能` : '正在读取技能';
-      }
-      return item.pluginId
-        ? `正在使用 ${item.pluginId}`
-        : item.command ? `正在运行命令：${truncate(item.command)}` : '正在运行命令';
-    case 'fileChange':
-      {
-        const paths = (item.changes || []).map(change => (change as Record<string, unknown>).path).filter(Boolean) as string[];
-        return paths.length ? `正在修改文件：${truncate(paths.join('、'))}` : '正在修改文件';
-      }
-    case 'webSearch':
-      return webSearchTitle(item, true);
-    case 'imageView':
-      return '正在查看图片';
-    case 'imageGeneration':
-      return '正在生成图片';
-    case 'mcpToolCall':
-    case 'dynamicToolCall':
-      return toolName.includes('image')
-        ? '正在生成图片'
-        : item.tool ? `正在调用工具：${item.tool}` : '正在调用工具';
-    case 'collabAgentToolCall':
-    case 'subAgentActivity':
-      return '正在协作处理';
-    case 'contextCompaction':
-      return '正在整理上下文';
-    case 'sleep':
-      return '正在等待';
-    case 'agentMessage':
-    case 'userMessage':
-      return '';
-    default:
-      return '正在处理';
+  const index = turn.items.findIndex(value => value.id === item.id);
+  if (index >= 0) turn.items[index] = item;
+  else turn.items.push(item);
+  if (item.type === 'agentMessage' && item.phase === 'final_answer') streamResultSeenConversationIds.add(sessionId);
+  if (sessionId === selectedId.value) {
+    streamingTurn.value = turn;
+    streamResultSeen.value = streamResultSeenConversationIds.has(sessionId);
   }
 }
 
@@ -869,198 +1141,6 @@ function reasoningText(item: ThreadItem) {
   return values.join('\n\n');
 }
 
-function activityTitle(item: ThreadItem, live = false) {
-  switch (item.type) {
-    case 'commandExecution':
-      if (isSkillReadItem(item)) {
-        const skill = skillReadName(item);
-        const display = skill ? humanizeSkillName(skill) : '';
-        return `${live ? '正在读取' : '读取'}${display ? ` ${display} 技能` : '技能'}`;
-      }
-      return live ? '正在运行命令' : '运行命令';
-    case 'fileChange': return fileChangeTitle(item, live);
-    case 'webSearch': return webSearchTitle(item, live);
-    case 'imageView': return live ? '正在查看图片' : '查看图片';
-    case 'imageGeneration': return live ? '正在生成图片' : '生成图片';
-    case 'mcpToolCall': return `${live ? '正在调用' : '调用'} ${item.server || 'MCP'} · ${item.tool || '工具'}`;
-    case 'dynamicToolCall': return `${live ? '正在调用' : '调用'} ${item.tool || '工具'}`;
-    case 'collabAgentToolCall': return live ? '正在协作处理' : '协作处理';
-    case 'contextCompaction': return live ? '正在整理上下文' : '整理上下文';
-    case 'plan': return '计划';
-    default: return live ? '正在处理' : String(item.type);
-  }
-}
-
-function activityIcon(item: ThreadItem) {
-  switch (item.type) {
-    case 'commandExecution': return isSkillReadItem(item) ? 'solar:document-text-linear' : 'solar:command-linear';
-    case 'fileChange': return 'solar:document-add-linear';
-    case 'webSearch': return webSearchActionType(item) === 'openPage' ? 'solar:link-round-angle-linear' : 'solar:magnifer-linear';
-    case 'imageGeneration': return 'solar:gallery-add-linear';
-    case 'reasoning': return 'solar:lightbulb-bolt-linear';
-    default: return 'solar:widget-5-linear';
-  }
-}
-
-function activityDetail(item: ThreadItem) {
-  if (item.type === 'commandExecution') return [item.command, item.aggregatedOutput].filter(Boolean).join('\n\n');
-  if (item.type === 'plan') return item.text || '';
-  if (item.type === 'fileChange') return fileChangeDetail(item);
-  if (item.type === 'webSearch') return item.result != null ? String(item.result) : '';
-  if (item.type === 'mcpToolCall' || item.type === 'dynamicToolCall') {
-    return JSON.stringify({ arguments: item.arguments, result: item.result }, null, 2);
-  }
-  return '';
-}
-
-function webSearchActionType(item: ThreadItem) {
-  return (item.action as { type?: string } | undefined)?.type || '';
-}
-
-function webSearchText(item: ThreadItem) {
-  const action = item.action as Record<string, unknown> | undefined;
-  const values = [
-    item.query,
-    action?.title,
-    action?.url,
-    action?.query
-  ].filter(value => typeof value === 'string' && value.trim()) as string[];
-  return values.length ? cleanSearchQuery(values[0]) : '';
-}
-
-function webSearchTitle(item: ThreadItem, live = false) {
-  const openPage = webSearchActionType(item) === 'openPage';
-  const prefix = live
-    ? openPage ? '正在打开网页' : '正在搜索网页'
-    : openPage ? '打开网页' : '搜索网页';
-  const text = webSearchText(item);
-  return text ? `${prefix}：${text}` : prefix;
-}
-
-function fileChangeTitle(item: ThreadItem, live = false) {
-  const changes = Array.isArray(item.changes) ? item.changes as Array<Record<string, unknown>> : [];
-  const prefix = live ? '正在修改文件' : '修改文件';
-  return changes.length ? `${prefix}：${changes.length} 个` : prefix;
-}
-
-function fileChangeDetail(item: ThreadItem) {
-  const changes = Array.isArray(item.changes) ? item.changes as Array<Record<string, unknown>> : [];
-  return changes.map(change => String(change.path || '')).filter(Boolean).join('\n');
-}
-
-function isIntermediateAgentMessage(item: ThreadItem) {
-  return item.type === 'agentMessage' && item.phase === 'commentary';
-}
-
-function turnProcessItems(turn: Turn) {
-  return turn.items.filter(item =>
-    item.type !== 'userMessage'
-    && item.type !== 'imageGeneration'
-    && item.type !== 'reasoning'
-    && (item.type !== 'agentMessage' || isIntermediateAgentMessage(item))
-  );
-}
-
-function turnReasoningItems(turn: Turn) {
-  return turn.items.filter(item => item.type === 'reasoning');
-}
-
-// 真正执行了工具/动作的条目（排除纯文字说明），用于判断任务是否"复杂"
-function turnWorkedItems(turn: Turn) {
-  return turnProcessItems(turn).filter(item => item.type !== 'agentMessage');
-}
-
-// 判断命令是否是在读取 skill：使用接口返回的结构化 commandActions
-// （type=read 且 path 指向 skills 目录），而不是解析命令字符串
-function isSkillReadItem(item: ThreadItem): boolean {
-  if (item.type !== 'commandExecution' || !Array.isArray(item.commandActions)) return false;
-  return item.commandActions.some(action =>
-    action?.type === 'read'
-    && typeof action.path === 'string'
-    && action.path.includes('skills')
-  );
-}
-
-// 从 commandActions 的 path 提取技能名（skills/ 后的第一个目录段）
-function skillReadName(item: ThreadItem): string {
-  if (!Array.isArray(item.commandActions)) return '';
-  const action = item.commandActions.find(a =>
-    a?.type === 'read' && typeof a.path === 'string' && a.path.includes('skills')
-  );
-  const match = action?.path?.match(/\/skills\/([^/]+)/);
-  return match ? match[1] : '';
-}
-
-// 读取技能时具体读取的文件名（commandActions path 的 basename）
-function skillReadFileName(item: ThreadItem): string {
-  if (!Array.isArray(item.commandActions)) return '';
-  const action = item.commandActions.find(a =>
-    a?.type === 'read' && typeof a.path === 'string' && a.path.includes('skills')
-  );
-  const path = action?.path ?? '';
-  return path.split('/').filter(Boolean).pop() ?? '';
-}
-
-// 展示的过程条目：同一技能的连续读取会合并技能标题，后续文件只展示文件名。
-function turnDisplayItems(turn: Turn): ThreadItem[] {
-  const result: ThreadItem[] = [];
-  let lastSkill = '';
-  for (const item of turnProcessItems(turn)) {
-    if (isSkillReadItem(item)) {
-      const skill = skillReadName(item);
-      if (skill && skill === lastSkill) {
-        result.push({ ...item, skillFileName: skillReadFileName(item) });
-        continue;
-      }
-      lastSkill = skill;
-    } else {
-      lastSkill = '';
-    }
-    result.push(item);
-  }
-  return result;
-}
-
-function turnActiveProcessItem(turn: Turn): ThreadItem | null {
-  const items = turnDisplayItems(turn).filter(item => item.type !== 'agentMessage');
-  return items.length ? items[items.length - 1] : null;
-}
-
-function processClassName(item: ThreadItem) {
-  if (item.type === 'webSearch') return 'search-entry';
-  if (item.type === 'commandExecution') return isSkillReadItem(item) ? 'skill-read-entry' : 'command-entry';
-  if (item.type === 'fileChange') return 'file-entry';
-  return 'tool-entry';
-}
-
-function processDisplayItems(turn: Turn): ProcessDisplayItem[] {
-  const active = turn === streamingTurn.value ? turnActiveProcessItem(turn) : null;
-  return turnDisplayItems(turn)
-    .filter(item => !(item.type === 'reasoning'))
-    .map(item => {
-      const live = Boolean(active && item.id === active.id);
-      const skillFile = typeof item.skillFileName === 'string' && item.skillFileName.trim() ? item.skillFileName.trim() : '';
-      const label = skillFile ? `读取 ${skillFile}` : activityTitle(item, live);
-      const detail = skillFile ? '' : activityDetail(item);
-      return {
-        item,
-        label,
-        icon: activityIcon(item),
-        detail,
-        live,
-        expandable: Boolean(detail),
-        className: processClassName(item)
-      };
-    });
-}
-
-function turnResultItems(turn: Turn) {
-  return turn.items.filter(item =>
-    item.type === 'imageGeneration'
-    || item.type === 'agentMessage' && !isIntermediateAgentMessage(item)
-  );
-}
-
 // 按 item 类型渲染不同的过程卡片，live 与完成态共用
 const ProcessItemCard = defineComponent({
   name: 'ProcessItemCard',
@@ -1072,6 +1152,38 @@ const ProcessItemCard = defineComponent({
       const display = props.display;
       const item = display.item;
       const icon = h(Icon, { icon: display.icon });
+
+      if (item.type === 'webSearchGroup') {
+        const queries = item.searchQueries || [];
+        return h('details', { class: ['process-entry', 'web-search-group-entry', display.live ? 'process-entry-live' : ''] }, [
+          h('summary', [
+            icon,
+            h('span', { class: 'entry-label' }, display.label)
+          ]),
+          h('div', { class: ['process-detail-list', 'web-search-group-list'] }, queries.map(query =>
+            h('div', { class: ['process-detail-list-item', 'web-search-group-item'] }, [
+              h(Icon, { icon: 'solar:global-linear' }),
+              h('span', `已搜索网页： ${query}`)
+            ])
+          ))
+        ]);
+      }
+
+      if (item.type === 'skillReadGroup') {
+        const files = item.skillFiles || [];
+        return h('details', { class: ['process-entry', 'skill-read-entry', display.live ? 'process-entry-live' : ''] }, [
+          h('summary', [
+            icon,
+            h('span', { class: 'entry-label' }, display.label)
+          ]),
+          h('div', { class: ['process-detail-list', 'skill-read-list'] }, files.map(file =>
+            h('div', { class: ['process-detail-list-item', 'skill-read-list-item'] }, [
+              h(Icon, { icon: 'solar:document-text-linear' }),
+              h('span', file)
+            ])
+          ))
+        ]);
+      }
 
       if (item.type === 'agentMessage' && item.text) {
         return h('div', { class: 'process-commentary markdown-body', innerHTML: renderMarkdown(item.text) });
@@ -1103,32 +1215,6 @@ const ProcessItemCard = defineComponent({
   }
 });
 
-function formatTurnDuration(durationMs = 0) {
-  const totalSeconds = Math.max(0, Math.round(durationMs / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  const parts: string[] = [];
-  if (hours) parts.push(`${hours}小时`);
-  if (minutes) parts.push(`${minutes}分`);
-  if (seconds || parts.length === 0) parts.push(`${seconds}秒`);
-  return parts.join('');
-}
-
-// 技能名美化：jzero-skills → Jzero Skills，与 desktop 展示一致
-function humanizeSkillName(name: string): string {
-  return name
-    .split(/[-_\s]+/)
-    .filter(Boolean)
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
-// 搜索查询清洗：去掉内部追踪参数（#ws_call_id=...），避免标签出现长尾巴
-function cleanSearchQuery(query: string): string {
-  return query.replace(/#ws_call_id=.*$/, '').trim();
-}
-
 function startTurnTimer(startedAt?: string) {
   const parsed = startedAt ? Date.parse(startedAt) : Number.NaN;
   turnStartedAtMs = Number.isFinite(parsed) ? parsed : Date.now();
@@ -1149,20 +1235,26 @@ function stopTurnTimer() {
 }
 
 async function handleStreamEvent(event: StreamEvent) {
-  if (event.sessionId !== selectedId.value) return;
-  const eventTime = Date.parse(event.createdAt);
-  if (Number.isFinite(eventTime) && eventTime <= streamEventCutoff) return;
+  const isSelectedConversation = event.sessionId === selectedId.value;
+  const locallyStopped = Boolean(event.runId && locallyStoppedRunIds.has(event.runId)) || locallyStoppedSessionIds.has(event.sessionId);
 
   if (event.type === 'run.started') {
+    setConversationProcessing(event.sessionId, true);
+  }
+
+  if (locallyStopped && event.type !== 'run.completed' && event.type !== 'run.failed') return;
+
+  if (event.type === 'run.started') {
+    setConversationProcessing(event.sessionId, true);
     const data = event.data as { startedAt?: string } | undefined;
     beginActiveTurn({
+      sessionId: event.sessionId,
       id: event.runId || undefined,
       status: 'inProgress',
       startedAt: data?.startedAt || event.createdAt,
-      label: '正在思考',
       resetResultSeen: true
     });
-    await scrollToBottom();
+    if (isSelectedConversation) await scrollToBottom();
     return;
   }
 
@@ -1172,7 +1264,8 @@ async function handleStreamEvent(event: StreamEvent) {
       const startedAt = Number(turn.startedAt);
       const startedAtIso = Number.isFinite(startedAt) && startedAt > 0 ? new Date(startedAt * 1000).toISOString() : undefined;
       beginActiveTurn({
-        id: String(turn.id || streamingTurn.value?.id || ''),
+        sessionId: event.sessionId,
+        id: String(turn.id || cachedActiveTurn(event.sessionId)?.id || ''),
         status: String(turn.status || 'inProgress'),
         startedAt: startedAtIso,
         restartTimer: Boolean(startedAtIso)
@@ -1184,11 +1277,11 @@ async function handleStreamEvent(event: StreamEvent) {
   if (event.type === 'codex.turn.completed') {
     const turn = (event.data as { params?: { turn?: Record<string, unknown> } } | undefined)?.params?.turn;
     if (turn) {
-      beginActiveTurn({
-        id: String(turn.id || streamingTurn.value?.id || ''),
+      const activeTurn = beginActiveTurn({
+        sessionId: event.sessionId,
+        id: String(turn.id || cachedActiveTurn(event.sessionId)?.id || ''),
         status: String(turn.status || 'completed')
       });
-      const activeTurn = streamingTurn.value!;
       const durationMs = Number(turn.durationMs);
       if (Number.isFinite(durationMs) && durationMs >= 0) activeTurn.durationMs = durationMs;
       const completedAt = Number(turn.completedAt);
@@ -1196,11 +1289,9 @@ async function handleStreamEvent(event: StreamEvent) {
         activeTurn.completedAt = new Date(completedAt * 1000).toISOString();
       }
       if (Array.isArray(turn.items)) {
-        // turn.completed 快照只含 userMessage/agentMessage，合并而非替换，
-        // 保留流式阶段收集的 reasoning 等条目
-        const merged = new Map(activeTurn.items.map(item => [item.id, item]));
-        for (const item of turn.items as ThreadItem[]) merged.set(item.id, item);
-        activeTurn.items = Array.from(merged.values());
+        // turn.completed 快照只含 userMessage/agentMessage，统一走 mergeTurnItems，
+        // 让服务端 userMessage 替换本地确认消息，同时保留过程项。
+        activeTurn.items = mergeTurnItems(activeTurn.items, turn.items as ThreadItem[]);
       }
     }
     return;
@@ -1211,7 +1302,7 @@ async function handleStreamEvent(event: StreamEvent) {
     const payload = ((data?.params?.msg || data?.params?.payload || data?.params) ?? {}) as Record<string, unknown>;
     const startedAt = Number(payload.started_at);
     if (Number.isFinite(startedAt) && startedAt > 0) {
-      beginActiveTurn({ startedAt: new Date(startedAt * 1000).toISOString() });
+      beginActiveTurn({ sessionId: event.sessionId, startedAt: new Date(startedAt * 1000).toISOString() });
     }
     return;
   }
@@ -1220,7 +1311,7 @@ async function handleStreamEvent(event: StreamEvent) {
     const data = event.data as { params?: Record<string, unknown> } | undefined;
     const payload = ((data?.params?.msg || data?.params?.payload || data?.params) ?? {}) as Record<string, unknown>;
     const durationMs = Number(payload.duration_ms);
-    if (Number.isFinite(durationMs) && durationMs >= 0) elapsedDurationMs.value = durationMs;
+    if (Number.isFinite(durationMs) && durationMs >= 0 && isSelectedConversation) elapsedDurationMs.value = durationMs;
   }
 
   if (event.type === 'codex.item.reasoning.textDelta') {
@@ -1228,13 +1319,13 @@ async function handleStreamEvent(event: StreamEvent) {
     const delta = params?.delta ?? '';
     if (!delta) return;
     const itemId = params?.itemId || `stream-reasoning-${event.runId || 'active'}`;
-    const item = ensureStreamingItem(itemId, 'reasoning');
+    const item = ensureStreamingItem(event.sessionId, itemId, 'reasoning');
     const content = (Array.isArray(item.content) ? item.content : []) as unknown as string[];
     const index = Number(params?.contentIndex) || 0;
     while (content.length <= index) content.push('');
     content[index] = `${content[index] || ''}${delta}`;
     item.content = content;
-    await scrollToBottom();
+    if (isSelectedConversation) await scrollToBottom();
     return;
   }
 
@@ -1243,10 +1334,13 @@ async function handleStreamEvent(event: StreamEvent) {
     const delta = params?.delta ?? '';
     if (!delta) return;
     const itemId = params?.itemId || `stream-agent-${event.runId || 'active'}`;
-    const item = ensureStreamingItem(itemId, 'agentMessage');
+    const item = ensureStreamingItem(event.sessionId, itemId, 'agentMessage');
     item.text = `${item.text || ''}${delta}`;
-    if (item.phase === 'final_answer') streamResultSeen.value = true;
-    await scrollToBottom();
+    if (item.phase === 'final_answer') {
+      streamResultSeenConversationIds.add(event.sessionId);
+      if (isSelectedConversation) streamResultSeen.value = true;
+    }
+    if (isSelectedConversation) await scrollToBottom();
     return;
   }
 
@@ -1254,75 +1348,54 @@ async function handleStreamEvent(event: StreamEvent) {
     const params = (event.data as { params?: { item?: ThreadItem } } | undefined)?.params;
     const streamedItem = params?.item as ThreadItem | undefined;
     if (streamedItem) {
-      upsertStreamingItem(streamedItem);
+      upsertStreamingItem(event.sessionId, { ...streamedItem, streamStatus: 'running' });
       if (streamedItem.type === 'agentMessage' && streamedItem.phase === 'final_answer') {
-        streamResultSeen.value = true;
+        streamResultSeenConversationIds.add(event.sessionId);
+        if (isSelectedConversation) streamResultSeen.value = true;
       }
     }
-    if (!stopping.value) {
-      const label = processingLabel(params?.item);
-      // agentMessage 等空标签不覆盖当前状态，避免执行过程中状态闪空
-      // 已经有结果后，后续 reasoning 不再把状态拉回"正在思考"
-      if (label && !(streamResultSeen.value && params?.item?.type === 'reasoning')) processingStatus.value = label;
-    }
-    await scrollToBottom();
+    if (isSelectedConversation) await scrollToBottom();
     return;
   }
 
   if (event.type === 'codex.item.completed') {
     const params = (event.data as { params?: { item?: ThreadItem } } | undefined)?.params;
     if (params?.item) {
-      const completedItem = params.item as ThreadItem;
-      upsertStreamingItem(completedItem);
+      const completedItem = { ...(params.item as ThreadItem), streamStatus: 'completed' };
+      upsertStreamingItem(event.sessionId, completedItem);
       if (completedItem.type === 'agentMessage' && completedItem.phase === 'final_answer') {
-        streamResultSeen.value = true;
+        streamResultSeenConversationIds.add(event.sessionId);
+        if (isSelectedConversation) streamResultSeen.value = true;
       }
     }
-    await scrollToBottom();
+    if (isSelectedConversation) await scrollToBottom();
     return;
   }
 
   if (event.type === 'run.completed' || event.type === 'run.failed') {
-    stopTurnTimer();
-    const completedTurn = streamingTurn.value;
-    await Promise.all([refreshDetail({ restoreActiveTurn: false }), loadConversations()]);
-    if (completedTurn && detail.value) {
-      const persisted = detail.value.turns.find(turn => turn.id === completedTurn.id);
-      if (persisted) {
-        // 服务端持久化的 turn 只含 userMessage/agentMessage，工具/命令等过程
-        // 条目在流式阶段按真实时间顺序收集。以流式顺序为骨架交错合并，
-        // 避免命令全部堆到过程说明前面；同 id 或同文本的说明/最终回答
-        // 优先采用服务端版本（带权威 phase）。
-        const persistedById = new Map(persisted.items.map(item => [item.id, item]));
-        const pickPersisted = (streamItem: ThreadItem): ThreadItem | undefined => {
-          if (persistedById.has(streamItem.id)) return persistedById.get(streamItem.id);
-          if (streamItem.type === 'agentMessage' && streamItem.text) {
-            return persisted.items.find(existing =>
-              existing.type === 'agentMessage' && existing.text === streamItem.text
-            );
-          }
-          return undefined;
-        };
-        const merged: ThreadItem[] = [];
-        const usedPersisted = new Set<ThreadItem>();
-        const userMessage = persisted.items.find(item => item.type === 'userMessage');
-        if (userMessage) merged.push(userMessage);
-        for (const streamItem of completedTurn.items) {
-          if (streamItem.type === 'userMessage' || streamItem.type === 'reasoning') continue;
-          const existing = pickPersisted(streamItem);
-          if (existing) usedPersisted.add(existing);
-          merged.push(existing ?? streamItem);
-        }
-        for (const item of persisted.items) {
-          if (item.type === 'userMessage' || usedPersisted.has(item)) continue;
-          merged.push(item);
-        }
-        persisted.items = merged;
-      } else {
-        detail.value.turns.push(completedTurn);
-      }
+    if (locallyStopped) {
+      if (event.runId) locallyStoppedRunIds.delete(event.runId);
+      locallyStoppedSessionIds.delete(event.sessionId);
+      setConversationProcessing(event.sessionId, false);
+      await loadConversations();
+      return;
     }
-    resetActiveTurn();
+
+    const completedSessionId = event.sessionId;
+    setConversationProcessing(completedSessionId, false);
+    const completedTurn = finishActiveTurn(event.type === 'run.completed' ? 'completed' : 'failed', completedSessionId);
+    await nextTick();
+    if (selectedId.value === completedSessionId) {
+      await Promise.all([refreshDetail({ restoreActiveTurn: false }), loadConversations()]);
+    } else {
+      await loadConversations();
+    }
+    closeIdleConversationStreams();
+    if (completedTurn && selectedId.value === completedSessionId && detail.value?.conversation.id === completedSessionId) {
+      const persisted = detail.value.turns.find(turn => turn.id === completedTurn.id);
+      if (persisted) mergeTurnForDisplay(persisted, completedTurn);
+      else detail.value.turns.push(completedTurn);
+    }
   }
 }
 
@@ -1336,9 +1409,12 @@ async function saveRename() {
   const title = renameValue.value.trim();
   if (!activeConversation.value || !title) return;
   try {
-    const updated = await conversationApi.update(activeConversation.value.id, { title });
+    const conversationId = activeConversation.value.id;
+    const updated = await conversationApi.update(conversationId, { title });
     replaceConversation(updated);
-    if (detail.value) detail.value.conversation = updated;
+    if (detail.value?.conversation.id === conversationId) {
+      detail.value.conversation = { ...detail.value.conversation, ...updated };
+    }
     renameVisible.value = false;
   } catch (error) {
     showError(error);
@@ -1352,11 +1428,18 @@ async function togglePinned() {
 
 async function toggleConversationPinned(item: Conversation) {
   try {
+    const nextPinned = !item.pinnedAt;
     const updated = await conversationApi.update(item.id, {
-      pinned: !item.pinnedAt
+      pinned: nextPinned
     });
-    replaceConversation(updated);
+    const merged = { ...item, ...updated, pinnedAt: nextPinned ? updated.pinnedAt || item.pinnedAt || new Date().toISOString() : undefined };
+    replaceConversation(merged);
+    if (detail.value?.conversation.id === item.id) {
+      detail.value.conversation = { ...detail.value.conversation, ...merged };
+    }
     await loadConversations();
+    const refreshed = conversations.value.find(value => value.id === item.id);
+    revealConversationSection({ ...merged, ...refreshed, pinnedAt: nextPinned ? refreshed?.pinnedAt || merged.pinnedAt : undefined });
   } catch (error) {
     showError(error);
   }
@@ -1371,8 +1454,9 @@ async function archiveConversation(item: Conversation) {
   const wasSelected = item.id === selectedId.value;
   try {
     await conversationApi.update(item.id, { archived: true });
+    setConversationProcessing(item.id, false);
     if (wasSelected) {
-      closeStream?.();
+      closeConversationStream(item.id);
       selectedId.value = '';
       syncConversationUrl('');
       detail.value = null;
@@ -1397,8 +1481,10 @@ function confirmDelete() {
 async function deleteConversation() {
   if (!activeConversation.value) return;
   try {
-    await conversationApi.remove(activeConversation.value.id);
-    closeStream?.();
+    const removedId = activeConversation.value.id;
+    await conversationApi.remove(removedId);
+    setConversationProcessing(removedId, false);
+    closeConversationStream(removedId);
     selectedId.value = '';
     syncConversationUrl('');
     detail.value = null;
@@ -1411,7 +1497,10 @@ async function deleteConversation() {
 
 function replaceConversation(updated: Conversation) {
   const index = conversations.value.findIndex(item => item.id === updated.id);
-  if (index >= 0) conversations.value[index] = updated;
+  if (index < 0) return;
+  const current = conversations.value[index];
+  const running = updated.running || current.running || processingConversationIds.value.has(updated.id);
+  conversations.value[index] = { ...current, ...updated, running };
 }
 
 function handleComposerKeydown(event: KeyboardEvent) {
@@ -1453,6 +1542,7 @@ function handleMessageScroll(event: Event) {
 
 async function scrollToBottom(options: { force?: boolean } = {}) {
   await nextTick();
+  await new Promise(resolve => requestAnimationFrame(resolve));
   // 首次进入对话时消息面板可能还没渲染出来，轮询等待它挂载后再滚动
   let pane = messagePane.value || document.querySelector<HTMLElement>('.message-pane');
   for (let i = 0; i < 80 && !pane; i++) {
@@ -1488,9 +1578,13 @@ async function bootstrap() {
     syncConversationUrl('');
     detail.value = null;
     loadingDetail.value = false;
+    sendingRequest.value = false;
+    creatingConversation.value = false;
     resetActiveTurn();
-    closeStream?.();
-    closeStream = undefined;
+    activeTurnsByConversation.clear();
+    streamResultSeenConversationIds.clear();
+    processingConversationIds.value = new Set();
+    closeAllConversationStreams();
   });
   try {
     if (getToken()) {
@@ -1539,14 +1633,18 @@ function logout() {
   settingsVisible.value = false;
   currentUser.value = null;
   conversationGroups.value = [];
-  closeStream?.();
-  closeStream = undefined;
+  closeAllConversationStreams();
   selectedId.value = '';
   syncConversationUrl('');
   detail.value = null;
   loadingDetail.value = false;
   conversations.value = [];
+  sendingRequest.value = false;
+  creatingConversation.value = false;
   resetActiveTurn();
+  activeTurnsByConversation.clear();
+  streamResultSeenConversationIds.clear();
+  processingConversationIds.value = new Set();
 }
 
 function openSettings() {
@@ -1608,6 +1706,25 @@ function formatConversationDate(value: string) {
       }).format(date);
 }
 
+function isSameDay(left: Date, right: Date) {
+  return left.getFullYear() === right.getFullYear()
+    && left.getMonth() === right.getMonth()
+    && left.getDate() === right.getDate();
+}
+
+function formatMessageTime(value?: string) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const now = new Date();
+  const options: Intl.DateTimeFormatOptions = isSameDay(date, now)
+    ? { hour: '2-digit', minute: '2-digit' }
+    : date.getFullYear() === now.getFullYear()
+      ? { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }
+      : { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
+  return new Intl.DateTimeFormat('zh-CN', options).format(date);
+}
+
 function confirmDeleteAllArchived() {
   if (!archivedConversations.value.length) return;
   openConfirm(
@@ -1616,7 +1733,9 @@ function confirmDeleteAllArchived() {
     '全部删除',
     async () => {
       try {
-        await Promise.all(archivedConversations.value.map(item => conversationApi.remove(item.id)));
+        const removedIds = archivedConversations.value.map(item => item.id);
+        await Promise.all(removedIds.map(id => conversationApi.remove(id)));
+        clearConversationProcessing(removedIds);
         await loadConversations();
       } catch (error) {
         showError(error);
@@ -1714,7 +1833,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('touchcancel', onWindowTouchEnd);
   window.removeEventListener('blur', hideConversationPreview);
   colorSchemeMedia.removeEventListener('change', handleSystemAppearanceChange);
-  closeStream?.();
+  closeAllConversationStreams();
   stopTurnTimer();
 });
 watch(isDarkAppearance, value => {
@@ -2111,18 +2230,20 @@ watch([settingsVisible, settingsSection], () => {
             />
             <div class="composer-footer">
               <n-button
-                v-if="sending"
                 type="primary"
                 circle
-                :loading="stopping"
-                aria-label="停止当前任务"
-                title="停止当前任务"
-                @click="cancelTurn"
+                class="composer-action-button"
+                :class="{ 'is-pending': composerActionPending, 'is-running': sending }"
+                :disabled="composerActionDisabled"
+                :aria-label="composerActionLabel"
+                :title="composerActionLabel"
+                @click="handleComposerAction"
               >
-                <template #icon><Icon icon="solar:stop-bold" /></template>
-              </n-button>
-              <n-button v-else type="primary" circle :disabled="!canSend" @click="sendMessage">
-                <template #icon><Icon icon="solar:arrow-up-linear" /></template>
+                <template #icon>
+                  <Transition name="composer-action-icon" mode="out-in">
+                    <Icon :key="composerActionIcon" :icon="composerActionIcon" />
+                  </Transition>
+                </template>
               </n-button>
             </div>
           </div>
@@ -2140,8 +2261,8 @@ watch([settingsVisible, settingsSection], () => {
               @click="jumpToMessage(item.id)"
             />
           </nav>
-          <section ref="messagePane" class="message-pane" @scroll="handleMessageScroll">
-            <n-spin :show="loadingDetail">
+          <section :key="selectedId" ref="messagePane" class="message-pane" @scroll="handleMessageScroll">
+            <n-spin class="message-spin" :show="loadingDetail">
               <div class="message-column">
                 <section v-for="turn in renderedTurns" :key="turn.id" class="turn" :data-status="turn.status">
                   <article
@@ -2151,48 +2272,51 @@ watch([settingsVisible, settingsSection], () => {
                     tabindex="-1"
                     class="message user"
                   >
-                    <div class="message-content">{{ userItemText(item) }}</div>
+                    <div class="message-stack">
+                      <div class="message-content">{{ userItemText(item) }}</div>
+                      <time v-if="formatMessageTime(turn.startedAt)" class="message-time" :datetime="turn.startedAt">
+                        {{ formatMessageTime(turn.startedAt) }}
+                      </time>
+                    </div>
                   </article>
 
-                  <!-- 阶段一：处理中，结果卡片按到达顺序逐条追加平铺，思考时只显示"正在思考" -->
-                  <div v-if="turn === streamingTurn" class="turn-process">
-                    <div v-if="turnWorkedItems(turn).length" class="turn-process-summary">
-                      <span>正在处理 {{ formatTurnDuration(elapsedDurationMs) }}</span>
+                  <!-- 阶段一：先思考；出现工具/命令/搜索动作后才展示处理耗时和过程列表 -->
+                  <template v-if="turn === streamingTurn">
+                    <div v-if="showStreamingThinking(turn)" class="turn-live-status">
+                      <span class="status-pulse">正在思考</span>
                     </div>
-                    <div class="turn-process-content">
-                      <template
-                        v-for="display in processDisplayItems(turn)"
-                        :key="display.item.id"
-                      >
-                        <ProcessItemCard :display="display" />
-                      </template>
+                    <div v-else-if="showStreamingProcess(turn)" class="turn-process">
+                      <div class="turn-process-summary">
+                        <span>{{ streamingProcessSummary(turn, elapsedDurationMs) }}</span>
+                      </div>
+                      <div v-if="turnWorkedItems(turn).length" class="turn-process-content">
+                        <template
+                          v-for="display in processDisplayItems(turn, true)"
+                          :key="display.item.id"
+                        >
+                          <ProcessItemCard :display="display" />
+                        </template>
+                      </div>
                     </div>
-                  </div>
+                  </template>
                   <!-- 阶段二：过程说明 + 工具/过程卡片都收进"已处理 Xs"折叠区 -->
                   <template v-else>
                     <details
-                      v-if="turnProcessItems(turn).length && turn.durationMs !== undefined"
+                      v-if="showCompletedProcessSummary(turn)"
                       class="turn-process turn-process-done"
                     >
                       <summary>
-                        <span>已处理 {{ formatTurnDuration(turn.durationMs) }}</span>
+                        <span>{{ completedProcessSummary(turn) }}</span>
                       </summary>
-                      <div class="turn-process-content">
+                      <div v-if="turnProcessItems(turn).length" class="turn-process-content">
                         <ProcessItemCard
-                          v-for="display in processDisplayItems(turn)"
+                          v-for="display in processDisplayItems(turn, false)"
                           :key="display.item.id"
                           :display="display"
                         />
                       </div>
                     </details>
                   </template>
-                  <div
-                    v-if="turn === streamingTurn && processingStatus && !streamResultSeen && (!turnActiveProcessItem(turn) || turnActiveProcessItem(turn)!.type === 'reasoning')"
-                    class="turn-live-status"
-                  >
-                    <span :class="{ 'status-pulse': processingStatus === '正在思考' }">{{ processingStatus }}</span>
-                  </div>
-
                   <template v-for="item in turnResultItems(turn)" :key="item.id">
                     <article v-if="item.type === 'agentMessage'" class="message assistant">
                       <div class="message-content">
@@ -2237,18 +2361,20 @@ watch([settingsVisible, settingsSection], () => {
               />
               <div class="composer-footer">
                 <n-button
-                  v-if="sending"
                   type="primary"
                   circle
-                  :loading="stopping"
-                  aria-label="停止当前任务"
-                  title="停止当前任务"
-                  @click="cancelTurn"
+                  class="composer-action-button"
+                  :class="{ 'is-pending': composerActionPending, 'is-running': sending }"
+                  :disabled="composerActionDisabled"
+                  :aria-label="composerActionLabel"
+                  :title="composerActionLabel"
+                  @click="handleComposerAction"
                 >
-                  <template #icon><Icon icon="solar:stop-bold" /></template>
-                </n-button>
-                <n-button v-else type="primary" circle :disabled="!canSend" @click="sendMessage">
-                  <template #icon><Icon icon="solar:arrow-up-linear" /></template>
+                  <template #icon>
+                    <Transition name="composer-action-icon" mode="out-in">
+                      <Icon :key="composerActionIcon" :icon="composerActionIcon" />
+                    </Transition>
+                  </template>
                 </n-button>
               </div>
             </div>

@@ -54,9 +54,16 @@ type ThreadRun struct {
 	CreatedAt time.Time
 }
 
+type ActiveRun struct {
+	ID        string
+	ThreadID  string
+	CreatedAt time.Time
+}
+
 type activeRun struct {
-	id     string
-	cancel context.CancelFunc
+	id        string
+	createdAt time.Time
+	cancel    context.CancelFunc
 }
 
 type ThreadService struct {
@@ -73,7 +80,7 @@ func NewThreadService(runtime ThreadRuntime) *ThreadService {
 	return &ThreadService{
 		runtime:     runtime,
 		idleTimeout: turnIdleTimeout,
-		events:      NewEventHub(1_000, 256),
+		events:      NewEventHub(32, 256),
 		runs:        make(map[string]activeRun),
 	}
 }
@@ -106,11 +113,28 @@ func (s *ThreadService) List(ctx context.Context) ([]StoredThread, error) {
 	return append(active, archived...), nil
 }
 
+func (s *ThreadService) Metadata(ctx context.Context, threadID string) (StoredThread, error) {
+	if err := validateThreadID(threadID); err != nil {
+		return StoredThread{}, err
+	}
+	return s.runtime.ReadStoredThread(ctx, threadID, false)
+}
+
 func (s *ThreadService) Get(ctx context.Context, threadID string) (StoredThread, error) {
 	if err := validateThreadID(threadID); err != nil {
 		return StoredThread{}, err
 	}
 	return s.runtime.ReadStoredThread(ctx, threadID, true)
+}
+
+func (s *ThreadService) ActiveRun(threadID string) (ActiveRun, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	run, ok := s.runs[threadID]
+	if !ok {
+		return ActiveRun{}, false
+	}
+	return ActiveRun{ID: run.id, ThreadID: threadID, CreatedAt: run.createdAt}, true
 }
 
 func (s *ThreadService) EventCursor(threadID string) int64 {
@@ -189,7 +213,7 @@ func (s *ThreadService) Send(threadID, prompt string) (ThreadRun, error) {
 		CreatedAt: time.Now().UTC(),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	s.runs[threadID] = activeRun{id: run.ID, cancel: cancel}
+	s.runs[threadID] = activeRun{id: run.ID, createdAt: run.CreatedAt, cancel: cancel}
 	s.mu.Unlock()
 
 	go s.execute(ctx, cancel, run)
@@ -209,7 +233,7 @@ func (s *ThreadService) execute(ctx context.Context, cancel context.CancelFunc, 
 	}()
 
 	s.events.Publish(run.ThreadID, run.ID, "run.started", map[string]any{
-		"startedAt": time.Now().UTC(),
+		"startedAt": run.CreatedAt,
 	})
 	emit := func(event map[string]any) {
 		idleTimer.Reset(s.idleTimeout)
@@ -217,15 +241,9 @@ func (s *ThreadService) execute(ctx context.Context, cancel context.CancelFunc, 
 		if eventType == "" {
 			eventType = "event"
 		}
-		publishedName := "codex." + eventType
-		// item/agentMessage/delta is high-volume, transient streaming data: push
-		// to live subscribers only, without caching it in history. The finalized
-		// message arrives via run.completed and a detail refresh.
-		if eventType == "item.agentMessage.delta" {
-			s.events.Broadcast(run.ThreadID, run.ID, publishedName, event)
-			return
-		}
-		s.events.Publish(run.ThreadID, run.ID, publishedName, event)
+		// Codex process events are UI progress only. Keep them live-only so the
+		// server does not retain intermediate display state between subscribers.
+		s.events.Broadcast(run.ThreadID, run.ID, "codex."+eventType, event)
 	}
 	err := s.runtime.Resume(ctx, run.ThreadID, run.Prompt, emit)
 	if err != nil {

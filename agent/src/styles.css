@@ -668,7 +668,19 @@ body.is-dragging {
   overflow: auto;
 }
 
+.message-spin,
+.message-spin > .n-spin-container,
+.message-spin > .n-spin-container > .n-spin-content {
+  min-height: 100%;
+}
+
+.message-spin > .n-spin-container > .n-spin-content {
+  display: flex;
+  flex-direction: column;
+}
+
 .message-column {
+  flex: 1 0 auto;
   width: min(820px, calc(100% - 48px));
   min-height: 100%;
   margin: 0 auto;
@@ -824,11 +836,35 @@ body.is-dragging {
   justify-content: flex-end;
 }
 
-.message.user .message-content {
+.message-stack {
+  display: flex;
   max-width: 72%;
+  align-items: flex-end;
+  flex-direction: column;
+}
+
+.message.user .message-content {
+  max-width: 100%;
   padding: 10px 15px;
   border-radius: 18px;
   background: #f1f2f3;
+}
+
+.message-time {
+  margin-top: 7px;
+  padding-right: 6px;
+  color: #9aa1a5;
+  font-size: 13px;
+  line-height: 1.35;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.message.user:hover .message-time,
+.message.user:focus-within .message-time {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .message.assistant .message-content {
@@ -1137,8 +1173,15 @@ body.is-dragging {
   display: flex;
   align-items: center;
   gap: 8px;
-  cursor: pointer;
   list-style: none;
+}
+
+.process-entry > summary {
+  cursor: pointer;
+}
+
+.process-entry-title {
+  cursor: default;
 }
 
 .process-entry > summary::-webkit-details-marker {
@@ -1169,36 +1212,15 @@ body.is-dragging {
 }
 
 .process-entry .entry-label {
-  flex: 0 0 auto;
+  min-width: 0;
+  overflow: hidden;
+  flex: 0 1 auto;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.process-entry.skill-read-entry {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.process-entry-title.skill-read-entry {
   color: #8a9196;
-  font-size: 17px;
-}
-
-.process-entry.skill-read-entry svg {
-  width: 17px;
-  height: 17px;
-  flex: 0 0 auto;
-}
-
-.process-entry.skill-file-entry {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-left: 25px;
-  color: #8a9196;
-  font-size: 17px;
-}
-
-.process-entry.skill-file-entry svg {
-  width: 17px;
-  height: 17px;
-  flex: 0 0 auto;
 }
 
 .process-entry .entry-command {
@@ -1240,6 +1262,51 @@ body.is-dragging {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.process-entry.web-search-group-entry {
+  color: #8a9196;
+}
+
+.process-entry.web-search-group-entry > summary {
+  display: inline-flex;
+  max-width: 100%;
+}
+
+.process-entry.web-search-group-entry > summary::after {
+  margin-left: 8px;
+}
+
+.process-entry.skill-read-entry {
+  color: #8a9196;
+}
+
+.process-detail-list {
+  display: grid;
+  gap: 9px;
+  margin-top: 10px;
+  padding-left: 25px;
+}
+
+.process-detail-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #8a9196;
+  font-size: 17px;
+}
+
+.process-detail-list-item svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+
+.process-detail-list-item span {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .process-entry .file-path-list {
@@ -1461,6 +1528,43 @@ body.is-dragging {
   bottom: 12px;
   display: flex;
   align-items: center;
+}
+
+.composer-action-button {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease, background-color 0.18s ease;
+}
+
+.composer-action-button:not(.n-button--disabled):hover {
+  transform: translateY(-1px);
+}
+
+.composer-action-button .n-button__icon svg {
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.composer-action-button.is-pending .n-button__icon svg {
+  animation: composer-action-spin 0.9s linear infinite;
+}
+
+.composer-action-icon-enter-active,
+.composer-action-icon-leave-active {
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.composer-action-icon-enter-from {
+  opacity: 0;
+  transform: rotate(-45deg) scale(0.72);
+}
+
+.composer-action-icon-leave-to {
+  opacity: 0;
+  transform: rotate(45deg) scale(0.72);
+}
+
+@keyframes composer-action-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .modal-actions {

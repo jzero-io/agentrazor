@@ -23,7 +23,7 @@ FROM alpine:latest
 
 ARG TARGETARCH
 
-RUN apk add --no-cache ca-certificates curl tar tzdata \
+RUN apk add --no-cache bubblewrap ca-certificates curl tar tzdata \
     && case "$TARGETARCH" in \
          amd64) codex_arch="x86_64" ;; \
          arm64) codex_arch="aarch64" ;; \

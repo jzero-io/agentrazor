@@ -13,14 +13,16 @@ type CancelTurnResponse struct {
 }
 
 type Conversation struct {
-	Id         string  `json:"id"`
-	Title      string  `json:"title"`
-	Status     string  `json:"status"`
-	PinnedAt   *string `json:"pinnedAt,omitempty"`
-	ArchivedAt *string `json:"archivedAt,omitempty"`
-	GroupId    *string `json:"groupId,omitempty"`
-	CreatedAt  string  `json:"createdAt"`
-	UpdatedAt  string  `json:"updatedAt"`
+	Id               string  `json:"id"`
+	Title            string  `json:"title"`
+	Status           string  `json:"status"`
+	PinnedAt         *string `json:"pinnedAt,omitempty"`
+	ArchivedAt       *string `json:"archivedAt,omitempty"`
+	GroupId          *string `json:"groupId,omitempty"`
+	Running          bool    `json:"running"`
+	RunningStartedAt *string `json:"runningStartedAt,omitempty"`
+	CreatedAt        string  `json:"createdAt"`
+	UpdatedAt        string  `json:"updatedAt"`
 }
 
 type CreateRequest struct {
@@ -76,9 +78,10 @@ type SendMessageRequest struct {
 }
 
 type SendMessageResponse struct {
-	ConversationId string `json:"conversationId"`
-	SessionId      string `json:"sessionId"`
-	Run            Run    `json:"run"`
+	ConversationId string       `json:"conversationId"`
+	SessionId      string       `json:"sessionId"`
+	Conversation   Conversation `json:"conversation"`
+	Run            Run          `json:"run"`
 }
 
 type Turn struct {

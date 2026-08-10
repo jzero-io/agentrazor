@@ -16,7 +16,9 @@ type (
 		PinnedAt   *string `json:"pinnedAt,omitempty"`
 		ArchivedAt *string `json:"archivedAt,omitempty"`
 		GroupId    *string `json:"groupId,omitempty"`
-		CreatedAt  string  `json:"createdAt"`
+		Running          bool    `json:"running"`
+		RunningStartedAt *string `json:"runningStartedAt,omitempty"`
+		CreatedAt        string  `json:"createdAt"`
 		UpdatedAt  string  `json:"updatedAt"`
 	}
 	Run {
@@ -80,6 +82,7 @@ type (
 	SendMessageResponse {
 		ConversationId string `json:"conversationId"`
 		SessionId      string `json:"sessionId"`
+		Conversation   Conversation `json:"conversation"`
 		Run            Run    `json:"run"`
 	}
 )

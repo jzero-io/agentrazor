@@ -5,6 +5,8 @@ export interface Conversation {
   pinnedAt?: string;
   archivedAt?: string;
   groupId?: string;
+  running: boolean;
+  runningStartedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -24,8 +26,12 @@ export interface ThreadItem {
   tool?: string;
   server?: string;
   pluginId?: string | null;
-  commandActions?: Array<{ command?: string; name?: string; path?: string; type?: string }>;
-  skillFileName?: string;
+  commandActions?: Array<
+    | { type: 'read'; command: string; name: string; path: string }
+    | { type: 'listFiles'; command: string; path: string | null }
+    | { type: 'search'; command: string; query: string | null; path: string | null }
+    | { type: 'unknown'; command: string }
+  >;
   arguments?: unknown;
   result?: unknown;
   query?: string;
@@ -85,6 +91,7 @@ interface EventsResponse {
 export interface SendMessageResponse {
   conversationId: string;
   sessionId: string;
+  conversation: Conversation;
   run: {
     id: string;
     prompt: string;
@@ -122,14 +129,16 @@ export function setAuthErrorHandler(fn: (() => void) | null) {
   authErrorHandler = fn;
 }
 
-// 刷新 token 的并发单飞：多个请求同时 401 时只发起一次刷新，成功后一起重试
-let refreshTokenPromise: Promise<boolean> | null = null;
+type RefreshAccessTokenResult = 'refreshed' | 'expired' | 'failed';
 
-async function refreshAccessToken(): Promise<boolean> {
+// 刷新 token 的并发单飞：多个请求同时鉴权失败时只发起一次刷新，成功后一起重试。
+let refreshTokenPromise: Promise<RefreshAccessTokenResult> | null = null;
+
+async function refreshAccessToken(): Promise<RefreshAccessTokenResult> {
   if (!refreshTokenPromise) {
     refreshTokenPromise = (async () => {
       const refreshToken = getRefreshToken();
-      if (!refreshToken) return false;
+      if (!refreshToken) return 'expired';
       try {
         const response = await fetch(`${apiBase}/api/v1/auth/refreshToken`, {
           method: 'POST',
@@ -138,24 +147,28 @@ async function refreshAccessToken(): Promise<boolean> {
         });
         const body = (await response.json().catch(() => null)) as Envelope<LoginResponse> | LoginResponse | null;
         const envelope = body !== null && isEnvelope<LoginResponse>(body) ? body : null;
-        // 40102 = refresh token 过期，属于登录态失效，不做续期
-        if (envelope?.code === 40102) return false;
+        if (response.status === 401 || envelope?.code === 40102) return 'expired';
+        if (!response.ok) return 'failed';
+        if (envelope && envelope.code !== 200) return envelope.code === 40102 ? 'expired' : 'failed';
         const data = envelope ? envelope.data : (body as LoginResponse | null);
-        if (!data || !data.token || !data.refreshToken) return false;
+        if (!data?.token || !data.refreshToken) return 'failed';
         setToken(data.token);
         setRefreshToken(data.refreshToken);
-        return true;
+        return 'refreshed';
       } catch {
-        return false;
+        return 'failed';
       }
-    })();
-    refreshTokenPromise.finally(() => {
-      setTimeout(() => {
-        refreshTokenPromise = null;
-      }, 1000);
+    })().finally(() => {
+      refreshTokenPromise = null;
     });
   }
   return refreshTokenPromise;
+}
+
+async function refreshAccessTokenOrExpire() {
+  const result = await refreshAccessToken();
+  if (result === 'expired') expireSession();
+  return result === 'refreshed';
 }
 
 function expireSession() {
@@ -185,9 +198,10 @@ async function request<T>(path: string, init?: RequestInit, retried = false): Pr
   // 鉴权失败：HTTP 401（未来兼容）或业务码 40101（access token 过期，可刷新）
   const authFailed = response.status === 401 || envelope?.code === 40101;
   if (authFailed) {
-    // 先尝试用 refreshToken 续期，成功则带新 token 重试一次
-    if (!retried && (await refreshAccessToken())) {
-      return request<T>(path, init, true);
+    if (!retried) {
+      const refreshResult = await refreshAccessToken();
+      if (refreshResult === 'refreshed') return request<T>(path, init, true);
+      if (refreshResult === 'failed') throw new Error('登录续期失败，请稍后重试');
     }
     expireSession();
     throw new Error('登录已过期，请重新登录');
@@ -253,16 +267,11 @@ export const conversationApi = {
     let retried = false;
     let lastEventId = Math.max(0, Number(afterId) || 0);
 
-    // 断线后静默重连：先刷新 token（可能已过期），再用新 token 重新连接
-    const reconnect = async (): Promise<boolean> => {
+    const reconnect = async (refresh = false): Promise<boolean> => {
       if (controller.signal.aborted || retried) return false;
       retried = true;
       await new Promise(resolve => setTimeout(resolve, 1000));
-      if (!getRefreshToken()) return false;
-      if (!(await refreshAccessToken())) {
-        expireSession();
-        return false;
-      }
+      if (refresh && !(await refreshAccessTokenOrExpire())) return false;
       await connect();
       return true;
     };
@@ -284,7 +293,9 @@ export const conversationApi = {
         // 用 Content-Type 区分：SSE 是 text/event-stream，失败响应是 JSON
         const contentType = response.headers.get('content-type') || '';
         if (!response.ok || !response.body || !contentType.includes('text/event-stream')) {
-          if (await reconnect()) return;
+          const body = await response.clone().json().catch(() => null) as Envelope<unknown> | null;
+          const authFailed = response.status === 401 || (body !== null && isEnvelope<unknown>(body) && body.code === 40101);
+          if (await reconnect(authFailed)) return;
           if (!controller.signal.aborted) onError();
           return;
         }
@@ -318,11 +329,11 @@ export const conversationApi = {
           }
         }
         // 流结束（服务端空闲回收/重启等）：自动重连保持事件不中断
-        if (await reconnect()) return;
+        if (await reconnect(false)) return;
         if (!controller.signal.aborted) onError();
       } catch (error) {
         if ((error as Error)?.name !== 'AbortError') {
-          if (await reconnect()) return;
+          if (await reconnect(false)) return;
           if (!controller.signal.aborted) onError();
         }
       }

@@ -52,6 +52,19 @@ func sendMessage(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 	if thread.Archived {
 		return nil, agentdomain.ErrThreadArchived
 	}
+	if strings.TrimSpace(thread.Name) == "" || thread.Name == "新对话" {
+		title := strings.ReplaceAll(content, "\n", " ")
+		title = strings.Join(strings.Fields(title), " ")
+		if chars := []rune(title); len(chars) > 28 {
+			title = string(chars[:28])
+		}
+		if title != "" {
+			if err := svcCtx.AgentThreads.SetName(ctx, conversationID, title); err != nil {
+				return nil, err
+			}
+			thread.Name = title
+		}
+	}
 	run, err := svcCtx.AgentThreads.Send(conversationID, content)
 	if err != nil {
 		return nil, err
@@ -59,6 +72,13 @@ func sendMessage(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 	return &types.SendMessageResponse{
 		ConversationId: conversationID,
 		SessionId:      conversationID,
-		Run:            toRun(run),
+		Conversation: func() types.Conversation {
+			item := toConversation(thread)
+			item.Running = true
+			startedAt := formatTime(run.CreatedAt)
+			item.RunningStartedAt = &startedAt
+			return item
+		}(),
+		Run: toRun(run),
 	}, nil
 }

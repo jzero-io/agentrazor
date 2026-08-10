@@ -4,15 +4,16 @@ package plugins
 import (
 	"github.com/zeromicro/go-zero/rest"
 
+    "{{ .Module }}/internal/handler"
     "{{ .Module }}/internal/svc"
-	{{range $v := .Plugins}}{{ $v.Path | base }} "{{ $v.Module }}/serverless"
+	{{range $i, $v := .Plugins}}serverless{{ $i }} "{{ $v.Module }}/serverless"
 	{{end}}
 )
 
 func LoadPlugins(server *rest.Server, svcCtx *svc.ServiceContext) {
-	{{ range $v := .Plugins }}
+	{{ range $i, $v := .Plugins }}
 	{
-        serverless := {{ $v.Path | base }}.New(svcCtx.ServiceContext)
+        serverless := serverless{{ $i }}.New(svcCtx.ServiceContext)
         serverless.HandlerFunc(server, serverless.SvcCtx)
         handler.RegisterRoute2Code(serverless.RouteCodesMap)
     }
