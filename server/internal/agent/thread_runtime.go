@@ -165,15 +165,58 @@ func (r *CodexAppServerRuntime) SetThreadName(ctx context.Context, threadID, nam
 	return nil
 }
 
+const pinnedThreadSectionName = "Pinned"
+
 func (r *CodexAppServerRuntime) SetThreadPinned(ctx context.Context, threadID string, pinned bool) error {
-	_, err := r.request(ctx, "thread/metadata/update", map[string]any{
-		"threadId": threadID,
-		"isPinned": pinned,
+	var sectionID any
+	if pinned {
+		id, err := r.pinnedThreadSectionID(ctx)
+		if err != nil {
+			return err
+		}
+		sectionID = id
+	}
+	_, err := r.request(ctx, "thread/section/move", map[string]any{
+		"threadId":  threadID,
+		"sectionId": sectionID,
 	})
 	if err != nil {
 		return fmt.Errorf("update Codex thread pin state: %w", err)
 	}
 	return nil
+}
+
+func (r *CodexAppServerRuntime) pinnedThreadSectionID(ctx context.Context) (string, error) {
+	var cursor string
+	for {
+		params := map[string]any{"limit": 100}
+		if cursor != "" {
+			params["cursor"] = cursor
+		}
+		result, err := r.request(ctx, "threadSection/list", params)
+		if err != nil {
+			return "", fmt.Errorf("list Codex thread sections: %w", err)
+		}
+		if values, ok := result["data"].([]any); ok {
+			for _, value := range values {
+				raw, ok := value.(map[string]any)
+				if !ok {
+					continue
+				}
+				if stringValue(raw["name"]) == pinnedThreadSectionName {
+					id := stringValue(raw["id"])
+					if id == "" {
+						return "", errors.New("Codex pinned thread section did not contain an id")
+					}
+					return id, nil
+				}
+			}
+		}
+		cursor = stringValue(result["nextCursor"])
+		if cursor == "" {
+			return "", errors.New("Codex pinned thread section not found")
+		}
+	}
 }
 
 func (r *CodexAppServerRuntime) ArchiveStoredThread(ctx context.Context, threadID string) error {
@@ -255,7 +298,7 @@ func decodeStoredThread(raw map[string]any, archived bool) StoredThread {
 		ID:        stringValue(raw["id"]),
 		Name:      stringValue(raw["name"]),
 		Preview:   stringValue(raw["preview"]),
-		IsPinned:  boolValue(raw["isPinned"]),
+		IsPinned:  threadInPinnedSection(raw),
 		Archived:  archived,
 		CreatedAt: timeValue(raw["createdAt"]),
 		UpdatedAt: timeValue(raw["updatedAt"]),
@@ -303,6 +346,11 @@ func decodeStoredThread(raw map[string]any, archived bool) StoredThread {
 	return thread
 }
 
+func threadInPinnedSection(raw map[string]any) bool {
+	section, ok := raw["section"].(map[string]any)
+	return ok && stringValue(section["name"]) == pinnedThreadSectionName
+}
+
 func int64Value(value any) (int64, bool) {
 	switch typed := value.(type) {
 	case float64:
@@ -313,18 +361,6 @@ func int64Value(value any) (int64, bool) {
 		return int64(typed), true
 	default:
 		return 0, false
-	}
-}
-
-func boolValue(value any) bool {
-	switch typed := value.(type) {
-	case bool:
-		return typed
-	case string:
-		parsed, _ := strconv.ParseBool(typed)
-		return parsed
-	default:
-		return false
 	}
 }
 
