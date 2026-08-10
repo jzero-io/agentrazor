@@ -42,7 +42,7 @@ const (
 func initManageUserVars(flavor sqlbuilder.Flavor) {
 	manageUserFieldNames = condition.RawFieldNamesWithFlavor(flavor, &ManageUser{})
 	manageUserRows = strings.Join(manageUserFieldNames, ",")
-	manageUserRowsExpectAutoFieldNames = condition.RemoveIgnoreColumnsWithFlavor(flavor, manageUserFieldNames, "`id`", "`create_time`", "`update_time`")
+	manageUserRowsExpectAutoFieldNames = condition.RemoveIgnoreColumnsWithFlavor(flavor, manageUserFieldNames, "id", "create_time", "update_time")
 	manageUserRowsExpectAutoSet = strings.Join(manageUserRowsExpectAutoFieldNames, ",")
 }
 
@@ -134,7 +134,7 @@ func (m *defaultManageUserModel) clone() *defaultManageUserModel {
 
 func (m *defaultManageUserModel) Delete(ctx context.Context, session sqlx.Session, id int64) error {
 	sb := sqlbuilder.DeleteFrom(m.table)
-	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "`id`"), id))
+	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "id"), id))
 	statement, args := sb.BuildWithFlavor(m.flavor)
 	var err error
 	if session != nil {
@@ -147,7 +147,7 @@ func (m *defaultManageUserModel) Delete(ctx context.Context, session sqlx.Sessio
 
 func (m *defaultManageUserModel) FindOne(ctx context.Context, session sqlx.Session, id int64) (*ManageUser, error) {
 	sb := sqlbuilder.Select(manageUserRows).From(m.table)
-	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "`id`"), id))
+	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "id"), id))
 	sb.Limit(1)
 	sql, args := sb.BuildWithFlavor(m.flavor)
 	var resp ManageUser
@@ -172,7 +172,7 @@ func (m *defaultManageUserModel) FindOneByUsername(ctx context.Context, session 
 	var err error
 
 	sb := sqlbuilder.Select(manageUserRows).From(m.table)
-	condition.SelectByWhereRawSql(sb, "`username` = ?", username)
+	condition.SelectByWhereRawSql(sb, "username = $1", username)
 	sb.Limit(1)
 
 	sql, args := sb.BuildWithFlavor(m.flavor)
@@ -198,7 +198,7 @@ func (m *defaultManageUserModel) FindOneByUuid(ctx context.Context, session sqlx
 	var err error
 
 	sb := sqlbuilder.Select(manageUserRows).From(m.table)
-	condition.SelectByWhereRawSql(sb, "`uuid` = ?", uuid)
+	condition.SelectByWhereRawSql(sb, "uuid = $1", uuid)
 	sb.Limit(1)
 
 	sql, args := sb.BuildWithFlavor(m.flavor)
@@ -320,7 +320,7 @@ func (m *defaultManageUserModel) Update(ctx context.Context, session sqlx.Sessio
 	}
 
 	sb.Set(assigns...)
-	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "`id`"), data.Id))
+	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "id"), data.Id))
 	statement, args := sb.BuildWithFlavor(m.flavor)
 
 	var err error

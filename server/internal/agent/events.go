@@ -115,6 +115,19 @@ func (h *EventHub) publish(sessionID, runID, eventType string, data any, cache b
 	return event
 }
 
+func (h *EventHub) Cursor(sessionID string) int64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.closed {
+		return 0
+	}
+	stream, ok := h.streams[sessionID]
+	if !ok {
+		return 0
+	}
+	return stream.nextID
+}
+
 func (h *EventHub) Subscribe(sessionID string, afterID int64) *Subscription {
 	h.mu.Lock()
 	defer h.mu.Unlock()

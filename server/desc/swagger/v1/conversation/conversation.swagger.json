@@ -249,6 +249,9 @@
                   ],
                   "type": "object"
                 },
+                "eventCursor": {
+                  "type": "integer"
+                },
                 "sessionId": {
                   "type": "string"
                 },

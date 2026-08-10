@@ -130,6 +130,7 @@ func buildDetail(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 	detail := &types.DetailResponse{
 		Conversation: toConversation(thread),
 		SessionId:    thread.ID,
+		EventCursor:  svcCtx.AgentThreads.EventCursor(conversationID),
 		Turns:        make([]types.Turn, 0, len(thread.Turns)),
 	}
 	assignments, err := groupAssignments(ctx, svcCtx, uuid)

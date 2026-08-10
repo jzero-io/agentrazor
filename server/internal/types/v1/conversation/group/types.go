@@ -9,24 +9,24 @@ var (
 	_ = time.Now()
 )
 
+type ArchiveConversationsResponse struct {
+}
+
 type ConversationGroup struct {
-	Id        string  `json:"id"`
-	Name      string  `json:"name"`
-	CreatedAt string  `json:"createdAt"`
-	UpdatedAt string  `json:"updatedAt"`
+	Id        string `json:"id"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
 }
 
 type CreateRequest struct {
 	Name string `json:"name" validate:"required,max=40"`
 }
 
-type DeleteResponse struct {
-}
-
-type ArchiveConversationsResponse struct {
-}
-
 type DeleteArchivedConversationsResponse struct {
+}
+
+type DeleteResponse struct {
 }
 
 type ListResponse struct {

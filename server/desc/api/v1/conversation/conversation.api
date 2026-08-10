@@ -63,6 +63,7 @@ type (
 	DetailResponse {
 		Conversation Conversation `json:"conversation"`
 		SessionId    string       `json:"sessionId,omitempty"`
+		EventCursor  int64        `json:"eventCursor"`
 		Turns        []Turn       `json:"turns"`
 	}
 	UpdateRequest {

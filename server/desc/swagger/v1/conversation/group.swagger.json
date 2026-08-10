@@ -32,9 +32,6 @@
                       "name": {
                         "type": "string"
                       },
-                      "pinnedAt": {
-                        "type": "string"
-                      },
                       "updatedAt": {
                         "type": "string"
                       }
@@ -42,7 +39,6 @@
                     "required": [
                       "id",
                       "name",
-                      "pinnedAt",
                       "createdAt",
                       "updatedAt"
                     ],
@@ -83,9 +79,6 @@
               "properties": {
                 "name": {
                   "type": "string"
-                },
-                "pinned": {
-                  "type": "boolean"
                 }
               },
               "required": [
@@ -110,9 +103,6 @@
                   "type": "string"
                 },
                 "name": {
-                  "type": "string"
-                },
-                "pinnedAt": {
                   "type": "string"
                 },
                 "updatedAt": {
@@ -197,9 +187,6 @@
               "properties": {
                 "name": {
                   "type": "string"
-                },
-                "pinned": {
-                  "type": "boolean"
                 }
               },
               "type": "object"
@@ -223,9 +210,6 @@
                 "name": {
                   "type": "string"
                 },
-                "pinnedAt": {
-                  "type": "string"
-                },
                 "updatedAt": {
                   "type": "string"
                 }
@@ -243,6 +227,86 @@
           }
         ],
         "summary": "Update",
+        "tags": [
+          "v1/conversation/group"
+        ]
+      }
+    },
+    "/api/v1/conversation-groups/{group_id}/archive-conversations": {
+      "post": {
+        "consumes": [
+          "application/x-www-form-urlencoded"
+        ],
+        "description": "接口权限编码:v1:conversation:group:archiveConversations",
+        "operationId": "v1/Conversation/GroupArchiveConversations",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "group_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object"
+            }
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "归档分组内所有对话",
+        "tags": [
+          "v1/conversation/group"
+        ]
+      }
+    },
+    "/api/v1/conversation-groups/{group_id}/delete-archived-conversations": {
+      "post": {
+        "consumes": [
+          "application/x-www-form-urlencoded"
+        ],
+        "description": "接口权限编码:v1:conversation:group:deleteArchivedConversations",
+        "operationId": "v1/Conversation/GroupDeleteArchivedConversations",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "group_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object"
+            }
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "删除分组内所有已归档对话",
         "tags": [
           "v1/conversation/group"
         ]

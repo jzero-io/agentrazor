@@ -17,12 +17,8 @@ log:
     mode: file
 
 sqlx:
-#    datasource: "${DATASOURCE:-root:123456@tcp(127.0.0.1:3306)/agentrazor?charset=utf8mb4&parseTime=True&loc=Local}"
-#    driverName: "${DRIVER_NAME:-mysql}"
-#    datasource: "${DATASOURCE:-postgres://root:123456@localhost:5432/agentrazor}"
-#    driverName: "${DRIVER_NAME:-pgx}"
-    datasource: "${DATASOURCE:-agentrazor.db}"
-    driverName: "${DRIVER_NAME:-sqlite}"
+    datasource: "${DATASOURCE:-postgres://root:123456@localhost:5432/agentrazor}"
+    driverName: "${DRIVER_NAME:-pgx}"
 
 redis:
     miniRedis: ${REDIS_MINI_REDIS:-true}
@@ -32,5 +28,5 @@ agent:
     binaryPath: "${CODEX_BINARY_PATH:-codex}"
     codexHome: "${CODEX_HOME_PATH:-data/codex-home}"
     agentrazorHome: "${AGENTRAZOR_HOME_PATH:-data/agentrazor-home}"
-    sandbox: "${AGENT_SANDBOX:-read-only}"
+    sandbox: "${AGENT_SANDBOX:-workspace-write}"
     startTimeoutSeconds: 15

@@ -3,10 +3,12 @@ services:
     build:
       context: ../../server
     restart: always
+    container_name: agentrazor-server  
     depends_on:
       - postgres
     volumes:
       - ./server/data:/dist/data
+      - ./server/logs:/dist/logs
     environment:
       - TZ=Asia/Shanghai
       - DRIVER_NAME=pgx
@@ -16,6 +18,7 @@ services:
     build:
       context: ../../web
     restart: always
+    container_name: agentrazor-web
     depends_on:
       - server
     volumes:
@@ -29,6 +32,7 @@ services:
     build:
       context: ../../agent
     restart: always
+    container_name: agentrazor-agent
     depends_on:
       - server
     volumes:

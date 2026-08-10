@@ -2,7 +2,6 @@ package svc
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/jzero-io/agentrazor/core-engine/svc"
 	"github.com/jzero-io/jzero/core/configcenter"
@@ -30,17 +29,8 @@ func NewServiceContext(cc configcenter.ConfigCenter[config.Config], route2code f
 	svcCtx.ServiceContext = svc.NewServiceContext(svcCtx.ConfigCenter.MustGetConfig().Config, route2code)
 	svcCtx.Model = model.NewModel(svcCtx.SqlxConn, modelx.WithCachedConn(modelx.NewConnWithCache(svcCtx.SqlxConn, svcCtx.Cache)))
 	svcCtx.Middleware = NewMiddleware(svcCtx)
-	agentConfig := cc.MustGetConfig().Agent
-	runtime, err := agent.NewCodexAppServerRuntime(agent.CodexAppServerOptions{
-		Binary:             agentConfig.BinaryPath,
-		CodexHome:          agentConfig.CodexHome,
-		AgentrazorHome:     agentConfig.AgentrazorHome,
-		Sandbox:            agentConfig.Sandbox,
-		DisableApps:        agentConfig.DisableApps,
-		DisabledMCPServers: agentConfig.DisabledMCPServers,
-		MaxEvents:          10_000,
-		StartTimeout:       time.Duration(agentConfig.StartTimeoutSeconds) * time.Second,
-	})
+	agentOptions := svcCtx.AgentOptionsFromConfig(cc.MustGetConfig().Agent)
+	runtime, err := agent.NewCodexAppServerRuntime(agentOptions)
 	if err != nil {
 		panic(err)
 	}

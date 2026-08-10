@@ -130,6 +130,7 @@ const mobileSidebarOpen = ref(false);
 const renameVisible = ref(false);
 const renameValue = ref('');
 const messagePane = ref<HTMLElement>();
+const autoScrollEnabled = ref(true);
 const currentUser = ref<UserInfo | null>(null);
 const authChecking = ref(true);
 const loginVisible = ref(false);
@@ -255,6 +256,16 @@ const isDarkAppearance = computed(() =>
 );
 const activeTheme = computed(() => isDarkAppearance.value ? darkTheme : null);
 
+interface ProcessDisplayItem {
+  item: ThreadItem;
+  label: string;
+  icon: string;
+  detail: string;
+  live: boolean;
+  expandable: boolean;
+  className: string;
+}
+
 // toast/message 跟随主题：深色模式下弹层不再出现白底
 const toastProviderProps = reactive({
   theme: activeTheme.value,
@@ -293,6 +304,10 @@ function conversationsInGroup(groupId: string) {
 function conversationGroupName(item: Conversation) {
   if (!item.groupId) return '';
   return conversationGroups.value.find(group => group.id === item.groupId)?.name || '';
+}
+
+function isConversationProcessing(item: Conversation) {
+  return item.id === selectedId.value && (sending.value || Boolean(streamingTurn.value));
 }
 
 function showConversationPreview(item: Conversation, event: MouseEvent) {
@@ -592,17 +607,14 @@ async function selectConversation(id: string) {
   selectedId.value = id;
   syncConversationUrl(id);
   detail.value = null;
-  streamingTurn.value = null;
-  sending.value = false;
-  processingStatus.value = '';
-  stopTurnTimer();
-  stopping.value = false;
+  resetActiveTurn();
   closeStream?.();
   closeStream = undefined;
+  autoScrollEnabled.value = true;
   streamEventCutoff = Date.now();
-  await refreshDetail();
+  const snapshot = await refreshDetail({ forceScroll: true });
   if (selectedId.value === id) {
-    closeStream = conversationApi.subscribe(id, handleStreamEvent, () => undefined);
+    closeStream = conversationApi.subscribe(id, snapshot?.eventCursor ?? 0, handleStreamEvent, () => undefined);
   }
 }
 
@@ -631,28 +643,107 @@ function syncConversationUrl(id: string) {
   window.history.replaceState(window.history.state, '', path);
 }
 
-async function refreshDetail() {
-  if (!selectedId.value) return;
+interface RefreshDetailOptions {
+  forceScroll?: boolean;
+  restoreActiveTurn?: boolean;
+}
+
+interface BeginActiveTurnOptions {
+  turn?: Turn;
+  id?: string;
+  status?: string;
+  startedAt?: string;
+  label?: string;
+  resetResultSeen?: boolean;
+  restartTimer?: boolean;
+}
+
+async function refreshDetail(options: RefreshDetailOptions = {}): Promise<ConversationDetail | null> {
+  const id = selectedId.value;
+  if (!id) return null;
   loadingDetail.value = true;
   try {
-    detail.value = await conversationApi.get(selectedId.value);
+    const snapshot = await conversationApi.get(id);
+    if (selectedId.value !== id) return null;
+    restoreActiveTurn(snapshot, options.restoreActiveTurn !== false);
+    return snapshot;
   } catch (error) {
-    showError(error);
+    if (selectedId.value === id) showError(error);
+    return null;
   } finally {
-    loadingDetail.value = false;
-    void scrollToBottom();
+    if (selectedId.value === id) {
+      loadingDetail.value = false;
+      void scrollToBottom({ force: options.forceScroll });
+    }
   }
+}
+
+function isActiveTurn(turn: Turn) {
+  const normalized = String(turn.status || '').replace(/[-_\s]/g, '').toLowerCase();
+  return normalized === 'inprogress' || normalized === 'running' || normalized === 'pending';
+}
+
+function beginActiveTurn(options: BeginActiveTurnOptions = {}) {
+  const current = options.turn
+    ? { ...options.turn, items: [...(options.turn.items || [])] }
+    : streamingTurn.value || { id: options.id || '', status: options.status || 'inProgress', items: [] };
+  if (options.id) current.id = options.id;
+  if (options.status) current.status = options.status;
+  if (options.startedAt) current.startedAt = options.startedAt;
+  streamingTurn.value = current;
+  sending.value = true;
+  stopping.value = false;
+  if (options.resetResultSeen) streamResultSeen.value = false;
+  else streamResultSeen.value = streamResultSeen.value || current.items.some(item => item.type === 'agentMessage' && item.phase === 'final_answer');
+  if (options.restartTimer || !turnStartedAtMs) startTurnTimer(current.startedAt || options.startedAt);
+  if (options.label !== undefined) {
+    processingStatus.value = options.label;
+  } else if (!processingStatus.value && !streamResultSeen.value) {
+    processingStatus.value = processingLabel(turnActiveProcessItem(current) || undefined);
+  }
+}
+
+function resetActiveTurn() {
+  streamingTurn.value = null;
+  sending.value = false;
+  stopping.value = false;
+  processingStatus.value = '';
+  streamResultSeen.value = false;
+  stopTurnTimer();
+}
+
+function restoreActiveTurn(snapshot: ConversationDetail, enabled: boolean) {
+  const turns = snapshot.turns || [];
+  let activeIndex = -1;
+  if (enabled) {
+    for (let index = turns.length - 1; index >= 0; index -= 1) {
+      if (isActiveTurn(turns[index])) {
+        activeIndex = index;
+        break;
+      }
+    }
+  }
+  if (activeIndex < 0) {
+    detail.value = snapshot;
+    return;
+  }
+
+  const activeTurn = turns[activeIndex];
+  detail.value = {
+    ...snapshot,
+    turns: turns.filter((_, index) => index !== activeIndex)
+  };
+  beginActiveTurn({
+    turn: activeTurn,
+    startedAt: activeTurn.startedAt || snapshot.conversation.updatedAt || snapshot.conversation.createdAt
+  });
 }
 
 async function sendMessage() {
   const content = draft.value.trim();
   if (!canSend.value || !content) return;
   draft.value = '';
-  sending.value = true;
-  streamingTurn.value = null;
-  processingStatus.value = '正在思考';
-  streamResultSeen.value = false;
-  startTurnTimer();
+  autoScrollEnabled.value = true;
 
   const optimistic: Turn = {
     id: `local-${Date.now()}`,
@@ -664,8 +755,8 @@ async function sendMessage() {
       content: [{ type: 'text', text: content }]
     }]
   };
-  streamingTurn.value = optimistic;
-  await scrollToBottom();
+  beginActiveTurn({ turn: optimistic, label: '正在思考', resetResultSeen: true, restartTimer: true });
+  await scrollToBottom({ force: true });
 
   try {
     if (activeConversation.value?.title === '新对话') {
@@ -677,11 +768,7 @@ async function sendMessage() {
     await conversationApi.send(selectedId.value, content);
   } catch (error) {
     draft.value = content;
-    streamingTurn.value = null;
-    sending.value = false;
-    stopTurnTimer();
-    if (!stopping.value) processingStatus.value = '';
-    stopping.value = false;
+    resetActiveTurn();
     showError(error);
   }
 }
@@ -700,29 +787,25 @@ async function cancelTurn() {
 }
 
 function ensureStreamingItem(id: string, type: string) {
-  if (!streamingTurn.value) {
-    streamingTurn.value = { id: '', status: 'inProgress', items: [] };
-  }
-  let item = streamingTurn.value.items.find(value => value.id === id);
+  beginActiveTurn();
+  let item = streamingTurn.value!.items.find(value => value.id === id);
   if (!item) {
     item = { id, type };
-    streamingTurn.value.items.push(item);
+    streamingTurn.value!.items.push(item);
   }
   return item;
 }
 
 function upsertStreamingItem(item: ThreadItem) {
-  if (!streamingTurn.value) {
-    streamingTurn.value = { id: '', status: 'inProgress', items: [] };
-  }
-  let index = streamingTurn.value.items.findIndex(value => value.id === item.id);
+  beginActiveTurn();
+  let index = streamingTurn.value!.items.findIndex(value => value.id === item.id);
   if (index < 0 && item.type === 'userMessage') {
-    index = streamingTurn.value.items.findIndex(value =>
+    index = streamingTurn.value!.items.findIndex(value =>
       value.type === 'userMessage' && value.id.startsWith('local-user-')
     );
   }
-  if (index >= 0) streamingTurn.value.items[index] = item;
-  else streamingTurn.value.items.push(item);
+  if (index >= 0) streamingTurn.value!.items[index] = item;
+  else streamingTurn.value!.items.push(item);
 }
 
 function processingLabel(item?: ThreadItem) {
@@ -747,12 +830,7 @@ function processingLabel(item?: ThreadItem) {
         return paths.length ? `正在修改文件：${truncate(paths.join('、'))}` : '正在修改文件';
       }
     case 'webSearch':
-      {
-        const isOpenPage = (item.action as { type?: string } | undefined)?.type === 'openPage';
-        return item.query
-          ? `${isOpenPage ? '正在打开网页：' : '正在搜索：'}${truncate(item.query)}`
-          : isOpenPage ? '正在打开网页' : '正在搜索网页';
-      }
+      return webSearchTitle(item, true);
     case 'imageView':
       return '正在查看图片';
     case 'imageGeneration':
@@ -791,27 +869,33 @@ function reasoningText(item: ThreadItem) {
   return values.join('\n\n');
 }
 
-function activityTitle(item: ThreadItem) {
+function activityTitle(item: ThreadItem, live = false) {
   switch (item.type) {
-    case 'commandExecution': return item.pluginId ? `使用 ${item.pluginId}` : '运行命令';
-    case 'fileChange': return '修改文件';
-    case 'webSearch': return item.query ? `搜索：${item.query}` : '搜索网页';
-    case 'imageView': return '查看图片';
-    case 'imageGeneration': return '生成图片';
-    case 'mcpToolCall': return `调用 ${item.server || 'MCP'} · ${item.tool || '工具'}`;
-    case 'dynamicToolCall': return `调用 ${item.tool || '工具'}`;
-    case 'collabAgentToolCall': return '协作处理';
-    case 'contextCompaction': return '整理上下文';
+    case 'commandExecution':
+      if (isSkillReadItem(item)) {
+        const skill = skillReadName(item);
+        const display = skill ? humanizeSkillName(skill) : '';
+        return `${live ? '正在读取' : '读取'}${display ? ` ${display} 技能` : '技能'}`;
+      }
+      return live ? '正在运行命令' : '运行命令';
+    case 'fileChange': return fileChangeTitle(item, live);
+    case 'webSearch': return webSearchTitle(item, live);
+    case 'imageView': return live ? '正在查看图片' : '查看图片';
+    case 'imageGeneration': return live ? '正在生成图片' : '生成图片';
+    case 'mcpToolCall': return `${live ? '正在调用' : '调用'} ${item.server || 'MCP'} · ${item.tool || '工具'}`;
+    case 'dynamicToolCall': return `${live ? '正在调用' : '调用'} ${item.tool || '工具'}`;
+    case 'collabAgentToolCall': return live ? '正在协作处理' : '协作处理';
+    case 'contextCompaction': return live ? '正在整理上下文' : '整理上下文';
     case 'plan': return '计划';
-    default: return item.type;
+    default: return live ? '正在处理' : String(item.type);
   }
 }
 
 function activityIcon(item: ThreadItem) {
   switch (item.type) {
-    case 'commandExecution': return 'solar:command-linear';
+    case 'commandExecution': return isSkillReadItem(item) ? 'solar:document-text-linear' : 'solar:command-linear';
     case 'fileChange': return 'solar:document-add-linear';
-    case 'webSearch': return 'solar:magnifer-linear';
+    case 'webSearch': return webSearchActionType(item) === 'openPage' ? 'solar:link-round-angle-linear' : 'solar:magnifer-linear';
     case 'imageGeneration': return 'solar:gallery-add-linear';
     case 'reasoning': return 'solar:lightbulb-bolt-linear';
     default: return 'solar:widget-5-linear';
@@ -821,11 +905,47 @@ function activityIcon(item: ThreadItem) {
 function activityDetail(item: ThreadItem) {
   if (item.type === 'commandExecution') return [item.command, item.aggregatedOutput].filter(Boolean).join('\n\n');
   if (item.type === 'plan') return item.text || '';
-  if (item.type === 'fileChange') return JSON.stringify(item.changes || [], null, 2);
+  if (item.type === 'fileChange') return fileChangeDetail(item);
+  if (item.type === 'webSearch') return item.result != null ? String(item.result) : '';
   if (item.type === 'mcpToolCall' || item.type === 'dynamicToolCall') {
     return JSON.stringify({ arguments: item.arguments, result: item.result }, null, 2);
   }
   return '';
+}
+
+function webSearchActionType(item: ThreadItem) {
+  return (item.action as { type?: string } | undefined)?.type || '';
+}
+
+function webSearchText(item: ThreadItem) {
+  const action = item.action as Record<string, unknown> | undefined;
+  const values = [
+    item.query,
+    action?.title,
+    action?.url,
+    action?.query
+  ].filter(value => typeof value === 'string' && value.trim()) as string[];
+  return values.length ? cleanSearchQuery(values[0]) : '';
+}
+
+function webSearchTitle(item: ThreadItem, live = false) {
+  const openPage = webSearchActionType(item) === 'openPage';
+  const prefix = live
+    ? openPage ? '正在打开网页' : '正在搜索网页'
+    : openPage ? '打开网页' : '搜索网页';
+  const text = webSearchText(item);
+  return text ? `${prefix}：${text}` : prefix;
+}
+
+function fileChangeTitle(item: ThreadItem, live = false) {
+  const changes = Array.isArray(item.changes) ? item.changes as Array<Record<string, unknown>> : [];
+  const prefix = live ? '正在修改文件' : '修改文件';
+  return changes.length ? `${prefix}：${changes.length} 个` : prefix;
+}
+
+function fileChangeDetail(item: ThreadItem) {
+  const changes = Array.isArray(item.changes) ? item.changes as Array<Record<string, unknown>> : [];
+  return changes.map(change => String(change.path || '')).filter(Boolean).join('\n');
 }
 
 function isIntermediateAgentMessage(item: ThreadItem) {
@@ -848,15 +968,6 @@ function turnReasoningItems(turn: Turn) {
 // 真正执行了工具/动作的条目（排除纯文字说明），用于判断任务是否"复杂"
 function turnWorkedItems(turn: Turn) {
   return turnProcessItems(turn).filter(item => item.type !== 'agentMessage');
-}
-
-// 流式处理中只展示当前活动条目（步骤切换时覆盖），完成后才展示完整过程
-function turnLiveItem(turn: Turn): ThreadItem | null {
-  const process = turn.items.filter(item =>
-    item.type !== 'userMessage'
-    && !(item.type === 'agentMessage' && !isIntermediateAgentMessage(item))
-  );
-  return process.length ? process[process.length - 1] : null;
 }
 
 // 判断命令是否是在读取 skill：使用接口返回的结构化 commandActions
@@ -890,8 +1001,7 @@ function skillReadFileName(item: ThreadItem): string {
   return path.split('/').filter(Boolean).pop() ?? '';
 }
 
-// 展示的过程条目：同一技能的连续读取，第一张显示"读取 X 技能"卡片，
-// 后续的每个文件读取展开为"已读取 xxx.md"，避免重复技能卡片
+// 展示的过程条目：同一技能的连续读取会合并技能标题，后续文件只展示文件名。
 function turnDisplayItems(turn: Turn): ThreadItem[] {
   const result: ThreadItem[] = [];
   let lastSkill = '';
@@ -911,6 +1021,39 @@ function turnDisplayItems(turn: Turn): ThreadItem[] {
   return result;
 }
 
+function turnActiveProcessItem(turn: Turn): ThreadItem | null {
+  const items = turnDisplayItems(turn).filter(item => item.type !== 'agentMessage');
+  return items.length ? items[items.length - 1] : null;
+}
+
+function processClassName(item: ThreadItem) {
+  if (item.type === 'webSearch') return 'search-entry';
+  if (item.type === 'commandExecution') return isSkillReadItem(item) ? 'skill-read-entry' : 'command-entry';
+  if (item.type === 'fileChange') return 'file-entry';
+  return 'tool-entry';
+}
+
+function processDisplayItems(turn: Turn): ProcessDisplayItem[] {
+  const active = turn === streamingTurn.value ? turnActiveProcessItem(turn) : null;
+  return turnDisplayItems(turn)
+    .filter(item => !(item.type === 'reasoning'))
+    .map(item => {
+      const live = Boolean(active && item.id === active.id);
+      const skillFile = typeof item.skillFileName === 'string' && item.skillFileName.trim() ? item.skillFileName.trim() : '';
+      const label = skillFile ? `读取 ${skillFile}` : activityTitle(item, live);
+      const detail = skillFile ? '' : activityDetail(item);
+      return {
+        item,
+        label,
+        icon: activityIcon(item),
+        detail,
+        live,
+        expandable: Boolean(detail),
+        className: processClassName(item)
+      };
+    });
+}
+
 function turnResultItems(turn: Turn) {
   return turn.items.filter(item =>
     item.type === 'imageGeneration'
@@ -922,84 +1065,39 @@ function turnResultItems(turn: Turn) {
 const ProcessItemCard = defineComponent({
   name: 'ProcessItemCard',
   props: {
-    item: { type: Object as PropType<ThreadItem>, required: true },
-    live: { type: Boolean, default: false }
+    display: { type: Object as PropType<ProcessDisplayItem>, required: true }
   },
   setup(props) {
     return () => {
-      const item = props.item;
-      const icon = (name: string) => h(Icon, { icon: name });
+      const display = props.display;
+      const item = display.item;
+      const icon = h(Icon, { icon: display.icon });
 
-      // 思考不单独渲染占位，统一由 live 状态行显示"正在思考"（避免重复）
-      if (item.type === 'reasoning') return null;
-
-      // 中间说明
       if (item.type === 'agentMessage' && item.text) {
         return h('div', { class: 'process-commentary markdown-body', innerHTML: renderMarkdown(item.text) });
       }
 
-      // 命令执行：终端卡片
-      if (item.type === 'commandExecution') {
-        // 读取 skill 的只显示一行提示，不展开命令与输出全文
-        if (isSkillReadItem(item)) {
-          // 同一技能的后续文件读取：展开为"已读取 xxx.md"
-          if (item.skillFileName) {
-            return h('div', { class: 'process-entry skill-file-entry' }, [
-              icon(activityIcon(item)),
-              h('span', { class: 'entry-label' }, `已读取 ${item.skillFileName}`)
-            ]);
-          }
-          const skill = skillReadName(item);
-          const skillDisplay = skill ? humanizeSkillName(skill) : '';
-          return h('div', { class: 'process-entry skill-read-entry' }, [
-            icon(activityIcon(item)),
-            h('span', { class: 'entry-label' }, `${props.live ? '正在读取' : '读取'}${skillDisplay ? ` ${skillDisplay} 技能` : '技能'}`)
-          ]);
-        }
-        return h('details', { class: 'process-entry command-entry' }, [
-          h('summary', [
-            icon(activityIcon(item)),
-            h('span', { class: 'entry-label' }, props.live ? '正在运行命令' : '运行了命令'),
-            item.command ? h('code', { class: 'entry-command' }, item.command) : null
-          ]),
-          item.aggregatedOutput ? h('pre', { class: 'command-output' }, item.aggregatedOutput) : null
-        ]);
+      const classes = ['process-entry', display.className, display.live ? 'process-entry-live' : ''];
+      const title = [
+        icon,
+        h('span', { class: 'entry-label' }, display.label)
+      ];
+
+      if (!display.expandable) {
+        return h('div', { class: [...classes, 'process-entry-title'] }, title);
       }
 
-      // 搜索：查询突出展示
-      if (item.type === 'webSearch') {
-        const isOpenPage = (item.action as { type?: string } | undefined)?.type === 'openPage';
-        const searchLabel = isOpenPage ? '已打开网页' : '已搜索网页';
-        const liveLabel = isOpenPage ? '正在打开网页' : '正在搜索网页';
-        return h('details', { class: 'process-entry search-entry' }, [
-          h('summary', [
-            icon(activityIcon(item)),
-            h('span', { class: 'entry-label' }, props.live ? liveLabel : searchLabel)
-          ]),
-          item.query ? h('div', { class: 'search-result' }, cleanSearchQuery(item.query)) : null,
-          item.result != null ? h('div', { class: 'search-result' }, String(item.result)) : null
-        ]);
-      }
+      const bodyClass = item.type === 'commandExecution'
+        ? 'command-output'
+        : item.type === 'fileChange'
+          ? 'file-path-list'
+          : item.type === 'webSearch'
+            ? 'search-result'
+            : 'activity-body';
 
-      // 修改文件
-      if (item.type === 'fileChange') {
-        const changes = Array.isArray(item.changes) ? item.changes as Array<Record<string, unknown>> : [];
-        return h('details', { class: 'process-entry file-entry' }, [
-          h('summary', [
-            icon(activityIcon(item)),
-            h('span', { class: 'entry-label' }, changes.length ? `修改 ${changes.length} 个文件` : '修改文件')
-          ]),
-          ...changes.map((change, index) => h('div', { class: 'file-change', key: `${item.id}-${index}` }, [
-            h('span', { class: 'file-path' }, String(change.path || ''))
-          ]))
-        ]);
-      }
-
-      // 工具调用等
-      const detail = activityDetail(item);
-      return h('details', { class: 'process-entry tool-entry' }, [
-        h('summary', [icon(activityIcon(item)), h('span', { class: 'entry-label' }, activityTitle(item))]),
-        detail ? h('pre', { class: 'activity-body' }, detail) : null
+      return h('details', { class: classes }, [
+        h('summary', title),
+        h(item.type === 'webSearch' ? 'div' : 'pre', { class: bodyClass }, display.detail)
       ]);
     };
   }
@@ -1056,15 +1154,14 @@ async function handleStreamEvent(event: StreamEvent) {
   if (Number.isFinite(eventTime) && eventTime <= streamEventCutoff) return;
 
   if (event.type === 'run.started') {
-    sending.value = true;
-    stopping.value = false;
-    processingStatus.value = '正在思考';
-    streamResultSeen.value = false;
     const data = event.data as { startedAt?: string } | undefined;
-    if (!turnStartedAtMs) startTurnTimer(data?.startedAt || event.createdAt);
-    if (!streamingTurn.value) {
-      streamingTurn.value = { id: event.runId || '', status: 'inProgress', items: [] };
-    }
+    beginActiveTurn({
+      id: event.runId || undefined,
+      status: 'inProgress',
+      startedAt: data?.startedAt || event.createdAt,
+      label: '正在思考',
+      resetResultSeen: true
+    });
     await scrollToBottom();
     return;
   }
@@ -1072,14 +1169,14 @@ async function handleStreamEvent(event: StreamEvent) {
   if (event.type === 'codex.turn.started') {
     const turn = (event.data as { params?: { turn?: Record<string, unknown> } } | undefined)?.params?.turn;
     if (turn) {
-      if (!streamingTurn.value) streamingTurn.value = { id: '', status: 'inProgress', items: [] };
-      streamingTurn.value.id = String(turn.id || streamingTurn.value.id);
-      streamingTurn.value.status = String(turn.status || 'inProgress');
       const startedAt = Number(turn.startedAt);
-      if (Number.isFinite(startedAt) && startedAt > 0) {
-        streamingTurn.value.startedAt = new Date(startedAt * 1000).toISOString();
-        startTurnTimer(streamingTurn.value.startedAt);
-      }
+      const startedAtIso = Number.isFinite(startedAt) && startedAt > 0 ? new Date(startedAt * 1000).toISOString() : undefined;
+      beginActiveTurn({
+        id: String(turn.id || streamingTurn.value?.id || ''),
+        status: String(turn.status || 'inProgress'),
+        startedAt: startedAtIso,
+        restartTimer: Boolean(startedAtIso)
+      });
     }
     return;
   }
@@ -1087,40 +1184,44 @@ async function handleStreamEvent(event: StreamEvent) {
   if (event.type === 'codex.turn.completed') {
     const turn = (event.data as { params?: { turn?: Record<string, unknown> } } | undefined)?.params?.turn;
     if (turn) {
-      if (!streamingTurn.value) streamingTurn.value = { id: '', status: 'completed', items: [] };
-      streamingTurn.value.id = String(turn.id || streamingTurn.value.id);
-      streamingTurn.value.status = String(turn.status || 'completed');
+      beginActiveTurn({
+        id: String(turn.id || streamingTurn.value?.id || ''),
+        status: String(turn.status || 'completed')
+      });
+      const activeTurn = streamingTurn.value!;
       const durationMs = Number(turn.durationMs);
-      if (Number.isFinite(durationMs) && durationMs >= 0) streamingTurn.value.durationMs = durationMs;
+      if (Number.isFinite(durationMs) && durationMs >= 0) activeTurn.durationMs = durationMs;
       const completedAt = Number(turn.completedAt);
       if (Number.isFinite(completedAt) && completedAt > 0) {
-        streamingTurn.value.completedAt = new Date(completedAt * 1000).toISOString();
+        activeTurn.completedAt = new Date(completedAt * 1000).toISOString();
       }
       if (Array.isArray(turn.items)) {
         // turn.completed 快照只含 userMessage/agentMessage，合并而非替换，
         // 保留流式阶段收集的 reasoning 等条目
-        const merged = new Map(streamingTurn.value.items.map(item => [item.id, item]));
+        const merged = new Map(activeTurn.items.map(item => [item.id, item]));
         for (const item of turn.items as ThreadItem[]) merged.set(item.id, item);
-        streamingTurn.value.items = Array.from(merged.values());
+        activeTurn.items = Array.from(merged.values());
       }
     }
     return;
   }
 
-	if (event.type.includes('task_started')) {
-		const data = event.data as { params?: Record<string, unknown> } | undefined;
-		const payload = ((data?.params?.msg || data?.params?.payload || data?.params) ?? {}) as Record<string, unknown>;
-		const startedAt = Number(payload.started_at);
-		if (Number.isFinite(startedAt) && startedAt > 0) startTurnTimer(new Date(startedAt * 1000).toISOString());
-		return;
-	}
+  if (event.type.includes('task_started')) {
+    const data = event.data as { params?: Record<string, unknown> } | undefined;
+    const payload = ((data?.params?.msg || data?.params?.payload || data?.params) ?? {}) as Record<string, unknown>;
+    const startedAt = Number(payload.started_at);
+    if (Number.isFinite(startedAt) && startedAt > 0) {
+      beginActiveTurn({ startedAt: new Date(startedAt * 1000).toISOString() });
+    }
+    return;
+  }
 
-	if (event.type.includes('task_complete')) {
-		const data = event.data as { params?: Record<string, unknown> } | undefined;
-		const payload = ((data?.params?.msg || data?.params?.payload || data?.params) ?? {}) as Record<string, unknown>;
-		const durationMs = Number(payload.duration_ms);
-		if (Number.isFinite(durationMs) && durationMs >= 0) elapsedDurationMs.value = durationMs;
-	}
+  if (event.type.includes('task_complete')) {
+    const data = event.data as { params?: Record<string, unknown> } | undefined;
+    const payload = ((data?.params?.msg || data?.params?.payload || data?.params) ?? {}) as Record<string, unknown>;
+    const durationMs = Number(payload.duration_ms);
+    if (Number.isFinite(durationMs) && durationMs >= 0) elapsedDurationMs.value = durationMs;
+  }
 
   if (event.type === 'codex.item.reasoning.textDelta') {
     const params = (event.data as { params?: { delta?: string; itemId?: string; contentIndex?: number } } | undefined)?.params;
@@ -1184,7 +1285,7 @@ async function handleStreamEvent(event: StreamEvent) {
   if (event.type === 'run.completed' || event.type === 'run.failed') {
     stopTurnTimer();
     const completedTurn = streamingTurn.value;
-    await Promise.all([refreshDetail(), loadConversations()]);
+    await Promise.all([refreshDetail({ restoreActiveTurn: false }), loadConversations()]);
     if (completedTurn && detail.value) {
       const persisted = detail.value.turns.find(turn => turn.id === completedTurn.id);
       if (persisted) {
@@ -1221,10 +1322,7 @@ async function handleStreamEvent(event: StreamEvent) {
         detail.value.turns.push(completedTurn);
       }
     }
-    sending.value = false;
-    streamingTurn.value = null;
-    processingStatus.value = '';
-    stopping.value = false;
+    resetActiveTurn();
   }
 }
 
@@ -1278,7 +1376,7 @@ async function archiveConversation(item: Conversation) {
       selectedId.value = '';
       syncConversationUrl('');
       detail.value = null;
-      streamingTurn.value = null;
+      resetActiveTurn();
     }
     await loadConversations(wasSelected);
   } catch (error) {
@@ -1304,7 +1402,7 @@ async function deleteConversation() {
     selectedId.value = '';
     syncConversationUrl('');
     detail.value = null;
-    streamingTurn.value = null;
+    resetActiveTurn();
     await loadConversations(true);
   } catch (error) {
     showError(error);
@@ -1342,16 +1440,29 @@ function showError(error: unknown) {
   toast.error(error instanceof Error ? error.message : '操作失败');
 }
 
-async function scrollToBottom() {
+function isMessagePaneNearBottom(pane: HTMLElement, threshold = 96) {
+  return pane.scrollHeight - pane.scrollTop - pane.clientHeight <= threshold;
+}
+
+function handleMessageScroll(event: Event) {
+  const pane = event.currentTarget;
+  if (pane instanceof HTMLElement) {
+    autoScrollEnabled.value = isMessagePaneNearBottom(pane);
+  }
+}
+
+async function scrollToBottom(options: { force?: boolean } = {}) {
   await nextTick();
   // 首次进入对话时消息面板可能还没渲染出来，轮询等待它挂载后再滚动
-  let pane = messagePane.value || document.querySelector('.message-pane');
+  let pane = messagePane.value || document.querySelector<HTMLElement>('.message-pane');
   for (let i = 0; i < 80 && !pane; i++) {
     await new Promise(resolve => setTimeout(resolve, 50));
-    pane = messagePane.value || document.querySelector('.message-pane');
+    pane = messagePane.value || document.querySelector<HTMLElement>('.message-pane');
   }
   if (!pane) return;
+  if (!options.force && !autoScrollEnabled.value && !isMessagePaneNearBottom(pane)) return;
   pane.scrollTo({ top: pane.scrollHeight, behavior: 'auto' });
+  autoScrollEnabled.value = true;
 }
 
 function messagePreview(content: string) {
@@ -1376,8 +1487,10 @@ async function bootstrap() {
     selectedId.value = '';
     syncConversationUrl('');
     detail.value = null;
-    streamingTurn.value = null;
+    loadingDetail.value = false;
+    resetActiveTurn();
     closeStream?.();
+    closeStream = undefined;
   });
   try {
     if (getToken()) {
@@ -1427,12 +1540,13 @@ function logout() {
   currentUser.value = null;
   conversationGroups.value = [];
   closeStream?.();
+  closeStream = undefined;
   selectedId.value = '';
   syncConversationUrl('');
   detail.value = null;
+  loadingDetail.value = false;
   conversations.value = [];
-  streamingTurn.value = null;
-  sending.value = false;
+  resetActiveTurn();
 }
 
 function openSettings() {
@@ -1631,7 +1745,13 @@ watch([settingsVisible, settingsSection], () => {
 <template>
   <n-config-provider :locale="zhCN" :date-locale="dateZhCN" :theme="activeTheme" :theme-overrides="themeOverrides">
     <div v-if="authChecking" class="app-boot-screen" aria-label="正在恢复登录状态">
-      <div class="app-boot-spinner"><Icon icon="solar:refresh-linear" /></div>
+      <div class="app-boot-card">
+        <img class="app-boot-logo" src="/agentrazor-icon.png" alt="" />
+        <div class="app-boot-copy">
+          <div class="app-boot-title">AgentRazor</div>
+          <div class="app-boot-text">正在恢复会话</div>
+        </div>
+      </div>
     </div>
     <div v-else class="app-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
       <aside class="sidebar" :class="{ 'mobile-open': mobileSidebarOpen }">
@@ -1674,6 +1794,16 @@ watch([settingsVisible, settingsSection], () => {
                     <button class="conversation-item" @click="hideConversationPreview(); selectConversation(item.id)">
                       <Icon icon="solar:pin-bold" class="pin-icon" />
                       <span>{{ item.title }}</span>
+                    </button>
+                    <button
+                      v-if="isConversationProcessing(item)"
+                      type="button"
+                      class="conversation-processing-button"
+                      aria-label="处理中"
+                      title="处理中"
+                      disabled
+                    >
+                      <Icon icon="solar:refresh-linear" />
                     </button>
                     <div class="conversation-actions">
                       <n-tooltip trigger="hover" placement="top">
@@ -1761,6 +1891,16 @@ watch([settingsVisible, settingsSection], () => {
                     <button class="conversation-item" @click="hideConversationPreview(); selectConversation(item.id)">
                       <span>{{ item.title }}</span>
                     </button>
+                    <button
+                      v-if="isConversationProcessing(item)"
+                      type="button"
+                      class="conversation-processing-button"
+                      aria-label="处理中"
+                      title="处理中"
+                      disabled
+                    >
+                      <Icon icon="solar:refresh-linear" />
+                    </button>
                     <div class="conversation-actions">
                       <n-tooltip trigger="hover" placement="top">
                         <template #trigger>
@@ -1821,6 +1961,16 @@ watch([settingsVisible, settingsSection], () => {
                   >
                     <button class="conversation-item" @click="hideConversationPreview(); selectConversation(item.id)">
                       <span>{{ item.title }}</span>
+                    </button>
+                    <button
+                      v-if="isConversationProcessing(item)"
+                      type="button"
+                      class="conversation-processing-button"
+                      aria-label="处理中"
+                      title="处理中"
+                      disabled
+                    >
+                      <Icon icon="solar:refresh-linear" />
                     </button>
                     <div class="conversation-actions">
                       <n-tooltip trigger="hover" placement="top">
@@ -1990,7 +2140,7 @@ watch([settingsVisible, settingsSection], () => {
               @click="jumpToMessage(item.id)"
             />
           </nav>
-          <section ref="messagePane" class="message-pane">
+          <section ref="messagePane" class="message-pane" @scroll="handleMessageScroll">
             <n-spin :show="loadingDetail">
               <div class="message-column">
                 <section v-for="turn in renderedTurns" :key="turn.id" class="turn" :data-status="turn.status">
@@ -2011,10 +2161,10 @@ watch([settingsVisible, settingsSection], () => {
                     </div>
                     <div class="turn-process-content">
                       <template
-                        v-for="item in turnDisplayItems(turn)"
-                        :key="item.id"
+                        v-for="display in processDisplayItems(turn)"
+                        :key="display.item.id"
                       >
-                        <ProcessItemCard :item="item" live />
+                        <ProcessItemCard :display="display" />
                       </template>
                     </div>
                   </div>
@@ -2029,15 +2179,15 @@ watch([settingsVisible, settingsSection], () => {
                       </summary>
                       <div class="turn-process-content">
                         <ProcessItemCard
-                          v-for="item in turnDisplayItems(turn)"
-                          :key="item.id"
-                          :item="item"
+                          v-for="display in processDisplayItems(turn)"
+                          :key="display.item.id"
+                          :display="display"
                         />
                       </div>
                     </details>
                   </template>
                   <div
-                    v-if="turn === streamingTurn && processingStatus && !streamResultSeen && (!turnLiveItem(turn) || turnLiveItem(turn)!.type === 'reasoning')"
+                    v-if="turn === streamingTurn && processingStatus && !streamResultSeen && (!turnActiveProcessItem(turn) || turnActiveProcessItem(turn)!.type === 'reasoning')"
                     class="turn-live-status"
                   >
                     <span :class="{ 'status-pulse': processingStatus === '正在思考' }">{{ processingStatus }}</span>

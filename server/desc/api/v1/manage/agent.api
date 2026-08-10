@@ -1,0 +1,79 @@
+syntax = "v1"
+
+info (
+	go_package: "v1/manage/agent"
+)
+
+type Skill {
+	Name string `json:"name"`
+}
+
+type SkillFile {
+	Name     string      `json:"name"`
+	Path     string      `json:"path"`
+	Type     string      `json:"type,options=file|directory"`
+	Children []SkillFile `json:"children,optional"`
+}
+
+type ListSkillsRequest {}
+
+type ListSkillsResponse {
+	Skills []Skill `json:"skills"`
+}
+
+type SkillDetailRequest {
+	SkillName string `path:"skill_name" validate:"required"`
+	File      string `form:"file,optional"`
+}
+
+type SkillDetailResponse {
+	Skill       Skill       `json:"skill"`
+	Files       []SkillFile `json:"files"`
+	CurrentFile string      `json:"currentFile"`
+	Content     string      `json:"content"`
+}
+
+type DeleteSkillRequest {
+	SkillName string `path:"skill_name" validate:"required"`
+}
+
+type DeleteSkillResponse {}
+
+type UpdateSkillFileRequest {
+	SkillName string `path:"skill_name" validate:"required"`
+	File      string `json:"file" validate:"required"`
+	Content   string `json:"content"`
+}
+
+type UpdateSkillFileResponse {}
+
+type UploadSkillRequest {}
+
+type UploadSkillResponse {
+	Name string `json:"name"`
+}
+
+@server (
+	prefix:          /api/v1
+	group:           v1/manage/agent
+	compact_handler: true
+	jwt:             Jwt
+	middleware:      Authx
+)
+service server {
+	@handler ListSkills
+	get /manage/agent/skills (ListSkillsRequest) returns (ListSkillsResponse)
+
+	@handler SkillDetail
+	get /manage/agent/skills/:skill_name (SkillDetailRequest) returns (SkillDetailResponse)
+
+	@handler UploadSkill
+	post /manage/agent/skills/upload (UploadSkillRequest) returns (UploadSkillResponse)
+
+	@handler DeleteSkill
+	post /manage/agent/skills/:skill_name/delete (DeleteSkillRequest) returns (DeleteSkillResponse)
+
+	@handler UpdateSkillFile
+	post /manage/agent/skills/:skill_name/file (UpdateSkillFileRequest) returns (UpdateSkillFileResponse)
+}
+

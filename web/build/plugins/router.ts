@@ -25,6 +25,15 @@ export function setupElegantRouter() {
     routePathTransformer(routeName, routePath) {
       const key = routeName as RouteKey;
 
+      if (key === 'agent') {
+        return '/manage/agent';
+      }
+
+      if (key === 'agent_skills') {
+        return '/manage/agent-skills';
+      }
+
+
       if (key === 'login') {
         const modules: UnionKey.LoginModule[] = ['pwd-login', 'code-login', 'register', 'reset-pwd', 'bind-wechat'];
 

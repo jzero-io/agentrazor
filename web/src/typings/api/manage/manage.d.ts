@@ -279,5 +279,36 @@ declare namespace Api {
       buttonCode: string;
       permissions?: MenuPermission[] | null;
     };
+
+    type AgentSkill = {
+      name: string;
+    };
+
+    type AgentSkillFile = {
+      name: string;
+      path: string;
+      type: 'file' | 'directory';
+      children?: AgentSkillFile[];
+    };
+
+    type ListSkillsResponse = {
+      skills: AgentSkill[];
+    };
+
+    type SkillDetailResponse = {
+      skill: AgentSkill;
+      files: AgentSkillFile[];
+      currentFile: string;
+      content: string;
+    };
+
+    type UploadSkillResponse = {
+      name: string;
+    };
+
+    type UpdateSkillFileRequest = {
+      file: string;
+      content: string;
+    };
   }
 }

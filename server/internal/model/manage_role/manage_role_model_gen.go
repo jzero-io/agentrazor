@@ -39,7 +39,7 @@ const (
 func initManageRoleVars(flavor sqlbuilder.Flavor) {
 	manageRoleFieldNames = condition.RawFieldNamesWithFlavor(flavor, &ManageRole{})
 	manageRoleRows = strings.Join(manageRoleFieldNames, ",")
-	manageRoleRowsExpectAutoFieldNames = condition.RemoveIgnoreColumnsWithFlavor(flavor, manageRoleFieldNames, "`id`", "`create_time`", "`update_time`")
+	manageRoleRowsExpectAutoFieldNames = condition.RemoveIgnoreColumnsWithFlavor(flavor, manageRoleFieldNames, "id", "create_time", "update_time")
 	manageRoleRowsExpectAutoSet = strings.Join(manageRoleRowsExpectAutoFieldNames, ",")
 }
 
@@ -127,7 +127,7 @@ func (m *defaultManageRoleModel) clone() *defaultManageRoleModel {
 
 func (m *defaultManageRoleModel) Delete(ctx context.Context, session sqlx.Session, id int64) error {
 	sb := sqlbuilder.DeleteFrom(m.table)
-	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "`id`"), id))
+	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "id"), id))
 	statement, args := sb.BuildWithFlavor(m.flavor)
 	var err error
 	if session != nil {
@@ -140,7 +140,7 @@ func (m *defaultManageRoleModel) Delete(ctx context.Context, session sqlx.Sessio
 
 func (m *defaultManageRoleModel) FindOne(ctx context.Context, session sqlx.Session, id int64) (*ManageRole, error) {
 	sb := sqlbuilder.Select(manageRoleRows).From(m.table)
-	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "`id`"), id))
+	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "id"), id))
 	sb.Limit(1)
 	sql, args := sb.BuildWithFlavor(m.flavor)
 	var resp ManageRole
@@ -165,7 +165,7 @@ func (m *defaultManageRoleModel) FindOneByUuid(ctx context.Context, session sqlx
 	var err error
 
 	sb := sqlbuilder.Select(manageRoleRows).From(m.table)
-	condition.SelectByWhereRawSql(sb, "`uuid` = ?", uuid)
+	condition.SelectByWhereRawSql(sb, "uuid = $1", uuid)
 	sb.Limit(1)
 
 	sql, args := sb.BuildWithFlavor(m.flavor)
@@ -278,7 +278,7 @@ func (m *defaultManageRoleModel) Update(ctx context.Context, session sqlx.Sessio
 	}
 
 	sb.Set(assigns...)
-	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "`id`"), data.Id))
+	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "id"), data.Id))
 	statement, args := sb.BuildWithFlavor(m.flavor)
 
 	var err error

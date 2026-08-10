@@ -36,7 +36,7 @@ const (
 func initConversationGroupVars(flavor sqlbuilder.Flavor) {
 	conversationGroupFieldNames = condition.RawFieldNamesWithFlavor(flavor, &ConversationGroup{})
 	conversationGroupRows = strings.Join(conversationGroupFieldNames, ",")
-	conversationGroupRowsExpectAutoFieldNames = condition.RemoveIgnoreColumnsWithFlavor(flavor, conversationGroupFieldNames, "`create_time`", "`update_time`")
+	conversationGroupRowsExpectAutoFieldNames = condition.RemoveIgnoreColumnsWithFlavor(flavor, conversationGroupFieldNames, "create_time", "update_time")
 	conversationGroupRowsExpectAutoSet = strings.Join(conversationGroupRowsExpectAutoFieldNames, ",")
 }
 
@@ -120,7 +120,7 @@ func (m *defaultConversationGroupModel) clone() *defaultConversationGroupModel {
 
 func (m *defaultConversationGroupModel) Delete(ctx context.Context, session sqlx.Session, uuid string) error {
 	sb := sqlbuilder.DeleteFrom(m.table)
-	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "`uuid`"), uuid))
+	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "uuid"), uuid))
 	statement, args := sb.BuildWithFlavor(m.flavor)
 	var err error
 	if session != nil {
@@ -133,7 +133,7 @@ func (m *defaultConversationGroupModel) Delete(ctx context.Context, session sqlx
 
 func (m *defaultConversationGroupModel) FindOne(ctx context.Context, session sqlx.Session, uuid string) (*ConversationGroup, error) {
 	sb := sqlbuilder.Select(conversationGroupRows).From(m.table)
-	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "`uuid`"), uuid))
+	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "uuid"), uuid))
 	sb.Limit(1)
 	sql, args := sb.BuildWithFlavor(m.flavor)
 	var resp ConversationGroup
@@ -201,7 +201,7 @@ func (m *defaultConversationGroupModel) Update(ctx context.Context, session sqlx
 	}
 
 	sb.Set(assigns...)
-	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "`uuid`"), data.Uuid))
+	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "uuid"), data.Uuid))
 	statement, args := sb.BuildWithFlavor(m.flavor)
 
 	var err error

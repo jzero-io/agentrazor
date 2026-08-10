@@ -33,6 +33,7 @@ type DeleteResponse struct {
 type DetailResponse struct {
 	Conversation Conversation `json:"conversation"`
 	SessionId    string       `json:"sessionId,omitempty"`
+	EventCursor  int64        `json:"eventCursor"`
 	Turns        []Turn       `json:"turns"`
 }
 

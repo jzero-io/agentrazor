@@ -56,6 +56,7 @@ export interface GeneratedImage {
 export interface ConversationDetail {
   conversation: Conversation;
   sessionId?: string;
+  eventCursor: number;
   turns: Turn[];
 }
 
@@ -79,6 +80,16 @@ interface EventsResponse {
   event: string;
   data: string;
   createdAt: string;
+}
+
+export interface SendMessageResponse {
+  conversationId: string;
+  sessionId: string;
+  run: {
+    id: string;
+    prompt: string;
+    createdAt: string;
+  };
 }
 
 const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
@@ -153,15 +164,21 @@ function expireSession() {
   authErrorHandler?.();
 }
 
-async function request<T>(path: string, init?: RequestInit, retried = false): Promise<T> {
+function withAuthHeaders(init?: RequestInit): Headers {
+  const headers = new Headers(init?.headers);
+  const hasBody = init?.body !== undefined && init.body !== null;
+  if (hasBody && !(init.body instanceof FormData) && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
   const token = getToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  return headers;
+}
+
+async function request<T>(path: string, init?: RequestInit, retried = false): Promise<T> {
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init?.headers
-    }
+    headers: withAuthHeaders(init)
   });
   const body = (await response.json().catch(() => null)) as Envelope<T> | T | null;
   const envelope = body !== null && isEnvelope<T>(body) ? body : null;
@@ -217,7 +234,7 @@ export const conversationApi = {
     return request<null>(`/api/v1/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
   },
   send(id: string, content: string) {
-    return request(`/api/v1/conversations/${encodeURIComponent(id)}/messages`, {
+    return request<SendMessageResponse>(`/api/v1/conversations/${encodeURIComponent(id)}/messages`, {
       method: 'POST',
       body: JSON.stringify({ content })
     });
@@ -227,13 +244,14 @@ export const conversationApi = {
       method: 'POST'
     });
   },
-  subscribe(id: string, onEvent: (event: StreamEvent) => void, onError: () => void) {
+  subscribe(id: string, afterId: number, onEvent: (event: StreamEvent) => void, onError: () => void) {
     // EventSource 无法携带 Authorization 头，改用 fetch 流式读取 SSE，
     // 这样鉴权与其他接口保持一致（Bearer token 走 Authorization）。
     const controller = new AbortController();
     const url = `${apiBase}/api/v1/conversations/${encodeURIComponent(id)}/events`;
     // 断线重试标记：一次断开最多自动重连一次，避免死循环
     let retried = false;
+    let lastEventId = Math.max(0, Number(afterId) || 0);
 
     // 断线后静默重连：先刷新 token（可能已过期），再用新 token 重新连接
     const reconnect = async (): Promise<boolean> => {
@@ -256,6 +274,7 @@ export const conversationApi = {
         const response = await fetch(url, {
           headers: {
             Accept: 'text/event-stream',
+            ...(lastEventId > 0 ? { 'Last-Event-ID': String(lastEventId) } : {}),
             ...(token ? { Authorization: `Bearer ${token}` } : {})
           },
           cache: 'no-store',
@@ -290,6 +309,8 @@ export const conversationApi = {
             try {
               const eventResponse = JSON.parse(payload) as EventsResponse;
               if (eventResponse.event === 'stream.heartbeat') continue;
+              if (eventResponse.id <= lastEventId) continue;
+              lastEventId = eventResponse.id;
               onEvent(JSON.parse(eventResponse.data) as StreamEvent);
             } catch {
               onError();

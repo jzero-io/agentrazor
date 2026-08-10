@@ -3,6 +3,7 @@ package route
 import (
 	"context"
 	"net/http"
+	"sort"
 
 	"github.com/guregu/null/v5"
 	"github.com/jzero-io/agentrazor/core-engine/helper/auth"
@@ -147,5 +148,8 @@ func buildRouteTree(menus []*manage_menu.ManageMenu, uuidMap map[string]*types.R
 			}
 		}
 	}
+	sort.SliceStable(result, func(i, j int) bool {
+		return result[i].Meta.Order < result[j].Meta.Order
+	})
 	return result
 }

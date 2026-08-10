@@ -11,6 +11,7 @@ import (
 	v1auth "github.com/jzero-io/agentrazor/server/internal/handler/v1/auth"
 	v1conversation "github.com/jzero-io/agentrazor/server/internal/handler/v1/conversation"
 	v1conversationgroup "github.com/jzero-io/agentrazor/server/internal/handler/v1/conversation/group"
+	v1manageagent "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/agent"
 	v1managemenu "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/menu"
 	v1managerole "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/role"
 	v1manageuser "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/user"
@@ -173,16 +174,54 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Handler: v1conversationgroup.Delete(serverCtx),
 				},
 				{
+
 					Method:  http.MethodPost,
 					Path:    "/conversation-groups/:group_id/archive-conversations",
 					Handler: v1conversationgroup.ArchiveConversations(serverCtx),
 				},
 				{
+
 					Method:  http.MethodPost,
 					Path:    "/conversation-groups/:group_id/delete-archived-conversations",
 					Handler: v1conversationgroup.DeleteArchivedConversations(serverCtx),
 				},
 			},
+			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
+			rest.WithPrefix("/api/v1"),
+		)
+	}
+	{
+		server.AddRoutes(
+			rest.WithMiddlewares(
+				[]rest.Middleware{serverCtx.Authx},
+				[]rest.Route{
+					{
+						Method:  http.MethodGet,
+						Path:    "/manage/agent/skills",
+						Handler: v1manageagent.ListSkills(serverCtx),
+					},
+					{
+						Method:  http.MethodGet,
+						Path:    "/manage/agent/skills/:skill_name",
+						Handler: v1manageagent.SkillDetail(serverCtx),
+					},
+					{
+						Method:  http.MethodPost,
+						Path:    "/manage/agent/skills/:skill_name/delete",
+						Handler: v1manageagent.DeleteSkill(serverCtx),
+					},
+					{
+						Method:  http.MethodPost,
+						Path:    "/manage/agent/skills/:skill_name/file",
+						Handler: v1manageagent.UpdateSkillFile(serverCtx),
+					},
+					{
+						Method:  http.MethodPost,
+						Path:    "/manage/agent/skills/upload",
+						Handler: v1manageagent.UploadSkill(serverCtx),
+					},
+				}...,
+			),
 			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
 			rest.WithPrefix("/api/v1"),
 		)

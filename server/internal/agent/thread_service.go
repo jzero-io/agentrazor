@@ -113,6 +113,13 @@ func (s *ThreadService) Get(ctx context.Context, threadID string) (StoredThread,
 	return s.runtime.ReadStoredThread(ctx, threadID, true)
 }
 
+func (s *ThreadService) EventCursor(threadID string) int64 {
+	if err := validateThreadID(threadID); err != nil {
+		return 0
+	}
+	return s.events.Cursor(threadID)
+}
+
 func (s *ThreadService) SetName(ctx context.Context, threadID, title string) error {
 	if err := validateThreadID(threadID); err != nil {
 		return err

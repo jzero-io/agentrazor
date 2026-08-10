@@ -175,3 +175,44 @@ export function GetMenuTree() {
 }
 
 export function GetAllButtons() {}
+
+
+export function GetAgentSkills() {
+  return request<Api.Manage.ListSkillsResponse>({
+    url: '/api/v1/manage/agent/skills',
+    method: 'get'
+  });
+}
+
+
+export function GetAgentSkillDetail(name: string, file?: string) {
+  return request<Api.Manage.SkillDetailResponse>({
+    url: `/api/v1/manage/agent/skills/${encodeURIComponent(name)}`,
+    method: 'get',
+    params: file ? { file } : undefined
+  });
+}
+
+export function UploadAgentSkill(data: FormData) {
+  return request<Api.Manage.UploadSkillResponse>({
+    url: '/api/v1/manage/agent/skills/upload',
+    method: 'post',
+    data,
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+}
+
+export function DeleteAgentSkill(name: string) {
+  return request<Record<string, never>>({
+    url: `/api/v1/manage/agent/skills/${encodeURIComponent(name)}/delete`,
+    method: 'post'
+  });
+}
+
+export function UpdateAgentSkillFile(name: string, file: string, content: string) {
+  return request<Record<string, never>>({
+    url: `/api/v1/manage/agent/skills/${encodeURIComponent(name)}/file`,
+    method: 'post',
+    data: { file, content }
+  });
+}

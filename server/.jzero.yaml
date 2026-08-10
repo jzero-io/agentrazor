@@ -14,7 +14,18 @@ gen:
   git-change: true
   route2Code: true
 
-  model-driver: mysql
+  model-driver: pgx
   model-cache: false
   model-ignore-columns: ["create_time", "update_time"]
-  model-schema: agentrazor
+  model-datasource: true
+  model-datasource-url: "postgres://root:123456@127.0.0.1:5432/agentrazor?sslmode=disable"
+  model-datasource-table:
+    - conversation
+    - conversation_group
+    - manage_email
+    - manage_menu
+    - manage_role
+    - manage_role_menu
+    - manage_user
+    - manage_user_role
+  model-schema: public

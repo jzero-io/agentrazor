@@ -36,7 +36,7 @@ const (
 func initConversationVars(flavor sqlbuilder.Flavor) {
 	conversationFieldNames = condition.RawFieldNamesWithFlavor(flavor, &Conversation{})
 	conversationRows = strings.Join(conversationFieldNames, ",")
-	conversationRowsExpectAutoFieldNames = condition.RemoveIgnoreColumnsWithFlavor(flavor, conversationFieldNames, "`create_time`", "`update_time`")
+	conversationRowsExpectAutoFieldNames = condition.RemoveIgnoreColumnsWithFlavor(flavor, conversationFieldNames, "create_time", "update_time")
 	conversationRowsExpectAutoSet = strings.Join(conversationRowsExpectAutoFieldNames, ",")
 }
 
@@ -120,7 +120,7 @@ func (m *defaultConversationModel) clone() *defaultConversationModel {
 
 func (m *defaultConversationModel) Delete(ctx context.Context, session sqlx.Session, id string) error {
 	sb := sqlbuilder.DeleteFrom(m.table)
-	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "`id`"), id))
+	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "id"), id))
 	statement, args := sb.BuildWithFlavor(m.flavor)
 	var err error
 	if session != nil {
@@ -133,7 +133,7 @@ func (m *defaultConversationModel) Delete(ctx context.Context, session sqlx.Sess
 
 func (m *defaultConversationModel) FindOne(ctx context.Context, session sqlx.Session, id string) (*Conversation, error) {
 	sb := sqlbuilder.Select(conversationRows).From(m.table)
-	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "`id`"), id))
+	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "id"), id))
 	sb.Limit(1)
 	sql, args := sb.BuildWithFlavor(m.flavor)
 	var resp Conversation
@@ -201,7 +201,7 @@ func (m *defaultConversationModel) Update(ctx context.Context, session sqlx.Sess
 	}
 
 	sb.Set(assigns...)
-	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "`id`"), data.Id))
+	sb.Where(sb.EQ(condition.QuoteWithFlavor(m.flavor, "id"), data.Id))
 	statement, args := sb.BuildWithFlavor(m.flavor)
 
 	var err error

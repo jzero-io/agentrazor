@@ -35,6 +35,9 @@ type CodexAppServerOptions struct {
 	DisabledMCPServers []string
 	MaxEvents          int
 	StartTimeout       time.Duration
+	ModelProvider      string
+	Model              string
+	ReasoningEffort    string
 }
 
 // CodexAppServerRuntime owns one long-running Codex app-server process. Business
@@ -127,6 +130,9 @@ func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRun
 	if options.StartTimeout <= 0 {
 		options.StartTimeout = 15 * time.Second
 	}
+	options.ModelProvider = strings.TrimSpace(options.ModelProvider)
+	options.Model = strings.TrimSpace(options.Model)
+	options.ReasoningEffort = strings.TrimSpace(options.ReasoningEffort)
 	if options.CodexHome != "" {
 		codexHome, err := filepath.Abs(options.CodexHome)
 		if err != nil {
@@ -340,14 +346,24 @@ func (r *CodexAppServerRuntime) runTurn(ctx context.Context, threadID, prompt st
 	}
 	defer r.unregisterExecution(threadID, execution)
 
-	result, err := r.request(ctx, "turn/start", map[string]any{
+	params := map[string]any{
 		"threadId": threadID,
 		"cwd":      conversationDir,
 		"input": []map[string]any{{
 			"type": "text",
 			"text": prompt,
 		}},
-	})
+	}
+	if r.options.ModelProvider != "" {
+		params["modelProvider"] = r.options.ModelProvider
+	}
+	if r.options.Model != "" {
+		params["model"] = r.options.Model
+	}
+	if r.options.ReasoningEffort != "" {
+		params["reasoningEffort"] = r.options.ReasoningEffort
+	}
+	result, err := r.request(ctx, "turn/start", params)
 	if err != nil {
 		return fmt.Errorf("start Codex turn: %w", err)
 	}

@@ -47,8 +47,33 @@ export const generatedRoutes: GeneratedRoute[] = [
       title: 'about',
       i18nKey: 'route.about',
       icon: 'fluent:book-information-24-regular',
-      order: 10
+      order: 9999
     }
+  },
+  {
+    name: 'agent',
+    path: '/manage/agent',
+    component: 'layout.base',
+    meta: {
+      title: 'agent',
+      i18nKey: 'route.agent',
+      icon: 'carbon:bot',
+      order: 6,
+      roles: ['R_ADMIN']
+    },
+    children: [
+      {
+        name: 'agent_skills',
+        path: '/manage/agent-skills',
+        component: 'view.agent_skills',
+        meta: {
+          title: 'agent_skills',
+          i18nKey: 'route.agent_skills',
+          icon: 'carbon:skill-level-basic',
+          order: 1
+        }
+      }
+    ]
   },
   {
     name: 'home',

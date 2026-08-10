@@ -440,9 +440,6 @@
                       "name": {
                         "type": "string"
                       },
-                      "pinnedAt": {
-                        "type": "string"
-                      },
                       "updatedAt": {
                         "type": "string"
                       }
@@ -450,7 +447,6 @@
                     "required": [
                       "id",
                       "name",
-                      "pinnedAt",
                       "createdAt",
                       "updatedAt"
                     ],
@@ -491,9 +487,6 @@
               "properties": {
                 "name": {
                   "type": "string"
-                },
-                "pinned": {
-                  "type": "boolean"
                 }
               },
               "required": [
@@ -518,9 +511,6 @@
                   "type": "string"
                 },
                 "name": {
-                  "type": "string"
-                },
-                "pinnedAt": {
                   "type": "string"
                 },
                 "updatedAt": {
@@ -605,9 +595,6 @@
               "properties": {
                 "name": {
                   "type": "string"
-                },
-                "pinned": {
-                  "type": "boolean"
                 }
               },
               "type": "object"
@@ -631,9 +618,6 @@
                 "name": {
                   "type": "string"
                 },
-                "pinnedAt": {
-                  "type": "string"
-                },
                 "updatedAt": {
                   "type": "string"
                 }
@@ -651,6 +635,86 @@
           }
         ],
         "summary": "Update",
+        "tags": [
+          "v1/conversation/group"
+        ]
+      }
+    },
+    "/api/v1/conversation-groups/{group_id}/archive-conversations": {
+      "post": {
+        "consumes": [
+          "application/x-www-form-urlencoded"
+        ],
+        "description": "接口权限编码:v1:conversation:group:archiveConversations",
+        "operationId": "v1/Conversation/GroupArchiveConversations",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "group_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object"
+            }
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "归档分组内所有对话",
+        "tags": [
+          "v1/conversation/group"
+        ]
+      }
+    },
+    "/api/v1/conversation-groups/{group_id}/delete-archived-conversations": {
+      "post": {
+        "consumes": [
+          "application/x-www-form-urlencoded"
+        ],
+        "description": "接口权限编码:v1:conversation:group:deleteArchivedConversations",
+        "operationId": "v1/Conversation/GroupDeleteArchivedConversations",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "group_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object"
+            }
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "删除分组内所有已归档对话",
         "tags": [
           "v1/conversation/group"
         ]
@@ -896,6 +960,9 @@
                     "updatedAt"
                   ],
                   "type": "object"
+                },
+                "eventCursor": {
+                  "type": "integer"
                 },
                 "sessionId": {
                   "type": "string"
@@ -1229,1557 +1296,6 @@
         "summary": "停止当前 Turn",
         "tags": [
           "v1/conversation"
-        ]
-      }
-    },
-    "/api/v1/crypto_tracing/analysis-plans": {
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "接口权限编码:v1:crypto_tracing:analysisPlan",
-        "operationId": "plugins/crypto_tracing/v1/CryptoTracingAnalysisPlan",
-        "parameters": [
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "properties": {
-                "case_id": {
-                  "type": "string"
-                },
-                "conversation_id": {
-                  "type": "string"
-                },
-                "intent": {
-                  "type": "string"
-                },
-                "overrides": {
-                  "properties": {
-                    "direction": {
-                      "type": "string"
-                    },
-                    "max_hops": {
-                      "type": "integer"
-                    },
-                    "relationship_analysis_enabled": {
-                      "type": "boolean"
-                    },
-                    "service_exit_tracing_enabled": {
-                      "type": "boolean"
-                    },
-                    "time_range": {
-                      "properties": {
-                        "end": {
-                          "type": "string"
-                        },
-                        "start": {
-                          "type": "string"
-                        }
-                      },
-                      "type": "object"
-                    }
-                  },
-                  "type": "object"
-                }
-              },
-              "required": [
-                "conversation_id",
-                "case_id",
-                "intent"
-              ],
-              "type": "object"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "properties": {
-                "code": {
-                  "description": "business code",
-                  "example": 0,
-                  "type": "integer"
-                },
-                "data": {
-                  "properties": {
-                    "algorithm_version": {
-                      "type": "string"
-                    },
-                    "analysis_plan_id": {
-                      "type": "string"
-                    },
-                    "attribution_method": {
-                      "type": "string"
-                    },
-                    "config_hash": {
-                      "type": "string"
-                    },
-                    "confirmation_required": {
-                      "type": "boolean"
-                    },
-                    "enabled_scenarios": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
-                    },
-                    "enabled_stages": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
-                    },
-                    "max_hops": {
-                      "type": "integer"
-                    },
-                    "trace_scenario": {
-                      "type": "string"
-                    },
-                    "warnings": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
-                    },
-                    "weight_version": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
-                },
-                "msg": {
-                  "description": "business message",
-                  "example": "ok",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "schemes": [
-          "https"
-        ],
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "summary": "生成分析计划",
-        "tags": [
-          "plugins/crypto_tracing/v1/crypto_tracing"
-        ]
-      }
-    },
-    "/api/v1/crypto_tracing/analysis-plans/{plan_id}/confirm": {
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "接口权限编码:v1:crypto_tracing:analysisConfirm",
-        "operationId": "plugins/crypto_tracing/v1/CryptoTracingAnalysisConfirm",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "plan_id",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "properties": {
-                "answers": {
-                  "additionalProperties": {},
-                  "type": "object"
-                },
-                "conversation_id": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "conversation_id",
-                "answers"
-              ],
-              "type": "object"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "properties": {
-                "code": {
-                  "description": "business code",
-                  "example": 0,
-                  "type": "integer"
-                },
-                "data": {
-                  "properties": {
-                    "algorithm_version": {
-                      "type": "string"
-                    },
-                    "analysis_plan_id": {
-                      "type": "string"
-                    },
-                    "attribution_method": {
-                      "type": "string"
-                    },
-                    "config_hash": {
-                      "type": "string"
-                    },
-                    "confirmation_required": {
-                      "type": "boolean"
-                    },
-                    "enabled_scenarios": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
-                    },
-                    "enabled_stages": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
-                    },
-                    "max_hops": {
-                      "type": "integer"
-                    },
-                    "trace_scenario": {
-                      "type": "string"
-                    },
-                    "warnings": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
-                    },
-                    "weight_version": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
-                },
-                "msg": {
-                  "description": "business message",
-                  "example": "ok",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "schemes": [
-          "https"
-        ],
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "summary": "确认分析计划",
-        "tags": [
-          "plugins/crypto_tracing/v1/crypto_tracing"
-        ]
-      }
-    },
-    "/api/v1/crypto_tracing/analysis-runs": {
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "接口权限编码:v1:crypto_tracing:analysisRun",
-        "operationId": "plugins/crypto_tracing/v1/CryptoTracingAnalysisRun",
-        "parameters": [
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "properties": {
-                "conversation_id": {
-                  "type": "string"
-                },
-                "plan_id": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "conversation_id",
-                "plan_id"
-              ],
-              "type": "object"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "properties": {
-                "code": {
-                  "description": "business code",
-                  "example": 0,
-                  "type": "integer"
-                },
-                "data": {
-                  "properties": {
-                    "analysis_run_id": {
-                      "type": "string"
-                    },
-                    "artifact_refs": {
-                      "items": {
-                        "properties": {
-                          "artifact_id": {
-                            "type": "string"
-                          },
-                          "type": {
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "artifact_id",
-                          "type"
-                        ],
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "data_snapshot_id": {
-                      "type": "string"
-                    },
-                    "quality_status": {
-                      "type": "string"
-                    },
-                    "report_readiness": {
-                      "properties": {
-                        "enabled_scenarios": {
-                          "items": {
-                            "type": "string"
-                          },
-                          "type": "array"
-                        },
-                        "missing_required_fields": {
-                          "items": {
-                            "type": "string"
-                          },
-                          "type": "array"
-                        },
-                        "ready": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "ready",
-                        "missing_required_fields",
-                        "enabled_scenarios"
-                      ],
-                      "type": "object"
-                    },
-                    "status": {
-                      "type": "string"
-                    },
-                    "summary": {
-                      "additionalProperties": {},
-                      "type": "object"
-                    },
-                    "verified_conclusions": {
-                      "items": {
-                        "additionalProperties": {},
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "warnings": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
-                    }
-                  },
-                  "type": "object"
-                },
-                "msg": {
-                  "description": "business message",
-                  "example": "ok",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "schemes": [
-          "https"
-        ],
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "summary": "启动分析运行",
-        "tags": [
-          "plugins/crypto_tracing/v1/crypto_tracing"
-        ]
-      }
-    },
-    "/api/v1/crypto_tracing/analysis-runs/{run_id}": {
-      "get": {
-        "description": "接口权限编码:v1:crypto_tracing:analysisStatus",
-        "operationId": "plugins/crypto_tracing/v1/CryptoTracingAnalysisStatus",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "conversation_id",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "in": "path",
-            "name": "run_id",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "properties": {
-                "code": {
-                  "description": "business code",
-                  "example": 0,
-                  "type": "integer"
-                },
-                "data": {
-                  "properties": {
-                    "analysis_run_id": {
-                      "type": "string"
-                    },
-                    "artifact_refs": {
-                      "items": {
-                        "properties": {
-                          "artifact_id": {
-                            "type": "string"
-                          },
-                          "type": {
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "artifact_id",
-                          "type"
-                        ],
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "data_snapshot_id": {
-                      "type": "string"
-                    },
-                    "quality_status": {
-                      "type": "string"
-                    },
-                    "report_readiness": {
-                      "properties": {
-                        "enabled_scenarios": {
-                          "items": {
-                            "type": "string"
-                          },
-                          "type": "array"
-                        },
-                        "missing_required_fields": {
-                          "items": {
-                            "type": "string"
-                          },
-                          "type": "array"
-                        },
-                        "ready": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "ready",
-                        "missing_required_fields",
-                        "enabled_scenarios"
-                      ],
-                      "type": "object"
-                    },
-                    "status": {
-                      "type": "string"
-                    },
-                    "summary": {
-                      "additionalProperties": {},
-                      "type": "object"
-                    },
-                    "verified_conclusions": {
-                      "items": {
-                        "additionalProperties": {},
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "warnings": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
-                    }
-                  },
-                  "type": "object"
-                },
-                "msg": {
-                  "description": "business message",
-                  "example": "ok",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "schemes": [
-          "https"
-        ],
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "summary": "查询分析运行状态",
-        "tags": [
-          "plugins/crypto_tracing/v1/crypto_tracing"
-        ]
-      }
-    },
-    "/api/v1/crypto_tracing/analysis-runs/{run_id}/cancel": {
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "接口权限编码:v1:crypto_tracing:analysisCancel",
-        "operationId": "plugins/crypto_tracing/v1/CryptoTracingAnalysisCancel",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "run_id",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "properties": {
-                "conversation_id": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "conversation_id"
-              ],
-              "type": "object"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "properties": {
-                "code": {
-                  "description": "business code",
-                  "example": 0,
-                  "type": "integer"
-                },
-                "data": {
-                  "properties": {
-                    "analysis_run_id": {
-                      "type": "string"
-                    },
-                    "artifact_refs": {
-                      "items": {
-                        "properties": {
-                          "artifact_id": {
-                            "type": "string"
-                          },
-                          "type": {
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "artifact_id",
-                          "type"
-                        ],
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "data_snapshot_id": {
-                      "type": "string"
-                    },
-                    "quality_status": {
-                      "type": "string"
-                    },
-                    "report_readiness": {
-                      "properties": {
-                        "enabled_scenarios": {
-                          "items": {
-                            "type": "string"
-                          },
-                          "type": "array"
-                        },
-                        "missing_required_fields": {
-                          "items": {
-                            "type": "string"
-                          },
-                          "type": "array"
-                        },
-                        "ready": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "ready",
-                        "missing_required_fields",
-                        "enabled_scenarios"
-                      ],
-                      "type": "object"
-                    },
-                    "status": {
-                      "type": "string"
-                    },
-                    "summary": {
-                      "additionalProperties": {},
-                      "type": "object"
-                    },
-                    "verified_conclusions": {
-                      "items": {
-                        "additionalProperties": {},
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "warnings": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
-                    }
-                  },
-                  "type": "object"
-                },
-                "msg": {
-                  "description": "business message",
-                  "example": "ok",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "schemes": [
-          "https"
-        ],
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "summary": "取消分析运行",
-        "tags": [
-          "plugins/crypto_tracing/v1/crypto_tracing"
-        ]
-      }
-    },
-    "/api/v1/crypto_tracing/analysis-runs/{run_id}/refresh": {
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "接口权限编码:v1:crypto_tracing:analysisRefresh",
-        "operationId": "plugins/crypto_tracing/v1/CryptoTracingAnalysisRefresh",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "run_id",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "properties": {
-                "conversation_id": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "conversation_id"
-              ],
-              "type": "object"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "properties": {
-                "code": {
-                  "description": "business code",
-                  "example": 0,
-                  "type": "integer"
-                },
-                "data": {
-                  "properties": {
-                    "analysis_run_id": {
-                      "type": "string"
-                    },
-                    "artifact_refs": {
-                      "items": {
-                        "properties": {
-                          "artifact_id": {
-                            "type": "string"
-                          },
-                          "type": {
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "artifact_id",
-                          "type"
-                        ],
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "data_snapshot_id": {
-                      "type": "string"
-                    },
-                    "quality_status": {
-                      "type": "string"
-                    },
-                    "report_readiness": {
-                      "properties": {
-                        "enabled_scenarios": {
-                          "items": {
-                            "type": "string"
-                          },
-                          "type": "array"
-                        },
-                        "missing_required_fields": {
-                          "items": {
-                            "type": "string"
-                          },
-                          "type": "array"
-                        },
-                        "ready": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "ready",
-                        "missing_required_fields",
-                        "enabled_scenarios"
-                      ],
-                      "type": "object"
-                    },
-                    "status": {
-                      "type": "string"
-                    },
-                    "summary": {
-                      "additionalProperties": {},
-                      "type": "object"
-                    },
-                    "verified_conclusions": {
-                      "items": {
-                        "additionalProperties": {},
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "warnings": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
-                    }
-                  },
-                  "type": "object"
-                },
-                "msg": {
-                  "description": "business message",
-                  "example": "ok",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "schemes": [
-          "https"
-        ],
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "summary": "增量刷新数据并重算受影响阶段",
-        "tags": [
-          "plugins/crypto_tracing/v1/crypto_tracing"
-        ]
-      }
-    },
-    "/api/v1/crypto_tracing/analysis-runs/{run_id}/resume": {
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "接口权限编码:v1:crypto_tracing:analysisResume",
-        "operationId": "plugins/crypto_tracing/v1/CryptoTracingAnalysisResume",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "run_id",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "properties": {
-                "conversation_id": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "conversation_id"
-              ],
-              "type": "object"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "properties": {
-                "code": {
-                  "description": "business code",
-                  "example": 0,
-                  "type": "integer"
-                },
-                "data": {
-                  "properties": {
-                    "analysis_run_id": {
-                      "type": "string"
-                    },
-                    "artifact_refs": {
-                      "items": {
-                        "properties": {
-                          "artifact_id": {
-                            "type": "string"
-                          },
-                          "type": {
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "artifact_id",
-                          "type"
-                        ],
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "data_snapshot_id": {
-                      "type": "string"
-                    },
-                    "quality_status": {
-                      "type": "string"
-                    },
-                    "report_readiness": {
-                      "properties": {
-                        "enabled_scenarios": {
-                          "items": {
-                            "type": "string"
-                          },
-                          "type": "array"
-                        },
-                        "missing_required_fields": {
-                          "items": {
-                            "type": "string"
-                          },
-                          "type": "array"
-                        },
-                        "ready": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "ready",
-                        "missing_required_fields",
-                        "enabled_scenarios"
-                      ],
-                      "type": "object"
-                    },
-                    "status": {
-                      "type": "string"
-                    },
-                    "summary": {
-                      "additionalProperties": {},
-                      "type": "object"
-                    },
-                    "verified_conclusions": {
-                      "items": {
-                        "additionalProperties": {},
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "warnings": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
-                    }
-                  },
-                  "type": "object"
-                },
-                "msg": {
-                  "description": "business message",
-                  "example": "ok",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "schemes": [
-          "https"
-        ],
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "summary": "恢复中断的分析运行",
-        "tags": [
-          "plugins/crypto_tracing/v1/crypto_tracing"
-        ]
-      }
-    },
-    "/api/v1/crypto_tracing/artifacts/{artifact_id}": {
-      "get": {
-        "description": "接口权限编码:v1:crypto_tracing:artifactGet",
-        "operationId": "plugins/crypto_tracing/v1/CryptoTracingArtifactGet",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "conversation_id",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "in": "path",
-            "name": "artifact_id",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "properties": {
-                "code": {
-                  "description": "business code",
-                  "example": 0,
-                  "type": "integer"
-                },
-                "data": {
-                  "properties": {
-                    "artifact_id": {
-                      "type": "string"
-                    },
-                    "artifact_type": {
-                      "type": "string"
-                    },
-                    "note": {
-                      "type": "string"
-                    },
-                    "object_uri": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
-                },
-                "msg": {
-                  "description": "business message",
-                  "example": "ok",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "schemes": [
-          "https"
-        ],
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "summary": "获取图谱、报告或证据包产物引用",
-        "tags": [
-          "plugins/crypto_tracing/v1/crypto_tracing"
-        ]
-      }
-    },
-    "/api/v1/crypto_tracing/cases/intake": {
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "接口权限编码:v1:crypto_tracing:caseIntake",
-        "operationId": "plugins/crypto_tracing/v1/CryptoTracingCaseIntake",
-        "parameters": [
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "properties": {
-                "conversation_id": {
-                  "type": "string"
-                },
-                "extracted_slots": {
-                  "properties": {
-                    "address_roles": {
-                      "additionalProperties": {
-                        "type": "string"
-                      },
-                      "type": "object"
-                    },
-                    "analysis_intent": {
-                      "type": "string"
-                    },
-                    "chain": {
-                      "type": "string"
-                    },
-                    "direction": {
-                      "type": "string"
-                    },
-                    "max_hops": {
-                      "type": "integer"
-                    },
-                    "relationship_analysis": {
-                      "type": "boolean"
-                    },
-                    "report_requested": {
-                      "type": "boolean"
-                    },
-                    "seed_addresses": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
-                    },
-                    "seed_transactions": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
-                    },
-                    "service_exit_tracing": {
-                      "type": "boolean"
-                    },
-                    "time_range": {
-                      "properties": {
-                        "end": {
-                          "type": "string"
-                        },
-                        "start": {
-                          "type": "string"
-                        }
-                      },
-                      "type": "object"
-                    },
-                    "token": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
-                },
-                "raw_prompt": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "conversation_id",
-                "raw_prompt",
-                "extracted_slots"
-              ],
-              "type": "object"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "properties": {
-                "code": {
-                  "description": "business code",
-                  "example": 0,
-                  "type": "integer"
-                },
-                "data": {
-                  "properties": {
-                    "can_continue": {
-                      "type": "boolean"
-                    },
-                    "case_id": {
-                      "type": "string"
-                    },
-                    "missing_slots": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
-                    },
-                    "questions": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
-                    }
-                  },
-                  "type": "object"
-                },
-                "msg": {
-                  "description": "business message",
-                  "example": "ok",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "schemes": [
-          "https"
-        ],
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "summary": "新建案件或补充案件输入",
-        "tags": [
-          "plugins/crypto_tracing/v1/crypto_tracing"
-        ]
-      }
-    },
-    "/api/v1/crypto_tracing/context": {
-      "get": {
-        "description": "接口权限编码:v1:crypto_tracing:context",
-        "operationId": "plugins/crypto_tracing/v1/CryptoTracingContext",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "conversation_id",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "properties": {
-                "code": {
-                  "description": "business code",
-                  "example": 0,
-                  "type": "integer"
-                },
-                "data": {
-                  "properties": {
-                    "active_analysis_run_id": {
-                      "type": "string"
-                    },
-                    "active_analysis_run_status": {
-                      "type": "string"
-                    },
-                    "case_id": {
-                      "type": "string"
-                    },
-                    "case_status": {
-                      "type": "string"
-                    },
-                    "conversation_id": {
-                      "type": "string"
-                    },
-                    "current_data_snapshot_id": {
-                      "type": "string"
-                    },
-                    "latest_completed_analysis_run_id": {
-                      "type": "string"
-                    },
-                    "permissions": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
-                    },
-                    "plugin": {
-                      "type": "string"
-                    },
-                    "turn_id": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
-                },
-                "msg": {
-                  "description": "business message",
-                  "example": "ok",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "schemes": [
-          "https"
-        ],
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "summary": "获取当前对话、案件与权限上下文",
-        "tags": [
-          "plugins/crypto_tracing/v1/crypto_tracing"
-        ]
-      }
-    },
-    "/api/v1/crypto_tracing/reports": {
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "接口权限编码:v1:crypto_tracing:reportGenerate",
-        "operationId": "plugins/crypto_tracing/v1/CryptoTracingReportGenerate",
-        "parameters": [
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "properties": {
-                "analysis_run_id": {
-                  "type": "string"
-                },
-                "conversation_id": {
-                  "type": "string"
-                },
-                "data_snapshot_id": {
-                  "type": "string"
-                },
-                "output_formats": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                "template_type": {
-                  "type": "string"
-                },
-                "template_version": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "conversation_id",
-                "analysis_run_id",
-                "data_snapshot_id",
-                "template_type",
-                "template_version",
-                "output_formats"
-              ],
-              "type": "object"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "properties": {
-                "code": {
-                  "description": "business code",
-                  "example": 0,
-                  "type": "integer"
-                },
-                "data": {
-                  "properties": {
-                    "artifacts": {
-                      "items": {
-                        "properties": {
-                          "artifact_id": {
-                            "type": "string"
-                          },
-                          "type": {
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "artifact_id",
-                          "type"
-                        ],
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "data_snapshot_id": {
-                      "type": "string"
-                    },
-                    "payload_hash": {
-                      "type": "string"
-                    },
-                    "report_id": {
-                      "type": "string"
-                    },
-                    "report_version": {
-                      "type": "integer"
-                    },
-                    "template_version": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
-                },
-                "msg": {
-                  "description": "business message",
-                  "example": "ok",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "schemes": [
-          "https"
-        ],
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "summary": "基于固定快照生成报告",
-        "tags": [
-          "plugins/crypto_tracing/v1/crypto_tracing"
-        ]
-      }
-    },
-    "/api/v1/crypto_tracing/snapshots/{snapshot_id}": {
-      "get": {
-        "description": "接口权限编码:v1:crypto_tracing:snapshotGet",
-        "operationId": "plugins/crypto_tracing/v1/CryptoTracingSnapshotGet",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "conversation_id",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "in": "path",
-            "name": "snapshot_id",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "properties": {
-                "code": {
-                  "description": "business code",
-                  "example": 0,
-                  "type": "integer"
-                },
-                "data": {
-                  "properties": {
-                    "case_id": {
-                      "type": "string"
-                    },
-                    "coverage_json": {
-                      "additionalProperties": {},
-                      "type": "object"
-                    },
-                    "coverage_status": {
-                      "type": "string"
-                    },
-                    "end_block": {
-                      "type": "integer"
-                    },
-                    "quality_status": {
-                      "type": "string"
-                    },
-                    "snapshot_block": {
-                      "type": "integer"
-                    },
-                    "snapshot_id": {
-                      "type": "string"
-                    },
-                    "snapshot_time": {
-                      "type": "string"
-                    },
-                    "start_block": {
-                      "type": "integer"
-                    }
-                  },
-                  "type": "object"
-                },
-                "msg": {
-                  "description": "business message",
-                  "example": "ok",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "schemes": [
-          "https"
-        ],
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "summary": "读取固定数据快照摘要",
-        "tags": [
-          "plugins/crypto_tracing/v1/crypto_tracing"
-        ]
-      }
-    },
-    "/api/v1/crypto_tracing/version": {
-      "get": {
-        "description": "接口权限编码:version:version",
-        "operationId": "plugins/crypto_tracing/versionVersion",
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "properties": {
-                "code": {
-                  "description": "business code",
-                  "example": 0,
-                  "type": "integer"
-                },
-                "data": {
-                  "properties": {
-                    "commit": {
-                      "type": "string"
-                    },
-                    "date": {
-                      "type": "string"
-                    },
-                    "goVersion": {
-                      "type": "string"
-                    },
-                    "version": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
-                },
-                "msg": {
-                  "description": "business message",
-                  "example": "ok",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "schemes": [
-          "https"
-        ],
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "summary": "Version",
-        "tags": [
-          "plugins/crypto_tracing/version"
         ]
       }
     },
@@ -3133,6 +1649,308 @@
         "summary": "Add",
         "tags": [
           "v1/manage/user"
+        ]
+      }
+    },
+    "/api/v1/manage/agent/skills": {
+      "get": {
+        "description": "接口权限编码:v1:manage:agent:listSkills",
+        "operationId": "v1/Manage/AgentListSkills",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "properties": {
+                "skills": {
+                  "items": {
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "ListSkills",
+        "tags": [
+          "v1/manage/agent"
+        ]
+      }
+    },
+    "/api/v1/manage/agent/skills/upload": {
+      "post": {
+        "consumes": [
+          "application/x-www-form-urlencoded"
+        ],
+        "description": "接口权限编码:v1:manage:agent:uploadSkill",
+        "operationId": "v1/Manage/AgentUploadSkill",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "UploadSkill",
+        "tags": [
+          "v1/manage/agent"
+        ]
+      }
+    },
+    "/api/v1/manage/agent/skills/{skill_name}": {
+      "get": {
+        "description": "接口权限编码:v1:manage:agent:skillDetail",
+        "operationId": "v1/Manage/AgentSkillDetail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "skill_name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "allowEmptyValue": true,
+            "in": "query",
+            "name": "file",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "properties": {
+                "content": {
+                  "type": "string"
+                },
+                "currentFile": {
+                  "type": "string"
+                },
+                "files": {
+                  "items": {
+                    "properties": {
+                      "children": {
+                        "items": {
+                          "properties": {
+                            "children": {
+                              "items": {
+                                "type": "object"
+                              },
+                              "type": "array"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "path": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "enum": [
+                                "file",
+                                "directory"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "path",
+                            "type"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "path": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "enum": [
+                          "file",
+                          "directory"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "path",
+                      "type"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "skill": {
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "SkillDetail",
+        "tags": [
+          "v1/manage/agent"
+        ]
+      }
+    },
+    "/api/v1/manage/agent/skills/{skill_name}/delete": {
+      "post": {
+        "consumes": [
+          "application/x-www-form-urlencoded"
+        ],
+        "description": "接口权限编码:v1:manage:agent:deleteSkill",
+        "operationId": "v1/Manage/AgentDeleteSkill",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "skill_name",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object"
+            }
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "DeleteSkill",
+        "tags": [
+          "v1/manage/agent"
+        ]
+      }
+    },
+    "/api/v1/manage/agent/skills/{skill_name}/file": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "接口权限编码:v1:manage:agent:updateSkillFile",
+        "operationId": "v1/Manage/AgentUpdateSkillFile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "skill_name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "properties": {
+                "content": {
+                  "type": "string"
+                },
+                "file": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file",
+                "content"
+              ],
+              "type": "object"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object"
+            }
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "UpdateSkillFile",
+        "tags": [
+          "v1/manage/agent"
         ]
       }
     },

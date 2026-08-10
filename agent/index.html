@@ -6,9 +6,89 @@
     <meta name="theme-color" content="#f7f7f5" />
     <link rel="icon" type="image/png" href="/agentrazor-icon.png" />
     <title>AgentRazor</title>
+    <style>
+      :root {
+        color: #202124;
+        background: #f4f8fb;
+      }
+      html, body, #app {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        overflow: hidden;
+      }
+      .app-boot-screen {
+        display: grid;
+        min-height: 100vh;
+        min-height: 100dvh;
+        place-items: center;
+        background: radial-gradient(circle at 50% 28%, #ffffff 0, #f4f8fb 48%, #eaf3f7 100%);
+        color: #42545d;
+        font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+      .app-boot-card {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        opacity: 0;
+        transform: translateY(8px);
+        animation: app-boot-in 260ms ease forwards;
+      }
+      .app-boot-logo {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        box-shadow: 0 12px 32px rgb(31 88 112 / 16%);
+      }
+      .app-boot-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .app-boot-title {
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1;
+      }
+      .app-boot-text {
+        color: #7a8b93;
+        font-size: 13px;
+      }
+      @keyframes app-boot-in {
+        to { opacity: 1; transform: translateY(0); }
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          color: #e8edf2;
+          background: #101419;
+        }
+        .app-boot-screen {
+          background: radial-gradient(circle at 50% 28%, #202a34 0, #121820 48%, #0b0f14 100%);
+          color: #e8edf2;
+        }
+        .app-boot-logo {
+          box-shadow: 0 14px 38px rgb(0 0 0 / 34%);
+        }
+        .app-boot-text {
+          color: #9caab6;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <div class="app-boot-screen" aria-label="正在加载 AgentRazor">
+        <div class="app-boot-card">
+          <img class="app-boot-logo" src="/agentrazor-icon.png" alt="" />
+          <div class="app-boot-copy">
+            <div class="app-boot-title">AgentRazor</div>
+            <div class="app-boot-text">正在恢复会话</div>
+          </div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
