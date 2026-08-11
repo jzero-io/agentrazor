@@ -2952,13 +2952,11 @@ watch([settingsVisible, settingsSection], () => {
           @click="toggleRightPanel"
         >
           <template #icon><Icon icon="solar:sidebar-minimalistic-outline" /></template>
-          <span class="pinned-summary-count">{{ pinnedSummaryWorkspaces.length }}</span>
         </n-button>
 
         <aside v-if="pinnedSummaryOpen" class="pinned-summary-panel">
           <header>
             <strong>Pinned summary</strong>
-            <span>{{ pinnedSummaryWorkspaces.length }}</span>
           </header>
           <button
             v-for="workspace in pinnedSummaryWorkspaces"
@@ -3198,7 +3196,6 @@ watch([settingsVisible, settingsSection], () => {
                 @click="toggleRightPanel"
               >
                 <template #icon><Icon icon="solar:sidebar-minimalistic-outline" /></template>
-                <span class="pinned-summary-count">{{ pinnedSummaryWorkspaces.length }}</span>
               </n-button>
             </div>
           </header>
