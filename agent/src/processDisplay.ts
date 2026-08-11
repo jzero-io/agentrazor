@@ -141,7 +141,7 @@ export function activityDetail(item: ThreadItem) {
 export function processDisplayItems(turn: Turn, streaming = false): ProcessDisplayItem[] {
   const active = streaming ? turnActiveProcessItem(turn) : null;
   const visibleItems = turnDisplayItems(turn).filter(item => item.type !== 'reasoning') as DisplayThreadItem[];
-  const items = streaming ? compactStreamingProcessItems(visibleItems) : groupCompletedSearchItems(visibleItems);
+  const items = compactProcessItemsByStage(visibleItems);
   return items.map(item => {
     const live = Boolean(active && (item.id === active.id || item.memberIds?.includes(active.id)));
     const skillGroup = item.type === 'skillReadGroup';
@@ -423,7 +423,7 @@ function compactProcessStage(items: ThreadItem[]): DisplayThreadItem[] {
   return skillGroup ? [skillGroup] : [];
 }
 
-function compactStreamingProcessItems(items: ThreadItem[]): DisplayThreadItem[] {
+function compactProcessItemsByStage(items: ThreadItem[]): DisplayThreadItem[] {
   const result: ThreadItem[] = [];
   let stageItems: ThreadItem[] = [];
   const flushStage = () => {
@@ -440,26 +440,5 @@ function compactStreamingProcessItems(items: ThreadItem[]): DisplayThreadItem[] 
     stageItems.push(item);
   }
   flushStage();
-  return result;
-}
-
-function groupCompletedSearchItems(items: DisplayThreadItem[]) {
-  const result: DisplayThreadItem[] = [];
-  let searchItems: DisplayThreadItem[] = [];
-  const flushSearch = () => {
-    const group = createWebSearchGroup(searchItems);
-    if (group) result.push(group);
-    searchItems = [];
-  };
-
-  for (const item of items) {
-    if (isSearchPageItem(item)) {
-      searchItems.push(item);
-      continue;
-    }
-    flushSearch();
-    result.push(item);
-  }
-  flushSearch();
   return result;
 }
