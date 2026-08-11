@@ -313,9 +313,12 @@ export const conversationApi = {
             const sepLength = buffer.startsWith('\r\n', sep) ? 4 : 2;
             const raw = buffer.slice(0, sep);
             buffer = buffer.slice(sep + sepLength);
-            const dataLine = raw.split('\n').find(line => line.startsWith('data:'));
-            if (!dataLine) continue;
-            const payload = dataLine.slice(5).trim();
+            const payload = raw
+              .split(/\r?\n/)
+              .filter(line => line.startsWith('data:'))
+              .map(line => line.slice(5).trimStart())
+              .join('\n')
+              .trim();
             if (!payload) continue;
             try {
               const eventResponse = JSON.parse(payload) as EventsResponse;

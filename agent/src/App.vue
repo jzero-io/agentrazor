@@ -214,7 +214,6 @@ const appearanceOptions: Array<{ key: Appearance; label: string; icon: string }>
 ];
 const streamClosers = new Map<string, () => void>();
 let conversationSelectionToken = 0;
-let creatingConversationTask: Promise<void> | null = null;
 const draftConversationGroupId = ref('');
 
 const themeOverrides = {
@@ -230,11 +229,20 @@ const themeOverrides = {
   }
 };
 
+function conversationCreatedAtMs(item: Conversation) {
+  const time = Date.parse(item.createdAt || '');
+  return Number.isFinite(time) ? time : 0;
+}
+
+function sortConversationsByCreatedAt(items: Conversation[]) {
+  return [...items].sort((left, right) => conversationCreatedAtMs(right) - conversationCreatedAtMs(left));
+}
+
 const visibleConversations = computed(() =>
-  conversations.value.filter(item => item.status !== 'archived')
+  sortConversationsByCreatedAt(conversations.value.filter(item => item.status !== 'archived'))
 );
 const archivedConversations = computed(() =>
-  conversations.value.filter(item => item.status === 'archived')
+  sortConversationsByCreatedAt(conversations.value.filter(item => item.status === 'archived'))
 );
 const pinnedConversations = computed(() =>
   visibleConversations.value.filter(item => Boolean(item.pinnedAt))
@@ -1237,7 +1245,6 @@ async function sendMessage() {
   let conversationId = selectedId.value;
 
   try {
-    if (creatingConversationTask) await creatingConversationTask;
     conversationId = selectedId.value;
     if (!conversationId) return;
 
@@ -1425,6 +1432,12 @@ function normalizeStreamingItem(existing: ThreadItem | undefined, incoming: Thre
     next.phase = existing?.phase ?? 'commentary';
   }
   return next;
+}
+
+function streamAgentMessagePhase(params: { phase?: string | null; item?: ThreadItem } | undefined, existing?: ThreadItem) {
+  if (params?.phase) return params.phase;
+  if (params?.item?.phase) return params.item.phase;
+  return existing?.phase ?? 'commentary';
 }
 
 function upsertStreamingItem(sessionId: string, item: ThreadItem) {
@@ -1709,15 +1722,15 @@ async function handleStreamEvent(event: StreamEvent) {
   }
 
   if (event.type === 'codex.item.agentMessage.delta') {
-    const params = (event.data as { params?: { delta?: string; itemId?: string } } | undefined)?.params;
+    const params = (event.data as { params?: { delta?: string; itemId?: string; phase?: string | null; item?: ThreadItem } } | undefined)?.params;
     const delta = params?.delta ?? '';
     if (!delta) return;
-    const itemId = params?.itemId || `stream-agent-${event.runId || 'active'}`;
+    const itemId = params?.itemId || params?.item?.id || `stream-agent-${event.runId || 'active'}`;
     const existingItem = findStreamingItem(event.sessionId, itemId);
-    const phase = existingItem?.phase ?? 'commentary';
+    const phase = streamAgentMessagePhase(params, existingItem);
     if (phase !== 'final_answer') markProcessActive(event.sessionId);
     const item = ensureStreamingItem(event.sessionId, itemId, 'agentMessage');
-    if (item.phase === undefined || item.phase === null) item.phase = phase;
+    item.phase = phase;
     item.text = `${item.text || ''}${delta}`;
     publishActiveTurn(event.sessionId);
     if (item.phase === 'final_answer' && item.text) activeTurnResultSeenByConversation.set(event.sessionId, true);
