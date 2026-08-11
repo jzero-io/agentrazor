@@ -132,7 +132,7 @@ func (h *EventHub) Subscribe(sessionID string, afterID int64) *Subscription {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.closed {
-		return &Subscription{Events: make(chan StreamEvent)}
+		return closedSubscription()
 	}
 
 	stream := h.streamLocked(sessionID)
@@ -161,19 +161,37 @@ func (h *EventHub) Subscribe(sessionID string, afterID int64) *Subscription {
 			h.mu.Lock()
 			defer h.mu.Unlock()
 			if current, ok := h.streams[sessionID]; ok && current == stream {
-				delete(current.subscribers, subID)
+				if subscriber, ok := current.subscribers[subID]; ok {
+					delete(current.subscribers, subID)
+					close(subscriber)
+				}
 				current.lastActive = time.Now().UTC()
 			}
 		},
 	}
 }
 
+func closedSubscription() *Subscription {
+	channel := make(chan StreamEvent)
+	close(channel)
+	return &Subscription{Events: channel}
+}
+
+func closeEventStreamSubscribers(stream *eventStream) {
+	for id, subscriber := range stream.subscribers {
+		delete(stream.subscribers, id)
+		close(subscriber)
+	}
+}
+
 // Release drops replay history for a conversation that has been permanently
-// deleted. Existing subscribers remain safe: their channels are owned by the
-// subscription and will simply receive no further events for this session.
+// deleted and closes live subscribers so SSE handlers can exit promptly.
 func (h *EventHub) Release(sessionID string) {
 	h.mu.Lock()
-	delete(h.streams, sessionID)
+	if stream, ok := h.streams[sessionID]; ok {
+		closeEventStreamSubscribers(stream)
+		delete(h.streams, sessionID)
+	}
 	h.mu.Unlock()
 }
 
@@ -181,6 +199,9 @@ func (h *EventHub) Close() {
 	h.stopOnce.Do(func() { close(h.stop) })
 	h.mu.Lock()
 	h.closed = true
+	for _, stream := range h.streams {
+		closeEventStreamSubscribers(stream)
+	}
 	h.streams = make(map[string]*eventStream)
 	h.mu.Unlock()
 }

@@ -267,6 +267,9 @@ func (s *ThreadService) Cancel(threadID string) error {
 		return ErrServiceStopped
 	}
 	run, ok := s.runs[threadID]
+	if ok {
+		delete(s.runs, threadID)
+	}
 	s.mu.Unlock()
 	if ok {
 		run.cancel()

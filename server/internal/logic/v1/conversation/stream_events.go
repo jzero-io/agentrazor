@@ -64,7 +64,10 @@ func (l *StreamEvents) stream(req *types.EventsRequest, client chan<- *types.Eve
 		select {
 		case <-l.ctx.Done():
 			return nil
-		case event := <-subscription.Events:
+		case event, ok := <-subscription.Events:
+			if !ok {
+				return nil
+			}
 			response, err := toEventsResponse(event)
 			if err != nil {
 				return err

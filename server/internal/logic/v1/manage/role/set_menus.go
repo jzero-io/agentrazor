@@ -89,11 +89,9 @@ func (l *SetMenus) SetMenus(req *types.SetMenusRequest) (resp *types.SetMenusRes
 	// add casbin_rule
 	var newPolicies [][]string
 	// get menu perms
-	menus, err := l.svcCtx.Model.ManageMenu.FindByCondition(l.ctx, nil, condition.New(condition.Condition{
-		Field:    manage_menu.Uuid,
-		Operator: condition.In,
-		Value:    req.MenuUuids,
-	})...)
+	menus, err := l.svcCtx.Model.ManageMenu.FindByCondition(l.ctx, nil, condition.NewChain().
+		In(manage_menu.Uuid, req.MenuUuids).
+		Build()...)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +105,10 @@ func (l *SetMenus) SetMenus(req *types.SetMenusRequest) (resp *types.SetMenusRes
 
 	var b bool
 	if len(newPolicies) > 0 {
-		b, _ = l.svcCtx.CasbinEnforcer.AddPolicies(newPolicies)
+		b, err = l.svcCtx.CasbinEnforcer.AddPolicies(newPolicies)
+		if err != nil {
+			return nil, errors.New("fail to add policies: " + err.Error())
+		}
 		if !b {
 			return nil, errors.New("fail to add policies")
 		}
