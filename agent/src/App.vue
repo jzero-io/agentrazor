@@ -150,7 +150,6 @@ const activeTurnsByConversation = reactive(new Map<string, Turn>());
 const activeTurnResultSeenByConversation = reactive(new Map<string, boolean>());
 const activeTurnStartedAtByConversation = reactive(new Map<string, number>());
 const processStartedAtByConversation = reactive(new Map<string, number>());
-const processContentRevealAtByConversation = reactive(new Map<string, number>());
 const processActiveConversationIds = reactive(new Set<string>());
 const nowMs = ref(Date.now());
 const stopping = ref(false);
@@ -582,10 +581,17 @@ function deleteGroup(group: ConversationGroup) {
 }
 
 async function updateConversationGroup(item: Conversation, groupId: string) {
+  const previousGroupId = item.groupId || '';
+  const applyGroup = (conversation: Conversation) => {
+    replaceConversation({ ...conversation, groupId: groupId || undefined });
+  };
+
+  applyGroup(item);
   try {
     const updated = await conversationApi.update(item.id, { groupId });
-    replaceConversation(updated);
+    applyGroup({ ...item, ...updated });
   } catch (error) {
+    replaceConversation({ ...item, groupId: previousGroupId || undefined });
     showError(error);
   }
 }
@@ -624,11 +630,15 @@ function updateDragGhost(x: number, y: number) {
 function updateDropTarget(x: number, y: number) {
   const zone = document.elementFromPoint(x, y)
     ?.closest?.('.conversation-drop-zone') as HTMLElement | null | undefined;
-  conversationDropTarget.value = zone ? String(zone.dataset.groupId ?? '') : '';
+  conversationDropTarget.value = zone ? String(zone.dataset.dropTarget || zone.dataset.groupId || '') : '';
+}
+
+function dropTargetGroupId(target: string) {
+  return target === CONVERSATION_LIST_DROP_TARGET ? '' : target;
 }
 
 function finishDrag(item: Conversation) {
-  const targetGroupId = conversationDropTarget.value;
+  const target = conversationDropTarget.value;
   conversationDropTarget.value = '';
   draggedConversationId.value = '';
   if (dragGhostEl) {
@@ -636,11 +646,15 @@ function finishDrag(item: Conversation) {
     dragGhostEl = null;
   }
   document.body.classList.remove('is-dragging');
-  if (!targetGroupId && targetGroupId !== '') return;
+  if (!target) return;
+
+  const targetGroupId = dropTargetGroupId(target);
   if ((item.groupId || '') === targetGroupId) return;
   if (targetGroupId) {
     const group = conversationGroups.value.find(candidate => candidate.id === targetGroupId);
     if (group) group.collapsed = false;
+  } else {
+    conversationsExpanded.value = true;
   }
   void updateConversationGroup(item, targetGroupId);
 }
@@ -898,12 +912,6 @@ function isRestoredRunningTurn(turn: Turn) {
   return Boolean((turn as Turn & { restoredRunning?: boolean }).restoredRunning);
 }
 
-function processContentReady() {
-  if (!selectedId.value) return false;
-  const revealAt = processContentRevealAtByConversation.get(selectedId.value);
-  return revealAt === undefined || nowMs.value >= revealAt;
-}
-
 function hasVisibleProcessItems(turn: Turn) {
   return turnProcessItems(turn).length > 0;
 }
@@ -942,7 +950,7 @@ function rawStreamingProcessDisplays(turn: Turn) {
 function createStreamingTurnView(turn: Turn, userItems: ThreadItem[], resultItems: ThreadItem[]): TurnView {
   const rawProcessDisplays = rawStreamingProcessDisplays(turn);
   const hasProcessShell = isRestoredRunningTurn(turn) || hasActiveProcessState() || rawProcessDisplays.length > 0;
-  const processDisplays = hasProcessShell && processContentReady() ? rawProcessDisplays : [];
+  const processDisplays = hasProcessShell ? rawProcessDisplays : [];
   const hasResult = resultItems.some(item =>
     item.type === 'imageGeneration'
     || item.type === 'agentMessage' && Boolean(item.text)
@@ -1120,7 +1128,6 @@ function resetActiveTurn(options: { clearCache?: boolean } = {}) {
   if (options.clearCache && selectedId.value) {
     stopTurnTimer(selectedId.value);
     processStartedAtByConversation.delete(selectedId.value);
-    processContentRevealAtByConversation.delete(selectedId.value);
     processActiveConversationIds.delete(selectedId.value);
     activeTurnsByConversation.delete(selectedId.value);
     activeTurnResultSeenByConversation.delete(selectedId.value);
@@ -1562,10 +1569,8 @@ function startProcessTimer(sessionId: string, startedAt?: string) {
   if (!sessionId) return;
   processActiveConversationIds.add(sessionId);
   if (processStartedAtByConversation.has(sessionId)) return;
-  const now = Date.now();
   const parsed = startedAt ? Date.parse(startedAt) : Number.NaN;
-  processStartedAtByConversation.set(sessionId, Number.isFinite(parsed) ? parsed : now);
-  processContentRevealAtByConversation.set(sessionId, now + 350);
+  processStartedAtByConversation.set(sessionId, Number.isFinite(parsed) ? parsed : Date.now());
   ensureTurnTicker();
 }
 
@@ -1574,20 +1579,13 @@ function restoreProcessState(sessionId: string, turn: Turn, startedAt?: string) 
   startProcessTimer(sessionId, startedAt || turn.startedAt);
 }
 
-async function enterProcessState(sessionId: string, selected: boolean) {
-  const wasActive = processActiveConversationIds.has(sessionId);
+function markProcessActive(sessionId: string) {
   startProcessTimer(sessionId);
-  if (wasActive) return;
-  publishActiveTurn(sessionId);
-  if (!selected) return;
-  await nextTick();
-  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 }
 
 function resetProcessTimer(sessionId: string) {
   if (!sessionId) return;
   processStartedAtByConversation.delete(sessionId);
-  processContentRevealAtByConversation.delete(sessionId);
   processActiveConversationIds.delete(sessionId);
 }
 
@@ -1595,7 +1593,6 @@ function stopTurnTimer(sessionId: string) {
   const startedAt = activeTurnStartedAtByConversation.get(sessionId);
   activeTurnStartedAtByConversation.delete(sessionId);
   processStartedAtByConversation.delete(sessionId);
-  processContentRevealAtByConversation.delete(sessionId);
   processActiveConversationIds.delete(sessionId);
   stopTurnTickerIfIdle();
   return startedAt ? Math.max(0, Date.now() - startedAt) : undefined;
@@ -1604,7 +1601,6 @@ function stopTurnTimer(sessionId: string) {
 function stopAllTurnTimers() {
   activeTurnStartedAtByConversation.clear();
   processStartedAtByConversation.clear();
-  processContentRevealAtByConversation.clear();
   processActiveConversationIds.clear();
   if (turnTimer !== undefined) window.clearInterval(turnTimer);
   turnTimer = undefined;
@@ -1719,7 +1715,7 @@ async function handleStreamEvent(event: StreamEvent) {
     const itemId = params?.itemId || `stream-agent-${event.runId || 'active'}`;
     const existingItem = findStreamingItem(event.sessionId, itemId);
     const phase = existingItem?.phase ?? 'commentary';
-    if (phase !== 'final_answer') await enterProcessState(event.sessionId, isSelectedConversation);
+    if (phase !== 'final_answer') markProcessActive(event.sessionId);
     const item = ensureStreamingItem(event.sessionId, itemId, 'agentMessage');
     if (item.phase === undefined || item.phase === null) item.phase = phase;
     item.text = `${item.text || ''}${delta}`;
@@ -1733,7 +1729,7 @@ async function handleStreamEvent(event: StreamEvent) {
     const params = (event.data as { params?: { item?: ThreadItem } } | undefined)?.params;
     const streamedItem = params?.item as ThreadItem | undefined;
     if (streamedItem) {
-      if (isVisibleProcessStreamItem(streamedItem)) await enterProcessState(event.sessionId, isSelectedConversation);
+      if (isVisibleProcessStreamItem(streamedItem)) markProcessActive(event.sessionId);
       upsertStreamingItem(event.sessionId, { ...streamedItem, streamStatus: 'running' });
       if (streamedItem.type === 'agentMessage' && streamedItem.phase === 'final_answer' && streamedItem.text) {
         activeTurnResultSeenByConversation.set(event.sessionId, true);
@@ -1747,7 +1743,7 @@ async function handleStreamEvent(event: StreamEvent) {
     const params = (event.data as { params?: { item?: ThreadItem } } | undefined)?.params;
     if (params?.item) {
       const completedItem = { ...(params.item as ThreadItem), streamStatus: 'completed' };
-      if (isVisibleProcessStreamItem(completedItem)) await enterProcessState(event.sessionId, isSelectedConversation);
+      if (isVisibleProcessStreamItem(completedItem)) markProcessActive(event.sessionId);
       upsertStreamingItem(event.sessionId, completedItem);
       if (completedItem.type === 'agentMessage' && completedItem.phase === 'final_answer' && completedItem.text) {
         activeTurnResultSeenByConversation.set(event.sessionId, true);
@@ -2448,7 +2444,7 @@ watch([settingsVisible, settingsSection], () => {
               <div
                 class="conversation-group conversation-list-group conversation-drop-zone"
                 :class="{ 'drag-over': conversationDropTarget === CONVERSATION_LIST_DROP_TARGET }"
-                data-group-id=""
+                :data-drop-target="CONVERSATION_LIST_DROP_TARGET"
               >
                 <div class="conversation-list-heading">
                   <button class="conversation-group-toggle" @click="conversationsExpanded = !conversationsExpanded">
