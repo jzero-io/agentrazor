@@ -258,7 +258,7 @@ export const conversationApi = {
       method: 'POST'
     });
   },
-  subscribe(id: string, afterId: number, onEvent: (event: StreamEvent) => void, onError: () => void) {
+  subscribe(id: string, afterId: number, onEvent: (event: StreamEvent) => void, onError: () => void, onReconnect?: () => void) {
     // EventSource 无法携带 Authorization 头，改用 fetch 流式读取 SSE，
     // 这样鉴权与其他接口保持一致（Bearer token 走 Authorization）。
     const controller = new AbortController();
@@ -272,6 +272,7 @@ export const conversationApi = {
       retried = true;
       await new Promise(resolve => setTimeout(resolve, 1000));
       if (refresh && !(await refreshAccessTokenOrExpire())) return false;
+      onReconnect?.();
       await connect();
       return true;
     };

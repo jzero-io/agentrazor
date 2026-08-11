@@ -29,6 +29,7 @@ type EventHandler func(map[string]any)
 type CodexAppServerOptions struct {
 	Binary             string
 	CodexHome          string
+	PluginsRoot        string
 	AgentrazorHome     string
 	Sandbox            string
 	DisableApps        bool
@@ -142,6 +143,9 @@ func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRun
 			return nil, fmt.Errorf("create Codex home: %w", err)
 		}
 		options.CodexHome = codexHome
+		if err := syncPluginSkills(options.PluginsRoot, options.CodexHome); err != nil {
+			return nil, fmt.Errorf("sync plugin skills: %w", err)
+		}
 	}
 	if options.AgentrazorHome == "" {
 		options.AgentrazorHome = "data/agentrazor-home"

@@ -18,6 +18,7 @@
     "@iconify/vue": "4.1.2",
     "highlight.js": "^11.11.1",
     "markdown-it": "^15.0.0",
+    "mermaid": "^11.16.1",
     "naive-ui": "2.40.1",
     "vue": "3.5.11"
   },

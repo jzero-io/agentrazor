@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type PropType } from 'vue';
+import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, onUpdated, reactive, ref, watch, type PropType } from 'vue';
 import { Icon } from '@iconify/vue';
 import MarkdownIt from 'markdown-it';
 import hljs from 'highlight.js/lib/common';
@@ -45,6 +45,7 @@ interface SidebarViewState {
 }
 
 interface TurnView {
+  renderKey: string;
   turn: Turn;
   userItems: ThreadItem[];
   resultItems: ThreadItem[];
@@ -53,6 +54,17 @@ interface TurnView {
   processSummary: string;
   showTailThinking: boolean;
   streaming: boolean;
+}
+
+interface WorkspaceDescriptor {
+  type: 'workspace';
+  title: string;
+  url: string;
+}
+
+interface ParsedAgentMessage {
+  markdown: string;
+  workspaces: WorkspaceDescriptor[];
 }
 
 const SIDEBAR_VIEW_KEY = 'agentrazor_sidebar_view';
@@ -104,6 +116,16 @@ markdown.renderer.rules.fence = (tokens, index) => {
   const token = tokens[index];
   const info = (token.info || '').trim();
   const lang = info.split(/\s+/)[0]?.toLowerCase() || '';
+  if (lang === 'mermaid') {
+    const source = markdown.utils.escapeHtml(token.content);
+    return [
+      `<div class="mermaid-block" data-mermaid-source="${source}">`,
+      mermaidCopyButtonHtml(),
+      '<div class="mermaid-placeholder">正在渲染 Mermaid 图表</div>',
+      `<pre class="mermaid-source"><code>${source}</code></pre>`,
+      '</div>'
+    ].join('');
+  }
   const label = lang ? hljs.getLanguage(lang)?.name || lang : 'text';
   let code = '';
   try {
@@ -125,6 +147,150 @@ function renderMarkdown(content: string) {
   return markdown.render(content);
 }
 
+let mermaidRenderSeq = 0;
+let mermaidModulePromise: Promise<typeof import('mermaid')> | undefined;
+
+function mermaidCopyButtonHtml() {
+  return '<button type="button" class="mermaid-copy-button" data-mermaid-copy>复制源码</button>';
+}
+
+function loadMermaid() {
+  if (!mermaidModulePromise) mermaidModulePromise = import('mermaid');
+  return mermaidModulePromise;
+}
+
+function currentMermaidTheme() {
+  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'default';
+}
+
+function initMermaid(instance: typeof import('mermaid')['default']) {
+  instance.initialize({
+    startOnLoad: false,
+    securityLevel: 'strict',
+    theme: currentMermaidTheme()
+  });
+}
+
+async function renderMermaidBlocks(root: HTMLElement | null) {
+  if (!root) return;
+  const theme = currentMermaidTheme();
+  const blocks = Array.from(root.querySelectorAll<HTMLElement>('.mermaid-block'));
+  if (!blocks.length) return;
+  const { default: mermaid } = await loadMermaid();
+  initMermaid(mermaid);
+  for (const block of blocks) {
+    const source = block.dataset.mermaidSource || '';
+    if (!source.trim()) continue;
+    if (block.dataset.renderedSource === source && block.dataset.renderedTheme === theme) continue;
+    block.dataset.renderedSource = source;
+    block.dataset.renderedTheme = theme;
+    block.classList.remove('is-error');
+    block.classList.add('is-rendering');
+    try {
+      const id = `agent-mermaid-${++mermaidRenderSeq}`;
+      const { svg } = await mermaid.render(id, source);
+      if (!block.isConnected) continue;
+      block.innerHTML = `${mermaidCopyButtonHtml()}<div class="mermaid-diagram">${svg}</div>`;
+      block.classList.remove('is-rendering');
+    } catch (error) {
+      if (!block.isConnected) continue;
+      block.classList.remove('is-rendering');
+      block.classList.add('is-error');
+      block.innerHTML = [
+        mermaidCopyButtonHtml(),
+        '<div class="mermaid-error">Mermaid 图表渲染失败</div>',
+        `<pre class="mermaid-source"><code>${markdown.utils.escapeHtml(source)}</code></pre>`
+      ].join('');
+    }
+  }
+}
+
+async function writeClipboardText(text: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  textarea.style.top = '0';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  const copied = document.execCommand('copy');
+  document.body.removeChild(textarea);
+  if (!copied) throw new Error('复制失败');
+}
+
+async function copyMermaidSource(event: MouseEvent) {
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  const button = target?.closest<HTMLButtonElement>('[data-mermaid-copy]');
+  if (!button) return;
+  const block = button.closest<HTMLElement>('.mermaid-block');
+  const source = block?.dataset.mermaidSource || '';
+  if (!source) return;
+  event.preventDefault();
+  event.stopPropagation();
+  try {
+    await writeClipboardText(source);
+    const previous = button.textContent || '复制源码';
+    button.textContent = '已复制';
+    window.setTimeout(() => {
+      if (button.isConnected) button.textContent = previous;
+    }, 1200);
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : '复制失败');
+  }
+}
+
+function parseAgentMessage(content: string, streaming: boolean): ParsedAgentMessage {
+  if (streaming) return { markdown: content, workspaces: [] };
+  const workspaces: WorkspaceDescriptor[] = [];
+  const markdown = content.replace(/```json\s*([\s\S]*?)```/gi, (block, raw: string) => {
+    try {
+      const value = JSON.parse(raw.trim()) as Partial<WorkspaceDescriptor>;
+      if (value.type !== 'workspace' || typeof value.title !== 'string' || typeof value.url !== 'string') return block;
+      workspaces.push({ type: 'workspace', title: value.title, url: value.url });
+      return '';
+    } catch {
+      return block;
+    }
+  });
+  return { markdown: markdown.trim(), workspaces };
+}
+
+function openWorkspace(workspace: WorkspaceDescriptor) {
+  if (!selectedId.value) return;
+  workspaceExpanded.value = false;
+  pinnedSummaryOpen.value = false;
+  activeWorkspace.value = workspace;
+  workspaceVisible.value = true;
+}
+
+function collapseWorkspace() {
+  workspaceExpanded.value = false;
+  workspaceVisible.value = false;
+}
+
+function toggleRightPanel() {
+  if (workspaceVisible.value || pinnedSummaryOpen.value) {
+    pinnedSummaryOpen.value = false;
+    collapseWorkspace();
+    return;
+  }
+  pinnedSummaryOpen.value = true;
+}
+
+function toggleWorkspaceExpanded() {
+  workspaceExpanded.value = !workspaceExpanded.value;
+}
+
+function openPinnedWorkspace(workspace: WorkspaceDescriptor) {
+  openWorkspace(workspace);
+}
+
+
 function loadSidebarViewState(): SidebarViewState {
   try {
     return JSON.parse(localStorage.getItem(SIDEBAR_VIEW_KEY) || '{}') as SidebarViewState;
@@ -136,6 +302,33 @@ const savedSidebarView = loadSidebarViewState();
 
 const conversations = ref<Conversation[]>([]);
 const selectedId = ref('');
+const mainPanel = ref<HTMLElement | null>(null);
+const workspaceWidth = ref<number | null>(null);
+const workspaceExpanded = ref(false);
+const pinnedSummaryOpen = ref(false);
+const workspacePanelStyle = computed(() => workspaceWidth.value
+  ? { '--workspace-width': `${workspaceWidth.value}px` }
+  : {});
+let workspaceResizeStart: { x: number; width: number } | null = null;
+const workspacesByConversation = reactive(new Map<string, WorkspaceDescriptor>());
+const workspaceVisibilityByConversation = reactive(new Map<string, boolean>());
+const workspaceVisible = computed({
+  get: () => Boolean(workspaceVisibilityByConversation.get(selectedId.value)),
+  set: visible => {
+    const conversationId = selectedId.value;
+    if (!conversationId) return;
+    workspaceVisibilityByConversation.set(conversationId, visible);
+  }
+});
+const activeWorkspace = computed<WorkspaceDescriptor | null>({
+  get: () => workspacesByConversation.get(selectedId.value) || null,
+  set: workspace => {
+    const conversationId = selectedId.value;
+    if (!conversationId) return;
+    if (workspace) workspacesByConversation.set(conversationId, workspace);
+    else workspacesByConversation.delete(conversationId);
+  }
+});
 const detail = ref<ConversationDetail | null>(null);
 const detailsByConversation = reactive(new Map<string, ConversationDetail>());
 const draftsByConversation = reactive(new Map<string, string>());
@@ -333,10 +526,19 @@ function setConversationDraft(conversationId: string, value: string) {
 const userMessages = computed(() =>
   (activeDetail.value?.turns || []).flatMap(turn => turn.items.filter(item => item.type === 'userMessage'))
 );
-const renderedTurns = computed(() => [
-  ...(activeDetail.value?.turns || []),
-  ...(currentStreamingTurn.value ? [currentStreamingTurn.value] : [])
-]);
+const renderedTurns = computed(() => normalizedRenderedTurns(activeDetail.value?.turns || [], currentStreamingTurn.value));
+const pinnedSummaryWorkspaces = computed(() => {
+  const byUrl = new Map<string, WorkspaceDescriptor>();
+  for (const turn of renderedTurns.value) {
+    for (const item of turn.items) {
+      if (item.type !== 'agentMessage' || !item.text) continue;
+      for (const workspace of parseAgentMessage(item.text, false).workspaces) {
+        byUrl.set(workspace.url, workspace);
+      }
+    }
+  }
+  return [...byUrl.values()];
+});
 const renderedTurnViews = computed(() => renderedTurns.value.map(createTurnView));
 const canSend = computed(() => Boolean(draft.value.trim() && selectedId.value && !creatingConversation.value && !sendingRequest.value && !isConversationRunning(selectedId.value)));
 const composerActionPending = computed(() => creatingConversation.value || sendingRequest.value || stopping.value);
@@ -464,12 +666,14 @@ function isConversationProcessing(item: Conversation) {
   return item.running || processingConversationIds.value.has(item.id);
 }
 
-function applyConversationList(next: Conversation[]) {
+function applyConversationList(next: Conversation[], preserveLocalProcessing = true) {
   const nextIds = new Set(next.map(item => item.id));
   const runningIds = new Set(next.filter(item => item.running).map(item => item.id));
-  for (const id of processingConversationIds.value) {
-    if (nextIds.has(id) && (streamClosers.has(id) || id === selectedId.value && sending.value)) {
-      runningIds.add(id);
+  if (preserveLocalProcessing) {
+    for (const id of processingConversationIds.value) {
+      if (nextIds.has(id) && cachedActiveTurn(id)) {
+        runningIds.add(id);
+      }
     }
   }
   processingConversationIds.value = runningIds;
@@ -506,9 +710,32 @@ function ensureConversationStream(id: string, afterId = 0) {
     id,
     afterId,
     event => void handleStreamEvent(event),
-    () => closeConversationStream(id)
+    () => {
+      closeConversationStream(id);
+      void reconcileConversationStream(id);
+    },
+    () => void reconcileConversationStream(id)
   );
   streamClosers.set(id, close);
+}
+
+async function reconcileConversationStream(id: string) {
+  if (!id || !currentUser.value) return;
+  await loadConversations(false, false);
+  const conversation = conversations.value.find(item => item.id === id);
+  if (conversation?.running) {
+    if (selectedId.value === id) await refreshDetail({ restoreActiveTurn: true });
+    return;
+  }
+
+  setConversationProcessing(id, false);
+  stopTurnTimer(id);
+  activeTurnsByConversation.delete(id);
+  activeTurnResultSeenByConversation.delete(id);
+  if (selectedId.value === id) {
+    clearDisplayedActiveTurn();
+    await refreshDetail({ restoreActiveTurn: false });
+  }
 }
 
 function closeIdleConversationStreams(activeId = selectedId.value) {
@@ -726,10 +953,10 @@ function onWindowTouchEnd() {
   finishDrag(item);
 }
 
-async function loadConversations(selectFirst = false) {
+async function loadConversations(selectFirst = false, preserveLocalProcessing = true) {
   loadingList.value = true;
   try {
-    applyConversationList(await conversationApi.list());
+    applyConversationList(await conversationApi.list(), preserveLocalProcessing);
     if (selectFirst && !selectedId.value) {
       const requestedId = conversationIdFromPath(window.location.pathname);
       let preferred = visibleConversations.value.find(item => item.id === requestedId);
@@ -955,6 +1182,53 @@ function rawStreamingProcessDisplays(turn: Turn) {
   return processDisplayItems(turn, true);
 }
 
+function stableTurnId(turn: Turn) {
+  const id = String(turn.id || '');
+  return id && !id.startsWith('running-') ? id : '';
+}
+
+function turnUserSignature(turn: Turn) {
+  const userItem = turn.items.find(item => item.type === 'userMessage');
+  return userItem ? userItemText(userItem) || userItem.id : '';
+}
+
+function turnRenderKey(turn: Turn) {
+  const id = stableTurnId(turn);
+  if (id) return `turn:${id}`;
+  const user = turnUserSignature(turn);
+  if (user) return `user:${user}`;
+  return `turn:${turn.startedAt || turn.status || 'empty'}`;
+}
+
+function sameRenderedTurn(detailTurn: Turn, activeTurn: Turn, index: number, total: number) {
+  const detailId = stableTurnId(detailTurn);
+  const activeId = stableTurnId(activeTurn);
+  if (detailId && activeId) return detailId === activeId;
+  if (index !== total - 1) return false;
+  const detailUser = turnUserSignature(detailTurn);
+  const activeUser = turnUserSignature(activeTurn);
+  return Boolean(detailUser && activeUser && detailUser === activeUser);
+}
+
+function mergeRenderedActiveTurn(detailTurn: Turn, activeTurn: Turn) {
+  const merged = cloneTurnForStream(activeTurn);
+  merged.id = stableTurnId(activeTurn) || stableTurnId(detailTurn) || activeTurn.id || detailTurn.id;
+  merged.startedAt = activeTurn.startedAt || detailTurn.startedAt;
+  merged.completedAt = activeTurn.completedAt || detailTurn.completedAt;
+  if (merged.durationMs === undefined && detailTurn.durationMs !== undefined) merged.durationMs = detailTurn.durationMs;
+  merged.items = mergeTurnItems(activeTurn.items || [], detailTurn.items || []);
+  return merged;
+}
+
+function normalizedRenderedTurns(detailTurns: Turn[], activeTurn: Turn | null) {
+  if (!activeTurn) return detailTurns;
+  const duplicateIndex = detailTurns.findIndex((turn, index) => sameRenderedTurn(turn, activeTurn, index, detailTurns.length));
+  if (duplicateIndex < 0) return [...detailTurns, activeTurn];
+  const next = [...detailTurns];
+  next[duplicateIndex] = mergeRenderedActiveTurn(next[duplicateIndex], activeTurn);
+  return next;
+}
+
 function createStreamingTurnView(turn: Turn, userItems: ThreadItem[], resultItems: ThreadItem[]): TurnView {
   const rawProcessDisplays = rawStreamingProcessDisplays(turn);
   const hasProcessShell = isRestoredRunningTurn(turn) || hasActiveProcessState() || rawProcessDisplays.length > 0;
@@ -966,6 +1240,7 @@ function createStreamingTurnView(turn: Turn, userItems: ThreadItem[], resultItem
   const hasLiveProcess = processDisplays.some(display => display.live);
 
   return {
+    renderKey: turnRenderKey(turn),
     turn,
     userItems,
     resultItems,
@@ -980,6 +1255,7 @@ function createStreamingTurnView(turn: Turn, userItems: ThreadItem[], resultItem
 function createCompletedTurnView(turn: Turn, userItems: ThreadItem[], resultItems: ThreadItem[]): TurnView {
   const processDisplays = showCompletedProcessSummary(turn) ? completedProcessDisplays(turn) : [];
   return {
+    renderKey: turnRenderKey(turn),
     turn,
     userItems,
     resultItems,
@@ -1475,9 +1751,17 @@ const MarkdownBlock = defineComponent({
     streaming: { type: Boolean, default: false }
   },
   setup(props) {
+    const root = ref<HTMLElement | null>(null);
     const html = computed(() => renderMarkdown(props.content));
+    const renderMermaid = () => {
+      void nextTick(() => renderMermaidBlocks(root.value));
+    };
+    onMounted(renderMermaid);
+    onUpdated(renderMermaid);
     return () => h('div', {
+      ref: root,
       class: ['markdown-body', props.streaming ? 'streaming-markdown' : ''],
+      onClick: copyMermaidSource,
       innerHTML: html.value
     });
   }
@@ -1879,6 +2163,8 @@ async function deleteConversation() {
     const removedId = activeConversation.value.id;
     await conversationApi.remove(removedId);
     clearConversationDetail(removedId);
+    workspacesByConversation.delete(removedId);
+    workspaceVisibilityByConversation.delete(removedId);
     setConversationProcessing(removedId, false);
     closeConversationStream(removedId);
     selectedId.value = '';
@@ -2213,11 +2499,38 @@ function handleDocumentPointerOver(event: PointerEvent) {
   }
 }
 
+function startWorkspaceResize(event: PointerEvent) {
+  if (window.matchMedia('(max-width: 720px)').matches) return;
+  const panel = mainPanel.value?.querySelector<HTMLElement>('.workspace-panel');
+  if (!panel) return;
+  workspaceResizeStart = { x: event.clientX, width: panel.getBoundingClientRect().width };
+  document.body.classList.add('workspace-resizing');
+  event.preventDefault();
+}
+
+function resizeWorkspace(event: PointerEvent) {
+  if (!workspaceResizeStart) return;
+  const availableWidth = mainPanel.value?.clientWidth || window.innerWidth;
+  const maxWidth = Math.max(360, availableWidth - 320);
+  workspaceWidth.value = Math.min(
+    maxWidth,
+    Math.max(360, workspaceResizeStart.width + workspaceResizeStart.x - event.clientX)
+  );
+}
+
+function stopWorkspaceResize() {
+  if (!workspaceResizeStart) return;
+  workspaceResizeStart = null;
+  document.body.classList.remove('workspace-resizing');
+}
+
 onMounted(() => {
   document.addEventListener('pointerdown', handleDocumentPointerDown);
   document.addEventListener('pointerover', handleDocumentPointerOver);
   window.addEventListener('pointermove', onDragPointerMove);
+  window.addEventListener('pointermove', resizeWorkspace);
   window.addEventListener('pointerup', onDragPointerUp);
+  window.addEventListener('pointerup', stopWorkspaceResize);
   window.addEventListener('touchmove', onWindowTouchMove, { passive: false });
   window.addEventListener('touchend', onWindowTouchEnd);
   window.addEventListener('touchcancel', onWindowTouchEnd);
@@ -2233,7 +2546,9 @@ onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleDocumentPointerDown);
   document.removeEventListener('pointerover', handleDocumentPointerOver);
   window.removeEventListener('pointermove', onDragPointerMove);
+  window.removeEventListener('pointermove', resizeWorkspace);
   window.removeEventListener('pointerup', onDragPointerUp);
+  window.removeEventListener('pointerup', stopWorkspaceResize);
   window.removeEventListener('touchmove', onWindowTouchMove);
   window.removeEventListener('touchend', onWindowTouchEnd);
   window.removeEventListener('touchcancel', onWindowTouchEnd);
@@ -2241,6 +2556,10 @@ onBeforeUnmount(() => {
   colorSchemeMedia.removeEventListener('change', handleSystemAppearanceChange);
   closeAllConversationStreams();
   stopAllTurnTimers();
+});
+watch(selectedId, () => {
+  workspaceExpanded.value = false;
+  pinnedSummaryOpen.value = false;
 });
 watch(isDarkAppearance, value => {
   document.documentElement.dataset.theme = value ? 'dark' : 'light';
@@ -2594,7 +2913,12 @@ watch([settingsVisible, settingsSection], () => {
         </div>
       </div>
 
-      <main class="main-panel">
+      <main
+        ref="mainPanel"
+        class="main-panel"
+        :class="{ 'workspace-open': activeWorkspace && workspaceVisible, 'workspace-expanded': workspaceExpanded }"
+        :style="workspacePanelStyle"
+      >
         <header class="topbar">
           <n-button quaternary circle class="mobile-menu-button" @click="openMobileSidebar">
             <template #icon><Icon icon="solar:sidebar-minimalistic-outline" /></template>
@@ -2618,6 +2942,36 @@ watch([settingsVisible, settingsSection], () => {
             </div>
           </div>
         </header>
+
+        <n-button
+          v-if="pinnedSummaryWorkspaces.length && !workspaceVisible"
+          quaternary
+          class="right-panel-toggle topbar-right-panel-toggle"
+          aria-label="Toggle pinned summary"
+          title="Toggle pinned summary"
+          @click="toggleRightPanel"
+        >
+          <template #icon><Icon icon="solar:sidebar-minimalistic-outline" /></template>
+          <span class="pinned-summary-count">{{ pinnedSummaryWorkspaces.length }}</span>
+        </n-button>
+
+        <aside v-if="pinnedSummaryOpen" class="pinned-summary-panel">
+          <header>
+            <strong>Pinned summary</strong>
+            <span>{{ pinnedSummaryWorkspaces.length }}</span>
+          </header>
+          <button
+            v-for="workspace in pinnedSummaryWorkspaces"
+            :key="workspace.url"
+            type="button"
+            class="pinned-summary-item"
+            @click="openPinnedWorkspace(workspace)"
+          >
+            <Icon icon="solar:widget-5-linear" />
+            <span><strong>{{ workspace.title }}</strong><small>{{ workspace.url }}</small></span>
+            <Icon icon="solar:arrow-right-linear" />
+          </button>
+        </aside>
 
         <section v-if="conversationOpening" class="conversation-opening" aria-label="正在加载对话">
           <div class="conversation-opening-indicator">
@@ -2680,7 +3034,7 @@ watch([settingsVisible, settingsSection], () => {
           <section :key="selectedId" ref="messagePane" class="message-pane" @scroll="handleMessageScroll">
             <n-spin class="message-spin" :show="loadingCurrentDetail">
               <div class="message-column">
-                <section v-for="view in renderedTurnViews" :key="view.turn.id" class="turn" :data-status="view.turn.status">
+                <section v-for="view in renderedTurnViews" :key="view.renderKey" class="turn" :data-status="view.turn.status">
                   <article
                     v-for="item in view.userItems"
                     :key="item.id"
@@ -2736,10 +3090,21 @@ watch([settingsVisible, settingsSection], () => {
                     <article v-if="item.type === 'agentMessage'" class="message assistant">
                       <div class="message-content">
                         <MarkdownBlock
-                          v-if="item.text"
-                          :content="item.text"
+                          v-if="item.text && parseAgentMessage(item.text, view.streaming).markdown"
+                          :content="parseAgentMessage(item.text, view.streaming).markdown"
                           :streaming="view.streaming"
                         />
+                        <button
+                          v-for="workspace in parseAgentMessage(item.text || '', view.streaming).workspaces"
+                          :key="workspace.url"
+                          type="button"
+                          class="workspace-card"
+                          @click="openWorkspace(workspace)"
+                        >
+                          <Icon icon="solar:widget-5-linear" />
+                          <span><strong>{{ workspace.title }}</strong><small>在右侧打开工作台</small></span>
+                          <Icon icon="solar:arrow-right-linear" />
+                        </button>
                       </div>
                     </article>
 
@@ -2807,6 +3172,38 @@ watch([settingsVisible, settingsSection], () => {
           <p>创建对话，让 AgentRazor 持续处理你的目标。</p>
           <n-button type="primary" size="large" @click="createConversation">开始新对话</n-button>
         </section>
+
+        <aside v-if="activeWorkspace && workspaceVisible" class="workspace-panel" :class="{ 'is-expanded': workspaceExpanded }">
+          <div class="workspace-resizer" aria-hidden="true" @pointerdown="startWorkspaceResize" />
+          <header class="workspace-panel-header">
+            <strong>{{ activeWorkspace.title }}</strong>
+            <div class="workspace-panel-actions">
+              <n-button
+                quaternary
+                circle
+                class="workspace-maximize-button"
+                :aria-label="workspaceExpanded ? 'Restore workspace size' : 'Expand workspace'"
+                :title="workspaceExpanded ? 'Restore workspace size' : 'Expand workspace'"
+                @click="toggleWorkspaceExpanded"
+              >
+                <template #icon>
+                  <Icon :icon="workspaceExpanded ? 'solar:minimize-square-3-linear' : 'solar:maximize-square-3-linear'" />
+                </template>
+              </n-button>
+              <n-button
+                quaternary
+                class="right-panel-toggle workspace-right-panel-toggle"
+                aria-label="Toggle pinned summary"
+                title="Toggle pinned summary"
+                @click="toggleRightPanel"
+              >
+                <template #icon><Icon icon="solar:sidebar-minimalistic-outline" /></template>
+                <span class="pinned-summary-count">{{ pinnedSummaryWorkspaces.length }}</span>
+              </n-button>
+            </div>
+          </header>
+          <iframe :src="activeWorkspace.url" :title="activeWorkspace.title" />
+        </aside>
       </main>
     </div>
 
