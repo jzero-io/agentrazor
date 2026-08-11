@@ -794,6 +794,51 @@ body.is-dragging {
   width: min(760px, 100%);
 }
 
+.conversation-opening {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  color: #74736f;
+  text-align: center;
+}
+
+.conversation-opening-indicator {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid #e7e5e1;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 8%);
+  color: #5f63ff;
+  animation: status-pulse 1.6s ease-in-out infinite;
+}
+
+.conversation-opening-indicator svg {
+  width: 22px;
+  height: 22px;
+}
+
+.conversation-opening-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.conversation-opening-copy strong {
+  color: #272625;
+  font-size: 17px;
+}
+
+.conversation-opening-copy span {
+  font-size: 13px;
+}
+
 .empty-state {
   flex: 1 1 0;
   position: relative;
@@ -1131,6 +1176,22 @@ body.is-dragging {
 }
 
 .turn-live-status .status-pulse {
+  animation: status-pulse 1.6s ease-in-out infinite;
+}
+
+
+.turn-inline-thinking {
+  display: flex;
+  align-items: center;
+  min-height: 26px;
+  margin: 0 0 12px;
+  padding: 0;
+  color: #686d71;
+  font-size: 17px;
+  line-height: 1.75;
+}
+
+.turn-inline-thinking .status-pulse {
   animation: status-pulse 1.6s ease-in-out infinite;
 }
 
@@ -2269,6 +2330,16 @@ html[data-theme='dark'] .confirm-modal-body p {
   background:
     radial-gradient(circle at 50% 47%, rgb(255 255 255 / 2%), transparent 260px),
     #181818;
+}
+
+:root[data-theme="dark"] .conversation-opening-indicator {
+  border-color: #303030;
+  background: #202020;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 24%);
+}
+
+:root[data-theme="dark"] .conversation-opening-copy strong {
+  color: #ececec;
 }
 
 :root[data-theme="dark"] .topbar {
