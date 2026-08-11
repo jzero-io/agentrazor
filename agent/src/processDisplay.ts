@@ -62,7 +62,7 @@ export function turnProcessItems(turn: Turn) {
     item.type !== 'userMessage'
     && item.type !== 'imageGeneration'
     && item.type !== 'reasoning'
-    && (item.type !== 'agentMessage' || isIntermediateAgentMessage(item))
+    && (item.type !== 'agentMessage' || !isFinalAgentMessage(item))
   );
 }
 
@@ -73,7 +73,7 @@ export function turnWorkedItems(turn: Turn) {
 export function turnResultItems(turn: Turn) {
   return turn.items.filter(item =>
     item.type === 'imageGeneration'
-    || item.type === 'agentMessage' && !isIntermediateAgentMessage(item)
+    || item.type === 'agentMessage' && isFinalAgentMessage(item)
   );
 }
 
@@ -168,8 +168,12 @@ function normalizedStatus(value: unknown) {
   return typeof value === 'string' ? value.replace(/[-_\s]/g, '').toLowerCase() : '';
 }
 
+function isFinalAgentMessage(item: ThreadItem) {
+  return item.type === 'agentMessage' && item.phase === 'final_answer';
+}
+
 function isIntermediateAgentMessage(item: ThreadItem) {
-  return item.type === 'agentMessage' && item.phase === 'commentary';
+  return item.type === 'agentMessage' && !isFinalAgentMessage(item);
 }
 
 function webSearchActionType(item: ThreadItem) {
