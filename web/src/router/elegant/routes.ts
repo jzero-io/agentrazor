@@ -52,7 +52,7 @@ export const generatedRoutes: GeneratedRoute[] = [
   },
   {
     name: 'agent',
-    path: '/manage/agent',
+    path: '/agent',
     component: 'layout.base',
     meta: {
       title: 'agent',
@@ -64,7 +64,7 @@ export const generatedRoutes: GeneratedRoute[] = [
     children: [
       {
         name: 'agent_skills',
-        path: '/manage/agent-skills',
+        path: '/agent/skills',
         component: 'view.agent_skills',
         meta: {
           title: 'agent_skills',
