@@ -656,7 +656,7 @@ body.is-dragging {
   right: 16px;
 }
 
-.workspace-right-panel-toggle { flex: 0 0 auto; }
+.workspace-right-panel-toggle { flex: 0 0 auto; width: 34px; min-width: 34px; }
 
 
 .pinned-summary-panel {
@@ -2992,17 +2992,18 @@ html[data-theme='dark'] .confirm-modal-body p {
 
 .workspace-panel-header {
   display: flex;
-  height: 64px;
-  flex: 0 0 64px;
+  height: 48px;
+  flex: 0 0 48px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 0 16px 0 20px;
+  padding: 0 12px 0 16px;
   border-bottom: 1px solid #dfe2e4;
 }
 
 .workspace-panel-header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.workspace-panel-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
+.workspace-panel-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; }
+.workspace-panel-actions .workspace-action-button { width: 34px; min-width: 34px; height: 34px; min-height: 34px; padding: 0; border-radius: 50%; }
 .workspace-maximize-button { flex: 0 0 auto; }
 .workspace-panel.is-expanded .workspace-resizer { display: none; }
 :root[data-theme="dark"] .right-panel-toggle { background: transparent; }

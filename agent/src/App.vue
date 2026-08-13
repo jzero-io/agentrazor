@@ -286,6 +286,10 @@ function toggleWorkspaceExpanded() {
   workspaceExpanded.value = !workspaceExpanded.value;
 }
 
+function reloadWorkspace() {
+  workspaceReloadVersion.value += 1;
+}
+
 function openPinnedWorkspace(workspace: WorkspaceDescriptor) {
   openWorkspace(workspace);
 }
@@ -305,6 +309,7 @@ const selectedId = ref('');
 const mainPanel = ref<HTMLElement | null>(null);
 const workspaceWidth = ref<number | null>(null);
 const workspaceExpanded = ref(false);
+const workspaceReloadVersion = ref(0);
 const pinnedSummaryOpen = ref(false);
 const workspacePanelStyle = computed(() => workspaceWidth.value
   ? { '--workspace-width': `${workspaceWidth.value}px` }
@@ -3179,7 +3184,17 @@ watch([settingsVisible, settingsSection], () => {
               <n-button
                 quaternary
                 circle
-                class="workspace-maximize-button"
+                class="workspace-action-button"
+                aria-label="Refresh workspace"
+                title="Refresh workspace"
+                @click="reloadWorkspace"
+              >
+                <template #icon><Icon icon="solar:refresh-linear" /></template>
+              </n-button>
+              <n-button
+                quaternary
+                circle
+                class="workspace-action-button workspace-maximize-button"
                 :aria-label="workspaceExpanded ? 'Restore workspace size' : 'Expand workspace'"
                 :title="workspaceExpanded ? 'Restore workspace size' : 'Expand workspace'"
                 @click="toggleWorkspaceExpanded"
@@ -3190,7 +3205,8 @@ watch([settingsVisible, settingsSection], () => {
               </n-button>
               <n-button
                 quaternary
-                class="right-panel-toggle workspace-right-panel-toggle"
+                circle
+                class="workspace-action-button workspace-right-panel-toggle"
                 aria-label="Toggle pinned summary"
                 title="Toggle pinned summary"
                 @click="toggleRightPanel"
@@ -3199,7 +3215,7 @@ watch([settingsVisible, settingsSection], () => {
               </n-button>
             </div>
           </header>
-          <iframe :src="activeWorkspace.url" :title="activeWorkspace.title" />
+          <iframe :key="`${selectedId}:${workspaceReloadVersion}`" :src="activeWorkspace.url" :title="activeWorkspace.title" />
         </aside>
       </main>
     </div>
