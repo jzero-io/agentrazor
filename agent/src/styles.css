@@ -1167,14 +1167,21 @@ body.is-dragging {
 }
 
 .markdown-body .mermaid-diagram {
-  min-width: max-content;
-  padding: 44px 16px 16px;
+  min-width: 720px;
+  padding: 48px 24px 24px;
+  overflow-x: auto;
   text-align: center;
 }
 
 .markdown-body .mermaid-diagram svg {
-  max-width: 100%;
+  display: inline-block;
+  max-width: none;
+  min-width: 640px;
   height: auto;
+}
+
+.markdown-body .mermaid-diagram .nodeLabel {
+  line-height: 1.35;
 }
 
 .markdown-body .mermaid-source {

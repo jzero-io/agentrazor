@@ -167,7 +167,17 @@ function initMermaid(instance: typeof import('mermaid')['default']) {
   instance.initialize({
     startOnLoad: false,
     securityLevel: 'strict',
-    theme: currentMermaidTheme()
+    theme: currentMermaidTheme(),
+    flowchart: {
+      curve: 'basis',
+      nodeSpacing: 72,
+      rankSpacing: 88,
+      padding: 16,
+      useMaxWidth: true
+    },
+    themeVariables: {
+      fontSize: '14px'
+    }
   });
 }
 
