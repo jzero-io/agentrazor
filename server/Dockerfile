@@ -11,6 +11,8 @@ COPY ./ ./
 
 RUN jzero serverless build
 
+RUN go work use .
+
 RUN --mount=type=cache,target=/go/pkg CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -a -ldflags="$LDFLAGS" -o /dist/app main.go \
     && for plugin in plugins/*/; do \
          plugin_name=$(basename "$plugin" | tr '-' '_'); \
