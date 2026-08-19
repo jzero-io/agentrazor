@@ -254,8 +254,7 @@ async function copyMermaidSource(event: MouseEvent) {
   }
 }
 
-function parseAgentMessage(content: string, streaming: boolean): ParsedAgentMessage {
-  if (streaming) return { markdown: content, workspaces: [] };
+function parseAgentMessage(content: string, _streaming: boolean): ParsedAgentMessage {
   const workspaces: WorkspaceDescriptor[] = [];
   const markdown = content.replace(/```json\s*([\s\S]*?)```/gi, (block, raw: string) => {
     try {
@@ -3225,7 +3224,7 @@ watch([settingsVisible, settingsSection], () => {
               </n-button>
             </div>
           </header>
-          <iframe :key="`${selectedId}:${workspaceReloadVersion}`" :src="activeWorkspace.url" :title="activeWorkspace.title" />
+          <iframe :key="`${selectedId}:${activeWorkspace.url}:${workspaceReloadVersion}`" :src="activeWorkspace.url" :title="activeWorkspace.title" />
         </aside>
       </main>
     </div>
