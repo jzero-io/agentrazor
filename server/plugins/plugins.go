@@ -7,4 +7,6 @@ import (
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 )
 
-func LoadPlugins(server *rest.Server, svcCtx *svc.ServiceContext) {}
+func LoadPlugins(server *rest.Server, svcCtx *svc.ServiceContext) {
+
+}

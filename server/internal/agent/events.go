@@ -6,12 +6,12 @@ import (
 )
 
 type StreamEvent struct {
-	ID        int64     `json:"id"`
-	Type      string    `json:"type"`
-	SessionID string    `json:"sessionId"`
-	RunID     string    `json:"runId,omitempty"`
-	Data      any       `json:"data,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID             int64     `json:"id"`
+	Type           string    `json:"type"`
+	ConversationID string    `json:"conversationId"`
+	RunID          string    `json:"runId,omitempty"`
+	Data           any       `json:"data,omitempty"`
+	CreatedAt      time.Time `json:"createdAt"`
 }
 
 type Subscription struct {
@@ -69,35 +69,35 @@ func NewEventHub(historyLimit, bufferSize int) *EventHub {
 	return hub
 }
 
-func (h *EventHub) Publish(sessionID, runID, eventType string, data any) StreamEvent {
-	return h.publish(sessionID, runID, eventType, data, true)
+func (h *EventHub) Publish(conversationID, runID, eventType string, data any) StreamEvent {
+	return h.publish(conversationID, runID, eventType, data, true)
 }
 
 // Broadcast pushes an event to live subscribers without caching it in history.
 // Use for high-volume, transient events (e.g. streaming token deltas) that are
 // not worth replaying on reconnect: the finalized message is delivered via a
 // cached lifecycle event (run.completed) and a detail refresh.
-func (h *EventHub) Broadcast(sessionID, runID, eventType string, data any) StreamEvent {
-	return h.publish(sessionID, runID, eventType, data, false)
+func (h *EventHub) Broadcast(conversationID, runID, eventType string, data any) StreamEvent {
+	return h.publish(conversationID, runID, eventType, data, false)
 }
 
-func (h *EventHub) publish(sessionID, runID, eventType string, data any, cache bool) StreamEvent {
+func (h *EventHub) publish(conversationID, runID, eventType string, data any, cache bool) StreamEvent {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.closed {
 		return StreamEvent{}
 	}
 
-	stream := h.streamLocked(sessionID)
+	stream := h.streamLocked(conversationID)
 	stream.lastActive = time.Now().UTC()
 	stream.nextID++
 	event := StreamEvent{
-		ID:        stream.nextID,
-		Type:      eventType,
-		SessionID: sessionID,
-		RunID:     runID,
-		Data:      data,
-		CreatedAt: time.Now().UTC(),
+		ID:             stream.nextID,
+		Type:           eventType,
+		ConversationID: conversationID,
+		RunID:          runID,
+		Data:           data,
+		CreatedAt:      time.Now().UTC(),
 	}
 	if cache {
 		stream.history = append(stream.history, event)
@@ -115,27 +115,27 @@ func (h *EventHub) publish(sessionID, runID, eventType string, data any, cache b
 	return event
 }
 
-func (h *EventHub) Cursor(sessionID string) int64 {
+func (h *EventHub) Cursor(conversationID string) int64 {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.closed {
 		return 0
 	}
-	stream, ok := h.streams[sessionID]
+	stream, ok := h.streams[conversationID]
 	if !ok {
 		return 0
 	}
 	return stream.nextID
 }
 
-func (h *EventHub) Subscribe(sessionID string, afterID int64) *Subscription {
+func (h *EventHub) Subscribe(conversationID string, afterID int64) *Subscription {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.closed {
 		return closedSubscription()
 	}
 
-	stream := h.streamLocked(sessionID)
+	stream := h.streamLocked(conversationID)
 	stream.lastActive = time.Now().UTC()
 	stream.nextSubID++
 	subID := stream.nextSubID
@@ -160,7 +160,7 @@ func (h *EventHub) Subscribe(sessionID string, afterID int64) *Subscription {
 		close: func() {
 			h.mu.Lock()
 			defer h.mu.Unlock()
-			if current, ok := h.streams[sessionID]; ok && current == stream {
+			if current, ok := h.streams[conversationID]; ok && current == stream {
 				if subscriber, ok := current.subscribers[subID]; ok {
 					delete(current.subscribers, subID)
 					close(subscriber)
@@ -186,11 +186,11 @@ func closeEventStreamSubscribers(stream *eventStream) {
 
 // Release drops replay history for a conversation that has been permanently
 // deleted and closes live subscribers so SSE handlers can exit promptly.
-func (h *EventHub) Release(sessionID string) {
+func (h *EventHub) Release(conversationID string) {
 	h.mu.Lock()
-	if stream, ok := h.streams[sessionID]; ok {
+	if stream, ok := h.streams[conversationID]; ok {
 		closeEventStreamSubscribers(stream)
-		delete(h.streams, sessionID)
+		delete(h.streams, conversationID)
 	}
 	h.mu.Unlock()
 }
@@ -213,9 +213,9 @@ func (h *EventHub) sweepIdleStreams() {
 		select {
 		case now := <-ticker.C:
 			h.mu.Lock()
-			for sessionID, stream := range h.streams {
+			for conversationID, stream := range h.streams {
 				if len(stream.subscribers) == 0 && now.Sub(stream.lastActive) >= h.idleTTL {
-					delete(h.streams, sessionID)
+					delete(h.streams, conversationID)
 				}
 			}
 			h.mu.Unlock()
@@ -225,14 +225,14 @@ func (h *EventHub) sweepIdleStreams() {
 	}
 }
 
-func (h *EventHub) streamLocked(sessionID string) *eventStream {
-	stream, ok := h.streams[sessionID]
+func (h *EventHub) streamLocked(conversationID string) *eventStream {
+	stream, ok := h.streams[conversationID]
 	if !ok {
 		stream = &eventStream{
 			subscribers: make(map[uint64]chan StreamEvent),
 			lastActive:  time.Now().UTC(),
 		}
-		h.streams[sessionID] = stream
+		h.streams[conversationID] = stream
 	}
 	return stream
 }

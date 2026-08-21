@@ -270,7 +270,7 @@ function parseAgentMessage(content: string, _streaming: boolean): ParsedAgentMes
 }
 
 function openWorkspace(workspace: WorkspaceDescriptor) {
-  if (!selectedId.value) return;
+  if (!selectedConversationId.value) return;
   workspaceExpanded.value = false;
   pinnedSummaryOpen.value = false;
   activeWorkspace.value = workspace;
@@ -314,7 +314,7 @@ function loadSidebarViewState(): SidebarViewState {
 const savedSidebarView = loadSidebarViewState();
 
 const conversations = ref<Conversation[]>([]);
-const selectedId = ref('');
+const selectedConversationId = ref('');
 const mainPanel = ref<HTMLElement | null>(null);
 const workspaceWidth = ref<number | null>(null);
 const workspaceExpanded = ref(false);
@@ -327,17 +327,17 @@ let workspaceResizeStart: { x: number; width: number } | null = null;
 const workspacesByConversation = reactive(new Map<string, WorkspaceDescriptor>());
 const workspaceVisibilityByConversation = reactive(new Map<string, boolean>());
 const workspaceVisible = computed({
-  get: () => Boolean(workspaceVisibilityByConversation.get(selectedId.value)),
+  get: () => Boolean(workspaceVisibilityByConversation.get(selectedConversationId.value)),
   set: visible => {
-    const conversationId = selectedId.value;
+    const conversationId = selectedConversationId.value;
     if (!conversationId) return;
     workspaceVisibilityByConversation.set(conversationId, visible);
   }
 });
 const activeWorkspace = computed<WorkspaceDescriptor | null>({
-  get: () => workspacesByConversation.get(selectedId.value) || null,
+  get: () => workspacesByConversation.get(selectedConversationId.value) || null,
   set: workspace => {
-    const conversationId = selectedId.value;
+    const conversationId = selectedConversationId.value;
     if (!conversationId) return;
     if (workspace) workspacesByConversation.set(conversationId, workspace);
     else workspacesByConversation.delete(conversationId);
@@ -362,7 +362,7 @@ const nowMs = ref(Date.now());
 const stopping = ref(false);
 let turnTimer: number | undefined;
 const locallyStoppedRunIds = new Set<string>();
-const locallyStoppedSessionIds = new Set<string>();
+const locallyStoppedConversationIds = new Set<string>();
 const sidebarCollapsed = ref(savedSidebarView.sidebarCollapsed ?? false);
 const mobileSidebarOpen = ref(false);
 const renameVisible = ref(false);
@@ -481,10 +481,10 @@ const archivedConversationSections = computed(() => {
   return sections;
 });
 const activeConversation = computed(() =>
-  conversations.value.find(item => item.id === selectedId.value)
+  conversations.value.find(item => item.id === selectedConversationId.value)
 );
 const isArchivedActive = computed(() => activeConversation.value?.status === 'archived');
-function isDraftConversation(id = selectedId.value) {
+function isDraftConversation(id = selectedConversationId.value) {
   return id === DRAFT_CONVERSATION_ID;
 }
 
@@ -506,29 +506,29 @@ function createDraftConversationDetail(): ConversationDetail {
 }
 
 const activeDetail = computed(() => {
-  if (!selectedId.value) return null;
+  if (!selectedConversationId.value) return null;
   if (isDraftConversation()) return detail.value?.conversation.id === DRAFT_CONVERSATION_ID ? detail.value : createDraftConversationDetail();
-  return detailsByConversation.get(selectedId.value)
-    || (detail.value?.conversation.id === selectedId.value ? detail.value : null);
+  return detailsByConversation.get(selectedConversationId.value)
+    || (detail.value?.conversation.id === selectedConversationId.value ? detail.value : null);
 });
 const currentStreamingTurn = computed(() =>
-  selectedId.value ? activeTurnsByConversation.get(selectedId.value) || null : null
+  selectedConversationId.value ? activeTurnsByConversation.get(selectedConversationId.value) || null : null
 );
 const currentTurnElapsedMs = computed(() => {
-  if (!selectedId.value) return 0;
-  const startedAt = processStartedAtByConversation.get(selectedId.value);
+  if (!selectedConversationId.value) return 0;
+  const startedAt = processStartedAtByConversation.get(selectedConversationId.value);
   return startedAt ? Math.max(1000, nowMs.value - startedAt) : 1000;
 });
 const currentTurnResultSeen = computed(() =>
-  Boolean(selectedId.value && activeTurnResultSeenByConversation.get(selectedId.value))
+  Boolean(selectedConversationId.value && activeTurnResultSeenByConversation.get(selectedConversationId.value))
 );
 const draft = computed({
   get() {
-    return selectedId.value ? draftsByConversation.get(selectedId.value) || '' : '';
+    return selectedConversationId.value ? draftsByConversation.get(selectedConversationId.value) || '' : '';
   },
   set(value: string) {
-    if (!selectedId.value) return;
-    setConversationDraft(selectedId.value, value);
+    if (!selectedConversationId.value) return;
+    setConversationDraft(selectedConversationId.value, value);
   }
 });
 
@@ -554,7 +554,7 @@ const pinnedSummaryWorkspaces = computed(() => {
   return [...byUrl.values()];
 });
 const renderedTurnViews = computed(() => renderedTurns.value.map(createTurnView));
-const canSend = computed(() => Boolean(draft.value.trim() && selectedId.value && !creatingConversation.value && !sendingRequest.value && !isConversationRunning(selectedId.value)));
+const canSend = computed(() => Boolean(draft.value.trim() && selectedConversationId.value && !creatingConversation.value && !sendingRequest.value && !isConversationRunning(selectedConversationId.value)));
 const composerActionPending = computed(() => creatingConversation.value || sendingRequest.value || stopping.value);
 const composerActionDisabled = computed(() => sending.value ? stopping.value : !canSend.value);
 const composerActionLabel = computed(() => {
@@ -569,21 +569,21 @@ const composerActionIcon = computed(() => {
   return 'solar:arrow-up-linear';
 });
 const loadingCurrentDetail = computed(() =>
-  Boolean(selectedId.value)
+  Boolean(selectedConversationId.value)
   && !activeDetail.value
   && loadingDetail.value
-  && loadingDetailId.value === selectedId.value
+  && loadingDetailId.value === selectedConversationId.value
 );
 const conversationOpening = computed(() =>
-  Boolean(selectedId.value)
+  Boolean(selectedConversationId.value)
   && !activeDetail.value
   && !currentStreamingTurn.value
 );
 const currentConversationRunning = computed(() =>
-  Boolean(selectedId.value && !isDraftConversation() && (cachedActiveTurn(selectedId.value) || isConversationRunning(selectedId.value)))
+  Boolean(selectedConversationId.value && !isDraftConversation() && (cachedActiveTurn(selectedConversationId.value) || isConversationRunning(selectedConversationId.value)))
 );
 const isNewChat = computed(() =>
-  Boolean(selectedId.value)
+  Boolean(selectedConversationId.value)
   && !conversationOpening.value
   && Boolean(activeDetail.value)
   && !activeDetail.value!.turns?.length
@@ -738,7 +738,7 @@ async function reconcileConversationStream(id: string) {
   await loadConversations(false, false);
   const conversation = conversations.value.find(item => item.id === id);
   if (conversation?.running) {
-    if (selectedId.value === id) await refreshDetail({ restoreActiveTurn: true });
+    if (selectedConversationId.value === id) await refreshDetail({ restoreActiveTurn: true });
     return;
   }
 
@@ -746,13 +746,13 @@ async function reconcileConversationStream(id: string) {
   stopTurnTimer(id);
   activeTurnsByConversation.delete(id);
   activeTurnResultSeenByConversation.delete(id);
-  if (selectedId.value === id) {
+  if (selectedConversationId.value === id) {
     clearDisplayedActiveTurn();
     await refreshDetail({ restoreActiveTurn: false });
   }
 }
 
-function closeIdleConversationStreams(activeId = selectedId.value) {
+function closeIdleConversationStreams(activeId = selectedConversationId.value) {
   for (const id of [...streamClosers.keys()]) {
     if (id !== activeId && !processingConversationIds.value.has(id)) closeConversationStream(id);
   }
@@ -971,7 +971,7 @@ async function loadConversations(selectFirst = false, preserveLocalProcessing = 
   loadingList.value = true;
   try {
     applyConversationList(await conversationApi.list(), preserveLocalProcessing);
-    if (selectFirst && !selectedId.value) {
+    if (selectFirst && !selectedConversationId.value) {
       const requestedId = conversationIdFromPath(window.location.pathname);
       let preferred = visibleConversations.value.find(item => item.id === requestedId);
       if (!preferred && requestedId) {
@@ -1006,7 +1006,7 @@ function createConversation() {
   }
   mobileSidebarOpen.value = false;
   draftConversationGroupId.value = '';
-  selectedId.value = DRAFT_CONVERSATION_ID;
+  selectedConversationId.value = DRAFT_CONVERSATION_ID;
   detail.value = createDraftConversationDetail();
   clearDisplayedActiveTurn();
   syncConversationUrl('');
@@ -1028,7 +1028,7 @@ function createConversationInGroup(group: ConversationGroup) {
   }
   mobileSidebarOpen.value = false;
   draftConversationGroupId.value = group.id;
-  selectedId.value = DRAFT_CONVERSATION_ID;
+  selectedConversationId.value = DRAFT_CONVERSATION_ID;
   detail.value = createDraftConversationDetail();
   clearDisplayedActiveTurn();
   syncConversationUrl('');
@@ -1064,14 +1064,14 @@ function archiveGroupConversations(group: ConversationGroup) {
 async function selectConversation(id: string) {
   mobileSidebarOpen.value = false;
   if (!id) return;
-  if (id === selectedId.value && activeDetail.value) {
+  if (id === selectedConversationId.value && activeDetail.value) {
     if (loadingDetailId.value !== id) loadingDetail.value = false;
     return;
   }
 
   const token = ++conversationSelectionToken;
 
-  selectedId.value = id;
+  selectedConversationId.value = id;
   syncConversationUrl(id);
   detail.value = detailsByConversation.get(id) || null;
   autoScrollEnabled.value = true;
@@ -1079,7 +1079,7 @@ async function selectConversation(id: string) {
   syncDisplayedActiveTurnState();
 
   const snapshot = await refreshDetail({ forceScroll: true });
-  if (conversationSelectionToken !== token || selectedId.value !== id) return;
+  if (conversationSelectionToken !== token || selectedConversationId.value !== id) return;
   ensureConversationStream(id, snapshot?.eventCursor ?? 0);
   closeIdleConversationStreams(id);
 }
@@ -1115,7 +1115,7 @@ interface RefreshDetailOptions {
 }
 
 interface BeginActiveTurnOptions {
-  sessionId?: string;
+  conversationId?: string;
   turn?: Turn;
   id?: string;
   status?: string;
@@ -1125,24 +1125,24 @@ interface BeginActiveTurnOptions {
 }
 
 async function refreshDetail(options: RefreshDetailOptions = {}): Promise<ConversationDetail | null> {
-  const id = selectedId.value;
+  const id = selectedConversationId.value;
   if (!id) return null;
   loadingDetailId.value = id;
   loadingDetail.value = true;
   try {
     const snapshot = await conversationApi.get(id);
-    if (selectedId.value !== id) return null;
+    if (selectedConversationId.value !== id) return null;
     restoreActiveTurn(snapshot, options.restoreActiveTurn !== false);
     return snapshot;
   } catch (error) {
-    if (selectedId.value === id) showError(error);
+    if (selectedConversationId.value === id) showError(error);
     return null;
   } finally {
     if (loadingDetailId.value === id) {
       loadingDetail.value = false;
       loadingDetailId.value = '';
     }
-    if (selectedId.value === id) {
+    if (selectedConversationId.value === id) {
       void scrollToBottom({ force: options.forceScroll });
     }
   }
@@ -1170,7 +1170,7 @@ function completedProcessDisplays(turn: Turn) {
 }
 
 function hasActiveProcessState() {
-  return Boolean(selectedId.value && processActiveConversationIds.has(selectedId.value));
+  return Boolean(selectedConversationId.value && processActiveConversationIds.has(selectedConversationId.value));
 }
 
 function isVisibleProcessStreamItem(item: ThreadItem) {
@@ -1302,8 +1302,8 @@ function cloneTurnForStream(turn: Turn): Turn {
   };
 }
 
-function cachedActiveTurn(sessionId: string) {
-  return activeTurnsByConversation.get(sessionId) || null;
+function cachedActiveTurn(conversationId: string) {
+  return activeTurnsByConversation.get(conversationId) || null;
 }
 
 function activeTurnResultSeen(turn: Turn) {
@@ -1347,19 +1347,19 @@ function syncTurnForStream(target: Turn, source: Turn, options: { keepStatus?: b
   syncTurnItems(target.items, source.items || [], { skipIncomingReasoning: options.skipIncomingReasoning });
 }
 
-function publishActiveTurn(sessionId: string, turn?: Turn) {
-  if (!sessionId) return;
-  const current = turn || cachedActiveTurn(sessionId);
+function publishActiveTurn(conversationId: string, turn?: Turn) {
+  if (!conversationId) return;
+  const current = turn || cachedActiveTurn(conversationId);
   if (!current) return;
-  if (activeTurnsByConversation.get(sessionId) !== current) activeTurnsByConversation.set(sessionId, current);
-  if (activeTurnResultSeen(current) && !activeTurnResultSeenByConversation.get(sessionId)) {
-    activeTurnResultSeenByConversation.set(sessionId, true);
+  if (activeTurnsByConversation.get(conversationId) !== current) activeTurnsByConversation.set(conversationId, current);
+  if (activeTurnResultSeen(current) && !activeTurnResultSeenByConversation.get(conversationId)) {
+    activeTurnResultSeenByConversation.set(conversationId, true);
   }
 }
 
 function beginActiveTurn(options: BeginActiveTurnOptions = {}): Turn {
-  const sessionId = options.sessionId || selectedId.value;
-  let current: Turn | null = cachedActiveTurn(sessionId);
+  const conversationId = options.conversationId || selectedConversationId.value;
+  let current: Turn | null = cachedActiveTurn(conversationId);
 
   if (options.turn) {
     if (current) syncTurnForStream(current, options.turn);
@@ -1371,30 +1371,30 @@ function beginActiveTurn(options: BeginActiveTurnOptions = {}): Turn {
   if (options.id) current.id = options.id;
   if (options.status) current.status = options.status;
   if (options.startedAt) current.startedAt = options.startedAt;
-  if (sessionId && activeTurnsByConversation.get(sessionId) !== current) activeTurnsByConversation.set(sessionId, current);
+  if (conversationId && activeTurnsByConversation.get(conversationId) !== current) activeTurnsByConversation.set(conversationId, current);
 
-  if (options.resetResultSeen) activeTurnResultSeenByConversation.delete(sessionId);
-  else if (activeTurnResultSeen(current) && !activeTurnResultSeenByConversation.get(sessionId)) activeTurnResultSeenByConversation.set(sessionId, true);
+  if (options.resetResultSeen) activeTurnResultSeenByConversation.delete(conversationId);
+  else if (activeTurnResultSeen(current) && !activeTurnResultSeenByConversation.get(conversationId)) activeTurnResultSeenByConversation.set(conversationId, true);
 
-  setConversationProcessing(sessionId, true);
-  if (sessionId === selectedId.value) {
+  setConversationProcessing(conversationId, true);
+  if (conversationId === selectedConversationId.value) {
     sending.value = true;
     stopping.value = false;
   }
-  if (options.restartTimer || !activeTurnStartedAtByConversation.has(sessionId)) startTurnTimer(sessionId, current.startedAt || options.startedAt);
+  if (options.restartTimer || !activeTurnStartedAtByConversation.has(conversationId)) startTurnTimer(conversationId, current.startedAt || options.startedAt);
   return current;
 }
 
-function confirmSentTurn(sessionId: string, turn: Turn) {
-  const current = cachedActiveTurn(sessionId);
+function confirmSentTurn(conversationId: string, turn: Turn) {
+  const current = cachedActiveTurn(conversationId);
   if (!current) {
-    beginActiveTurn({ sessionId, turn, resetResultSeen: true, restartTimer: true });
+    beginActiveTurn({ conversationId, turn, resetResultSeen: true, restartTimer: true });
     return;
   }
 
   const hasStreamedItems = current.items.some(item => item.type !== 'userMessage');
   beginActiveTurn({
-    sessionId,
+    conversationId,
     turn: {
       ...current,
       id: current.id || turn.id,
@@ -1412,7 +1412,7 @@ function activeTurnError(error: unknown) {
 }
 
 function syncDisplayedActiveTurnState() {
-  const running = Boolean(selectedId.value && cachedActiveTurn(selectedId.value));
+  const running = Boolean(selectedConversationId.value && cachedActiveTurn(selectedConversationId.value));
   sending.value = running;
   if (!running) stopping.value = false;
 }
@@ -1423,30 +1423,30 @@ function clearDisplayedActiveTurn() {
 }
 
 function resetActiveTurn(options: { clearCache?: boolean } = {}) {
-  if (options.clearCache && selectedId.value) {
-    stopTurnTimer(selectedId.value);
-    processStartedAtByConversation.delete(selectedId.value);
-    processActiveConversationIds.delete(selectedId.value);
-    activeTurnsByConversation.delete(selectedId.value);
-    activeTurnResultSeenByConversation.delete(selectedId.value);
+  if (options.clearCache && selectedConversationId.value) {
+    stopTurnTimer(selectedConversationId.value);
+    processStartedAtByConversation.delete(selectedConversationId.value);
+    processActiveConversationIds.delete(selectedConversationId.value);
+    activeTurnsByConversation.delete(selectedConversationId.value);
+    activeTurnResultSeenByConversation.delete(selectedConversationId.value);
   }
   clearDisplayedActiveTurn();
 }
 
-function restoreRunningConversationFromList(sessionId: string) {
-  const conversation = conversations.value.find(item => item.id === sessionId);
+function restoreRunningConversationFromList(conversationId: string) {
+  const conversation = conversations.value.find(item => item.id === conversationId);
   if (!conversation || !isConversationProcessing(conversation)) return;
-  setConversationProcessing(sessionId, true);
-  const activeTurn = cachedActiveTurn(sessionId) || markRestoredRunningTurn({
-    id: `running-${sessionId}`,
+  setConversationProcessing(conversationId, true);
+  const activeTurn = cachedActiveTurn(conversationId) || markRestoredRunningTurn({
+    id: `running-${conversationId}`,
     status: 'inProgress',
     startedAt: conversation.runningStartedAt || conversation.updatedAt || conversation.createdAt,
     items: []
   });
   beginActiveTurn({
-    sessionId,
+    conversationId,
     turn: activeTurn,
-    resetResultSeen: !cachedActiveTurn(sessionId),
+    resetResultSeen: !cachedActiveTurn(conversationId),
     restartTimer: true
   });
 }
@@ -1461,7 +1461,7 @@ function activeTurnStartedAt(snapshot: ConversationDetail, turn?: Turn) {
 
 function setConversationDetail(snapshot: ConversationDetail) {
   detailsByConversation.set(snapshot.conversation.id, snapshot);
-  if (selectedId.value === snapshot.conversation.id) detail.value = snapshot;
+  if (selectedConversationId.value === snapshot.conversation.id) detail.value = snapshot;
 }
 
 function clearConversationDetail(id: string) {
@@ -1494,7 +1494,7 @@ function restoreActiveTurn(snapshot: ConversationDetail, enabled: boolean) {
       });
       restoreProcessState(snapshot.conversation.id, activeTurn, activeTurnStartedAt(snapshot, activeTurn));
       beginActiveTurn({
-        sessionId: snapshot.conversation.id,
+        conversationId: snapshot.conversation.id,
         turn: activeTurn,
         resetResultSeen: !cachedTurn,
         restartTimer: true
@@ -1518,7 +1518,7 @@ function restoreActiveTurn(snapshot: ConversationDetail, enabled: boolean) {
   const startedAt = activeTurnStartedAt(snapshot, activeTurn);
   restoreProcessState(snapshot.conversation.id, activeTurn, startedAt);
   beginActiveTurn({
-    sessionId: snapshot.conversation.id,
+    conversationId: snapshot.conversation.id,
     turn: activeTurn,
     startedAt,
     restartTimer: true
@@ -1526,16 +1526,16 @@ function restoreActiveTurn(snapshot: ConversationDetail, enabled: boolean) {
 }
 
 async function sendMessage() {
-  const draftKey = selectedId.value;
+  const draftKey = selectedConversationId.value;
   const content = draft.value.trim();
   if (!content || sendingRequest.value) return;
 
   sendingRequest.value = true;
   autoScrollEnabled.value = true;
-  let conversationId = selectedId.value;
+  let conversationId = selectedConversationId.value;
 
   try {
-    conversationId = selectedId.value;
+    conversationId = selectedConversationId.value;
     if (!conversationId) return;
 
     if (isDraftConversation(conversationId)) {
@@ -1548,7 +1548,7 @@ async function sendMessage() {
       upsertConversationListItem(nextConversation);
       revealConversationSection(nextConversation);
       conversationId = nextConversation.id;
-      selectedId.value = conversationId;
+      selectedConversationId.value = conversationId;
       syncConversationUrl(conversationId);
       setConversationDetail({ conversation: nextConversation, eventCursor: 0, turns: [] });
     }
@@ -1561,7 +1561,7 @@ async function sendMessage() {
     const sent = await conversationApi.send(conversationId, content);
     setConversationProcessing(conversationId, true);
     if (sent.conversation) replaceConversation(sent.conversation);
-    if (selectedId.value === conversationId) {
+    if (selectedConversationId.value === conversationId) {
       const selectedDetail = activeDetail.value;
       if (sent.conversation && selectedDetail?.conversation.id === conversationId) {
         selectedDetail.conversation = sent.conversation;
@@ -1581,16 +1581,16 @@ async function sendMessage() {
       await scrollToBottom({ force: true });
     }
   } catch (error) {
-    if (selectedId.value === conversationId) setConversationDraft(conversationId, content);
-    else if (selectedId.value === draftKey) setConversationDraft(draftKey, content);
+    if (selectedConversationId.value === conversationId) setConversationDraft(conversationId, content);
+    else if (selectedConversationId.value === draftKey) setConversationDraft(draftKey, content);
     if (activeTurnError(error)) {
       setConversationProcessing(conversationId, true);
       ensureConversationStream(conversationId, activeDetail.value?.conversation.id === conversationId ? activeDetail.value.eventCursor : 0);
-      if (selectedId.value === conversationId) await refreshDetail();
+      if (selectedConversationId.value === conversationId) await refreshDetail();
       return;
     }
     setConversationProcessing(conversationId, false);
-    if (selectedId.value === conversationId) resetActiveTurn();
+    if (selectedConversationId.value === conversationId) resetActiveTurn();
     showError(error);
   } finally {
     creatingConversation.value = false;
@@ -1599,14 +1599,14 @@ async function sendMessage() {
 }
 
 async function cancelTurn() {
-  const conversationId = selectedId.value;
+  const conversationId = selectedConversationId.value;
   if (!conversationId || !isConversationRunning(conversationId) || stopping.value) return;
   stopping.value = true;
   finalizeStoppedTurn(conversationId);
   try {
     await conversationApi.cancelTurn(conversationId);
   } catch (error) {
-    locallyStoppedSessionIds.delete(conversationId);
+    locallyStoppedConversationIds.delete(conversationId);
     setConversationProcessing(conversationId, false);
     showError(error);
   }
@@ -1665,10 +1665,10 @@ function mergeTurnForDisplay(target: Turn, source: Turn, keepStatus = false) {
   target.items = mergeTurnItems(target.items, source.items, { skipIncomingReasoning: true });
 }
 
-function finishActiveTurn(status: 'completed' | 'failed' | 'stopped', sessionId = selectedId.value) {
-  const selected = sessionId === selectedId.value;
-  const durationMs = stopTurnTimer(sessionId);
-  const finishedTurn = sessionId ? activeTurnsByConversation.get(sessionId) || null : null;
+function finishActiveTurn(status: 'completed' | 'failed' | 'stopped', conversationId = selectedConversationId.value) {
+  const selected = conversationId === selectedConversationId.value;
+  const durationMs = stopTurnTimer(conversationId);
+  const finishedTurn = conversationId ? activeTurnsByConversation.get(conversationId) || null : null;
   if (!finishedTurn) {
     if (selected) resetActiveTurn();
     return null;
@@ -1678,15 +1678,15 @@ function finishActiveTurn(status: 'completed' | 'failed' | 'stopped', sessionId 
   if (finishedTurn.durationMs === undefined && durationMs !== undefined) finishedTurn.durationMs = durationMs;
   if (status === 'stopped') {
     if (finishedTurn.id) locallyStoppedRunIds.add(finishedTurn.id);
-    if (sessionId) locallyStoppedSessionIds.add(sessionId);
+    if (conversationId) locallyStoppedConversationIds.add(conversationId);
   }
-  if (sessionId) {
-    setConversationProcessing(sessionId, false);
-    activeTurnsByConversation.delete(sessionId);
-    activeTurnResultSeenByConversation.delete(sessionId);
+  if (conversationId) {
+    setConversationProcessing(conversationId, false);
+    activeTurnsByConversation.delete(conversationId);
+    activeTurnResultSeenByConversation.delete(conversationId);
   }
 
-  const targetDetail = detailsByConversation.get(sessionId);
+  const targetDetail = detailsByConversation.get(conversationId);
   if (targetDetail) {
     const persisted = targetDetail.turns.find(turn => turn.id === finishedTurn.id);
     if (persisted) mergeTurnForDisplay(persisted, finishedTurn, status === 'stopped');
@@ -1698,16 +1698,16 @@ function finishActiveTurn(status: 'completed' | 'failed' | 'stopped', sessionId 
   return finishedTurn;
 }
 
-function finalizeStoppedTurn(sessionId = selectedId.value) {
-  finishActiveTurn('stopped', sessionId);
+function finalizeStoppedTurn(conversationId = selectedConversationId.value) {
+  finishActiveTurn('stopped', conversationId);
 }
 
-function findStreamingItem(sessionId: string, id: string) {
-  return cachedActiveTurn(sessionId)?.items.find(value => value.id === id);
+function findStreamingItem(conversationId: string, id: string) {
+  return cachedActiveTurn(conversationId)?.items.find(value => value.id === id);
 }
 
-function ensureStreamingItem(sessionId: string, id: string, type: string) {
-  const turn = beginActiveTurn({ sessionId });
+function ensureStreamingItem(conversationId: string, id: string, type: string) {
+  const turn = beginActiveTurn({ conversationId });
   let item = turn.items.find(value => value.id === id);
   if (!item) {
     item = { id, type };
@@ -1730,18 +1730,18 @@ function streamAgentMessagePhase(params: { phase?: string | null; item?: ThreadI
   return existing?.phase ?? 'commentary';
 }
 
-function upsertStreamingItem(sessionId: string, item: ThreadItem) {
-  const turn = beginActiveTurn({ sessionId });
+function upsertStreamingItem(conversationId: string, item: ThreadItem) {
+  const turn = beginActiveTurn({ conversationId });
   if (item.type === 'userMessage') {
     turn.items = mergeTurnItems(turn.items, [item]);
-    publishActiveTurn(sessionId, turn);
+    publishActiveTurn(conversationId, turn);
     return;
   }
   const index = turn.items.findIndex(value => value.id === item.id);
   if (index >= 0) syncThreadItem(turn.items[index], normalizeStreamingItem(turn.items[index], item));
   else turn.items.push(normalizeStreamingItem(undefined, item));
-  if (item.type === 'agentMessage' && item.phase === 'final_answer' && item.text) activeTurnResultSeenByConversation.set(sessionId, true);
-  publishActiveTurn(sessionId, turn);
+  if (item.type === 'agentMessage' && item.phase === 'final_answer' && item.text) activeTurnResultSeenByConversation.set(conversationId, true);
+  publishActiveTurn(conversationId, turn);
 }
 
 function userItemText(item: ThreadItem) {
@@ -1869,42 +1869,42 @@ function stopTurnTickerIfIdle() {
   turnTimer = undefined;
 }
 
-function startTurnTimer(sessionId: string, startedAt?: string) {
-  if (!sessionId) return;
+function startTurnTimer(conversationId: string, startedAt?: string) {
+  if (!conversationId) return;
   const parsed = startedAt ? Date.parse(startedAt) : Number.NaN;
-  activeTurnStartedAtByConversation.set(sessionId, Number.isFinite(parsed) ? parsed : Date.now());
+  activeTurnStartedAtByConversation.set(conversationId, Number.isFinite(parsed) ? parsed : Date.now());
   ensureTurnTicker();
 }
 
-function startProcessTimer(sessionId: string, startedAt?: string) {
-  if (!sessionId) return;
-  processActiveConversationIds.add(sessionId);
-  if (processStartedAtByConversation.has(sessionId)) return;
+function startProcessTimer(conversationId: string, startedAt?: string) {
+  if (!conversationId) return;
+  processActiveConversationIds.add(conversationId);
+  if (processStartedAtByConversation.has(conversationId)) return;
   const parsed = startedAt ? Date.parse(startedAt) : Number.NaN;
-  processStartedAtByConversation.set(sessionId, Number.isFinite(parsed) ? parsed : Date.now());
+  processStartedAtByConversation.set(conversationId, Number.isFinite(parsed) ? parsed : Date.now());
   ensureTurnTicker();
 }
 
-function restoreProcessState(sessionId: string, turn: Turn, startedAt?: string) {
-  if (!sessionId || !hasVisibleProcessItems(turn)) return;
-  startProcessTimer(sessionId, startedAt || turn.startedAt);
+function restoreProcessState(conversationId: string, turn: Turn, startedAt?: string) {
+  if (!conversationId || !hasVisibleProcessItems(turn)) return;
+  startProcessTimer(conversationId, startedAt || turn.startedAt);
 }
 
-function markProcessActive(sessionId: string) {
-  startProcessTimer(sessionId);
+function markProcessActive(conversationId: string) {
+  startProcessTimer(conversationId);
 }
 
-function resetProcessTimer(sessionId: string) {
-  if (!sessionId) return;
-  processStartedAtByConversation.delete(sessionId);
-  processActiveConversationIds.delete(sessionId);
+function resetProcessTimer(conversationId: string) {
+  if (!conversationId) return;
+  processStartedAtByConversation.delete(conversationId);
+  processActiveConversationIds.delete(conversationId);
 }
 
-function stopTurnTimer(sessionId: string) {
-  const startedAt = activeTurnStartedAtByConversation.get(sessionId);
-  activeTurnStartedAtByConversation.delete(sessionId);
-  processStartedAtByConversation.delete(sessionId);
-  processActiveConversationIds.delete(sessionId);
+function stopTurnTimer(conversationId: string) {
+  const startedAt = activeTurnStartedAtByConversation.get(conversationId);
+  activeTurnStartedAtByConversation.delete(conversationId);
+  processStartedAtByConversation.delete(conversationId);
+  processActiveConversationIds.delete(conversationId);
   stopTurnTickerIfIdle();
   return startedAt ? Math.max(0, Date.now() - startedAt) : undefined;
 }
@@ -1918,21 +1918,21 @@ function stopAllTurnTimers() {
 }
 
 async function handleStreamEvent(event: StreamEvent) {
-  const isSelectedConversation = event.sessionId === selectedId.value;
-  const locallyStopped = Boolean(event.runId && locallyStoppedRunIds.has(event.runId)) || locallyStoppedSessionIds.has(event.sessionId);
+  const isSelectedConversation = event.conversationId === selectedConversationId.value;
+  const locallyStopped = Boolean(event.runId && locallyStoppedRunIds.has(event.runId)) || locallyStoppedConversationIds.has(event.conversationId);
 
   if (event.type === 'run.started') {
-    resetProcessTimer(event.sessionId);
-    setConversationProcessing(event.sessionId, true);
+    resetProcessTimer(event.conversationId);
+    setConversationProcessing(event.conversationId, true);
   }
 
   if (locallyStopped && event.type !== 'run.completed' && event.type !== 'run.failed') return;
 
   if (event.type === 'run.started') {
-    setConversationProcessing(event.sessionId, true);
+    setConversationProcessing(event.conversationId, true);
     const data = event.data as { startedAt?: string } | undefined;
     beginActiveTurn({
-      sessionId: event.sessionId,
+      conversationId: event.conversationId,
       id: event.runId || undefined,
       status: 'inProgress',
       startedAt: data?.startedAt || event.createdAt,
@@ -1948,8 +1948,8 @@ async function handleStreamEvent(event: StreamEvent) {
       const startedAt = Number(turn.startedAt);
       const startedAtIso = Number.isFinite(startedAt) && startedAt > 0 ? new Date(startedAt * 1000).toISOString() : undefined;
       beginActiveTurn({
-        sessionId: event.sessionId,
-        id: String(turn.id || cachedActiveTurn(event.sessionId)?.id || ''),
+        conversationId: event.conversationId,
+        id: String(turn.id || cachedActiveTurn(event.conversationId)?.id || ''),
         status: String(turn.status || 'inProgress'),
         startedAt: startedAtIso,
         restartTimer: Boolean(startedAtIso)
@@ -1962,8 +1962,8 @@ async function handleStreamEvent(event: StreamEvent) {
     const turn = (event.data as { params?: { turn?: Record<string, unknown> } } | undefined)?.params?.turn;
     if (turn) {
       const activeTurn = beginActiveTurn({
-        sessionId: event.sessionId,
-        id: String(turn.id || cachedActiveTurn(event.sessionId)?.id || ''),
+        conversationId: event.conversationId,
+        id: String(turn.id || cachedActiveTurn(event.conversationId)?.id || ''),
         status: String(turn.status || 'completed')
       });
       const durationMs = Number(turn.durationMs);
@@ -1977,7 +1977,7 @@ async function handleStreamEvent(event: StreamEvent) {
         // 让服务端 userMessage 替换本地确认消息，同时保留过程项。
         activeTurn.items = mergeTurnItems(activeTurn.items, turn.items as ThreadItem[]);
       }
-      publishActiveTurn(event.sessionId, activeTurn);
+      publishActiveTurn(event.conversationId, activeTurn);
     }
     return;
   }
@@ -1987,7 +1987,7 @@ async function handleStreamEvent(event: StreamEvent) {
     const payload = ((data?.params?.msg || data?.params?.payload || data?.params) ?? {}) as Record<string, unknown>;
     const startedAt = Number(payload.started_at);
     if (Number.isFinite(startedAt) && startedAt > 0) {
-      beginActiveTurn({ sessionId: event.sessionId, startedAt: new Date(startedAt * 1000).toISOString() });
+      beginActiveTurn({ conversationId: event.conversationId, startedAt: new Date(startedAt * 1000).toISOString() });
     }
     return;
   }
@@ -1998,7 +1998,7 @@ async function handleStreamEvent(event: StreamEvent) {
     const durationMs = Number(payload.duration_ms);
     if (Number.isFinite(durationMs) && durationMs >= 0) {
       const startedAt = Date.now() - durationMs;
-      activeTurnStartedAtByConversation.set(event.sessionId, startedAt);
+      activeTurnStartedAtByConversation.set(event.conversationId, startedAt);
       ensureTurnTicker();
     }
   }
@@ -2008,13 +2008,13 @@ async function handleStreamEvent(event: StreamEvent) {
     const delta = params?.delta ?? '';
     if (!delta) return;
     const itemId = params?.itemId || `stream-reasoning-${event.runId || 'active'}`;
-    const item = ensureStreamingItem(event.sessionId, itemId, 'reasoning');
+    const item = ensureStreamingItem(event.conversationId, itemId, 'reasoning');
     const content = (Array.isArray(item.content) ? item.content : []) as unknown as string[];
     const index = Number(params?.contentIndex) || 0;
     while (content.length <= index) content.push('');
     content[index] = `${content[index] || ''}${delta}`;
     item.content = content;
-    publishActiveTurn(event.sessionId);
+    publishActiveTurn(event.conversationId);
     if (isSelectedConversation) await scrollToBottom();
     return;
   }
@@ -2024,14 +2024,14 @@ async function handleStreamEvent(event: StreamEvent) {
     const delta = params?.delta ?? '';
     if (!delta) return;
     const itemId = params?.itemId || params?.item?.id || `stream-agent-${event.runId || 'active'}`;
-    const existingItem = findStreamingItem(event.sessionId, itemId);
+    const existingItem = findStreamingItem(event.conversationId, itemId);
     const phase = streamAgentMessagePhase(params, existingItem);
-    if (phase !== 'final_answer') markProcessActive(event.sessionId);
-    const item = ensureStreamingItem(event.sessionId, itemId, 'agentMessage');
+    if (phase !== 'final_answer') markProcessActive(event.conversationId);
+    const item = ensureStreamingItem(event.conversationId, itemId, 'agentMessage');
     item.phase = phase;
     item.text = `${item.text || ''}${delta}`;
-    publishActiveTurn(event.sessionId);
-    if (item.phase === 'final_answer' && item.text) activeTurnResultSeenByConversation.set(event.sessionId, true);
+    publishActiveTurn(event.conversationId);
+    if (item.phase === 'final_answer' && item.text) activeTurnResultSeenByConversation.set(event.conversationId, true);
     if (isSelectedConversation) await scrollToBottom();
     return;
   }
@@ -2040,10 +2040,10 @@ async function handleStreamEvent(event: StreamEvent) {
     const params = (event.data as { params?: { item?: ThreadItem } } | undefined)?.params;
     const streamedItem = params?.item as ThreadItem | undefined;
     if (streamedItem) {
-      if (isVisibleProcessStreamItem(streamedItem)) markProcessActive(event.sessionId);
-      upsertStreamingItem(event.sessionId, { ...streamedItem, streamStatus: 'running' });
+      if (isVisibleProcessStreamItem(streamedItem)) markProcessActive(event.conversationId);
+      upsertStreamingItem(event.conversationId, { ...streamedItem, streamStatus: 'running' });
       if (streamedItem.type === 'agentMessage' && streamedItem.phase === 'final_answer' && streamedItem.text) {
-        activeTurnResultSeenByConversation.set(event.sessionId, true);
+        activeTurnResultSeenByConversation.set(event.conversationId, true);
       }
     }
     if (isSelectedConversation) await scrollToBottom();
@@ -2054,10 +2054,10 @@ async function handleStreamEvent(event: StreamEvent) {
     const params = (event.data as { params?: { item?: ThreadItem } } | undefined)?.params;
     if (params?.item) {
       const completedItem = { ...(params.item as ThreadItem), streamStatus: 'completed' };
-      if (isVisibleProcessStreamItem(completedItem)) markProcessActive(event.sessionId);
-      upsertStreamingItem(event.sessionId, completedItem);
+      if (isVisibleProcessStreamItem(completedItem)) markProcessActive(event.conversationId);
+      upsertStreamingItem(event.conversationId, completedItem);
       if (completedItem.type === 'agentMessage' && completedItem.phase === 'final_answer' && completedItem.text) {
-        activeTurnResultSeenByConversation.set(event.sessionId, true);
+        activeTurnResultSeenByConversation.set(event.conversationId, true);
       }
     }
     if (isSelectedConversation) await scrollToBottom();
@@ -2067,20 +2067,20 @@ async function handleStreamEvent(event: StreamEvent) {
   if (event.type === 'run.completed' || event.type === 'run.failed') {
     if (locallyStopped) {
       if (event.runId) locallyStoppedRunIds.delete(event.runId);
-      locallyStoppedSessionIds.delete(event.sessionId);
-      setConversationProcessing(event.sessionId, false);
+      locallyStoppedConversationIds.delete(event.conversationId);
+      setConversationProcessing(event.conversationId, false);
       await loadConversations();
       return;
     }
 
-    const completedSessionId = event.sessionId;
-    setConversationProcessing(completedSessionId, false);
-    const completedTurn = finishActiveTurn(event.type === 'run.completed' ? 'completed' : 'failed', completedSessionId);
+    const completedConversationId = event.conversationId;
+    setConversationProcessing(completedConversationId, false);
+    const completedTurn = finishActiveTurn(event.type === 'run.completed' ? 'completed' : 'failed', completedConversationId);
     await nextTick();
     await loadConversations();
     closeIdleConversationStreams();
     if (completedTurn) {
-      const targetDetail = detailsByConversation.get(completedSessionId);
+      const targetDetail = detailsByConversation.get(completedConversationId);
       if (targetDetail) {
         const persisted = targetDetail.turns.find(turn => turn.id === completedTurn.id);
         if (persisted) mergeTurnForDisplay(persisted, completedTurn);
@@ -2143,14 +2143,14 @@ async function toggleArchived() {
 }
 
 async function archiveConversation(item: Conversation) {
-  const wasSelected = item.id === selectedId.value;
+  const wasSelected = item.id === selectedConversationId.value;
   try {
     await conversationApi.update(item.id, { archived: true });
     clearConversationDetail(item.id);
     setConversationProcessing(item.id, false);
     if (wasSelected) {
       closeConversationStream(item.id);
-      selectedId.value = '';
+      selectedConversationId.value = '';
       syncConversationUrl('');
       detail.value = null;
       resetActiveTurn();
@@ -2181,7 +2181,7 @@ async function deleteConversation() {
     workspaceVisibilityByConversation.delete(removedId);
     setConversationProcessing(removedId, false);
     closeConversationStream(removedId);
-    selectedId.value = '';
+    selectedConversationId.value = '';
     draftConversationGroupId.value = '';
     syncConversationUrl('');
     detail.value = null;
@@ -2271,7 +2271,7 @@ async function bootstrap() {
     currentUser.value = null;
     conversations.value = [];
     settingsVisible.value = false;
-    selectedId.value = '';
+    selectedConversationId.value = '';
     syncConversationUrl('');
     detail.value = null;
     loadingDetail.value = false;
@@ -2334,7 +2334,7 @@ function logout() {
   currentUser.value = null;
   conversationGroups.value = [];
   closeAllConversationStreams();
-  selectedId.value = '';
+  selectedConversationId.value = '';
   draftConversationGroupId.value = '';
   syncConversationUrl('');
   detail.value = null;
@@ -2571,7 +2571,7 @@ onBeforeUnmount(() => {
   closeAllConversationStreams();
   stopAllTurnTimers();
 });
-watch(selectedId, () => {
+watch(selectedConversationId, () => {
   workspaceExpanded.value = false;
   pinnedSummaryOpen.value = false;
 });
@@ -2643,7 +2643,7 @@ watch([settingsVisible, settingsSection], () => {
                     v-for="item in pinnedConversations"
                     :key="item.id"
                     class="conversation-row previewable-conversation-row"
-                    :class="{ selected: item.id === selectedId, dragging: item.id === draggedConversationId }"
+                    :class="{ selected: item.id === selectedConversationId, dragging: item.id === draggedConversationId }"
                     @pointerdown="onConversationPointerDown(item, $event)"
                     @touchstart="onRowTouchStart(item, $event)"
                     @mouseenter="showConversationPreview(item, $event)"
@@ -2740,7 +2740,7 @@ watch([settingsVisible, settingsSection], () => {
                     v-for="item in conversationsInGroup(group.id)"
                     :key="item.id"
                     class="conversation-row grouped-conversation previewable-conversation-row"
-                    :class="{ selected: item.id === selectedId, dragging: item.id === draggedConversationId }"
+                    :class="{ selected: item.id === selectedConversationId, dragging: item.id === draggedConversationId }"
                     @pointerdown="onConversationPointerDown(item, $event)"
                     @touchstart="onRowTouchStart(item, $event)"
                     @mouseenter="showConversationPreview(item, $event)"
@@ -2811,7 +2811,7 @@ watch([settingsVisible, settingsSection], () => {
                     v-for="item in conversationList"
                     :key="item.id"
                     class="conversation-row previewable-conversation-row"
-                    :class="{ selected: item.id === selectedId, dragging: item.id === draggedConversationId }"
+                    :class="{ selected: item.id === selectedConversationId, dragging: item.id === draggedConversationId }"
                     @pointerdown="onConversationPointerDown(item, $event)"
                     @touchstart="onRowTouchStart(item, $event)"
                     @mouseenter="showConversationPreview(item, $event)"
@@ -2934,7 +2934,7 @@ watch([settingsVisible, settingsSection], () => {
         :style="workspacePanelStyle"
       >
         <header class="topbar">
-          <n-button quaternary circle class="mobile-menu-button" @click="openMobileSidebar">
+          <n-button quaternary circle class="mobile-menu-button" aria-label="打开左侧边栏" title="打开左侧边栏" @click="openMobileSidebar">
             <template #icon><Icon icon="solar:sidebar-minimalistic-outline" /></template>
           </n-button>
           <n-button v-if="sidebarCollapsed" quaternary circle class="topbar-sidebar-toggle" @click="sidebarCollapsed = false">
@@ -2961,8 +2961,8 @@ watch([settingsVisible, settingsSection], () => {
           v-if="pinnedSummaryWorkspaces.length && !workspaceVisible"
           quaternary
           class="right-panel-toggle topbar-right-panel-toggle"
-          aria-label="Toggle pinned summary"
-          title="Toggle pinned summary"
+          :aria-label="pinnedSummaryOpen ? '收起右侧面板' : '打开右侧面板'"
+          :title="pinnedSummaryOpen ? '收起右侧面板' : '打开右侧面板'"
           @click="toggleRightPanel"
         >
           <template #icon><Icon icon="solar:sidebar-minimalistic-outline" /></template>
@@ -2995,7 +2995,7 @@ watch([settingsVisible, settingsSection], () => {
           </div>
         </section>
 
-        <section v-else-if="selectedId && isNewChat" class="chat-empty">
+        <section v-else-if="selectedConversationId && isNewChat" class="chat-empty">
           <div class="welcome">
             <div class="welcome-icon"><img src="/agentrazor-icon.png" alt="" /></div>
             <h1>今天想完成什么？</h1>
@@ -3031,7 +3031,7 @@ watch([settingsVisible, settingsSection], () => {
           </div>
         </section>
 
-        <template v-else-if="selectedId">
+        <template v-else-if="selectedConversationId">
           <nav v-if="userMessages.length" class="conversation-preview" aria-label="用户消息导航">
             <button
               v-for="(item, index) in userMessages"
@@ -3043,7 +3043,7 @@ watch([settingsVisible, settingsSection], () => {
               @click="jumpToMessage(item.id)"
             />
           </nav>
-          <section :key="selectedId" ref="messagePane" class="message-pane" @scroll="handleMessageScroll">
+          <section :key="selectedConversationId" ref="messagePane" class="message-pane" @scroll="handleMessageScroll">
             <n-spin class="message-spin" :show="loadingCurrentDetail">
               <div class="message-column">
                 <section v-for="view in renderedTurnViews" :key="view.renderKey" class="turn" :data-status="view.turn.status">
@@ -3194,8 +3194,8 @@ watch([settingsVisible, settingsSection], () => {
                 quaternary
                 circle
                 class="workspace-action-button"
-                aria-label="Refresh workspace"
-                title="Refresh workspace"
+                aria-label="刷新右侧面板"
+                title="刷新右侧面板"
                 @click="reloadWorkspace"
               >
                 <template #icon><Icon icon="solar:refresh-linear" /></template>
@@ -3204,8 +3204,8 @@ watch([settingsVisible, settingsSection], () => {
                 quaternary
                 circle
                 class="workspace-action-button workspace-maximize-button"
-                :aria-label="workspaceExpanded ? 'Restore workspace size' : 'Expand workspace'"
-                :title="workspaceExpanded ? 'Restore workspace size' : 'Expand workspace'"
+                :aria-label="workspaceExpanded ? '恢复右侧面板' : '放大右侧面板'"
+                :title="workspaceExpanded ? '恢复右侧面板' : '放大右侧面板'"
                 @click="toggleWorkspaceExpanded"
               >
                 <template #icon>
@@ -3216,15 +3216,15 @@ watch([settingsVisible, settingsSection], () => {
                 quaternary
                 circle
                 class="workspace-action-button workspace-right-panel-toggle"
-                aria-label="Toggle pinned summary"
-                title="Toggle pinned summary"
+                aria-label="收起右侧面板"
+                title="收起右侧面板"
                 @click="toggleRightPanel"
               >
                 <template #icon><Icon icon="solar:sidebar-minimalistic-outline" /></template>
               </n-button>
             </div>
           </header>
-          <iframe :key="`${selectedId}:${activeWorkspace.url}:${workspaceReloadVersion}`" :src="activeWorkspace.url" :title="activeWorkspace.title" />
+          <iframe :key="`${selectedConversationId}:${activeWorkspace.url}:${workspaceReloadVersion}`" :src="activeWorkspace.url" :title="activeWorkspace.title" />
         </aside>
       </main>
     </div>

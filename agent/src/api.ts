@@ -61,7 +61,6 @@ export interface GeneratedImage {
 
 export interface ConversationDetail {
   conversation: Conversation;
-  sessionId?: string;
   eventCursor: number;
   turns: Turn[];
 }
@@ -69,7 +68,7 @@ export interface ConversationDetail {
 export interface StreamEvent {
   id: number;
   type: string;
-  sessionId: string;
+  conversationId: string;
   runId?: string;
   data?: unknown;
   createdAt: string;
@@ -90,11 +89,9 @@ interface EventsResponse {
 
 export interface SendMessageResponse {
   conversationId: string;
-  sessionId: string;
   conversation: Conversation;
   run: {
     id: string;
-    prompt: string;
     createdAt: string;
   };
 }

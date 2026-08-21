@@ -23,7 +23,6 @@ type (
 	}
 	Run {
 		Id        string `json:"id"`
-		Prompt    string `json:"prompt"`
 		CreatedAt string `json:"createdAt"`
 	}
 	GeneratedImage {
@@ -64,7 +63,6 @@ type (
 	}
 	DetailResponse {
 		Conversation Conversation `json:"conversation"`
-		SessionId    string       `json:"sessionId,omitempty"`
 		EventCursor  int64        `json:"eventCursor"`
 		Turns        []Turn       `json:"turns"`
 	}
@@ -81,7 +79,6 @@ type (
 	}
 	SendMessageResponse {
 		ConversationId string `json:"conversationId"`
-		SessionId      string `json:"sessionId"`
 		Conversation   Conversation `json:"conversation"`
 		Run            Run    `json:"run"`
 	}

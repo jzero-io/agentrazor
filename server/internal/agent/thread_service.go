@@ -284,10 +284,16 @@ func (s *ThreadService) Close() error {
 		return nil
 	}
 	s.closed = true
+	cancels := make([]context.CancelFunc, 0, len(s.runs))
 	for _, run := range s.runs {
-		run.cancel()
+		cancels = append(cancels, run.cancel)
 	}
+	s.runs = make(map[string]activeRun)
 	s.mu.Unlock()
+
+	for _, cancel := range cancels {
+		cancel()
+	}
 	err := s.runtime.Close()
 	s.events.Close()
 	return err

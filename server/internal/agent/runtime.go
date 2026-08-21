@@ -240,20 +240,20 @@ func isolatedCodexEnvironment(environment []string, codexHome string) []string {
 	return append(result, "CODEX_HOME="+codexHome)
 }
 
-func (r *CodexAppServerRuntime) Resume(ctx context.Context, externalSessionID, prompt string, emit EventHandler) error {
-	if externalSessionID == "" {
-		return errors.New("external session id is required")
+func (r *CodexAppServerRuntime) Resume(ctx context.Context, threadID, prompt string, emit EventHandler) error {
+	if threadID == "" {
+		return errors.New("thread id is required")
 	}
-	resumed, err := r.ensureThread(ctx, externalSessionID)
+	resumed, err := r.ensureThread(ctx, threadID)
 	if err != nil {
 		return err
 	}
 	if resumed {
 		emitRuntimeEvent(emit, "thread.resumed", map[string]any{
-			"threadId": externalSessionID,
+			"threadId": threadID,
 		})
 	}
-	return r.runTurn(ctx, externalSessionID, prompt, emit)
+	return r.runTurn(ctx, threadID, prompt, emit)
 }
 
 func (r *CodexAppServerRuntime) startThread(ctx context.Context) (string, error) {

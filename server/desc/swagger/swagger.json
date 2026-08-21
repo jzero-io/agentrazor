@@ -964,9 +964,6 @@
                 "eventCursor": {
                   "type": "integer"
                 },
-                "sessionId": {
-                  "type": "string"
-                },
                 "turns": {
                   "items": {
                     "properties": {
@@ -1225,20 +1222,13 @@
                     },
                     "id": {
                       "type": "string"
-                    },
-                    "prompt": {
-                      "type": "string"
                     }
                   },
                   "required": [
                     "id",
-                    "prompt",
                     "createdAt"
                   ],
                   "type": "object"
-                },
-                "sessionId": {
-                  "type": "string"
                 }
               },
               "type": "object"

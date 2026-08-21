@@ -71,7 +71,6 @@ func sendMessage(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 	}
 	return &types.SendMessageResponse{
 		ConversationId: conversationID,
-		SessionId:      conversationID,
 		Conversation: func() types.Conversation {
 			item := toConversation(thread)
 			item.Running = true

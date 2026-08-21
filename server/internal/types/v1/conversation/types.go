@@ -34,7 +34,6 @@ type DeleteResponse struct {
 
 type DetailResponse struct {
 	Conversation Conversation `json:"conversation"`
-	SessionId    string       `json:"sessionId,omitempty"`
 	EventCursor  int64        `json:"eventCursor"`
 	Turns        []Turn       `json:"turns"`
 }
@@ -68,7 +67,6 @@ type PathRequest struct {
 
 type Run struct {
 	Id        string `json:"id"`
-	Prompt    string `json:"prompt"`
 	CreatedAt string `json:"createdAt"`
 }
 
@@ -79,7 +77,6 @@ type SendMessageRequest struct {
 
 type SendMessageResponse struct {
 	ConversationId string       `json:"conversationId"`
-	SessionId      string       `json:"sessionId"`
 	Conversation   Conversation `json:"conversation"`
 	Run            Run          `json:"run"`
 }

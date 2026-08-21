@@ -115,7 +115,6 @@ func setConversationActiveRun(conversation *types.Conversation, threads *agentdo
 func toRun(value agentdomain.ThreadRun) types.Run {
 	return types.Run{
 		Id:        value.ID,
-		Prompt:    value.Prompt,
 		CreatedAt: formatTime(value.CreatedAt),
 	}
 }
@@ -140,7 +139,6 @@ func buildDetail(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 	setConversationActiveRun(&conversation, svcCtx.AgentThreads, conversationID)
 	detail := &types.DetailResponse{
 		Conversation: conversation,
-		SessionId:    thread.ID,
 		EventCursor:  svcCtx.AgentThreads.EventCursor(conversationID),
 		Turns:        make([]types.Turn, 0, len(thread.Turns)),
 	}
