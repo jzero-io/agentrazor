@@ -370,8 +370,10 @@ const locallyStoppedRunIds = new Set<string>();
 const locallyStoppedConversationIds = new Set<string>();
 const sidebarCollapsed = ref(savedSidebarView.sidebarCollapsed ?? false);
 const sidebarWidth = ref(Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, savedSidebarView.sidebarWidth || DEFAULT_SIDEBAR_WIDTH)));
+const sidebarHoverOpen = ref(false);
 const appShellStyle = computed(() => ({ '--sidebar-width': `${sidebarWidth.value}px` }));
 const mobileSidebarOpen = ref(false);
+const sidebarExpanded = computed(() => !sidebarCollapsed.value || sidebarHoverOpen.value || mobileSidebarOpen.value);
 const renameVisible = ref(false);
 const renameValue = ref('');
 const messagePane = ref<HTMLElement>();
@@ -1024,7 +1026,32 @@ function createConversation() {
 function openMobileSidebar() {
   // 移动端抽屉：确保侧栏内容展开（桌面端折叠状态不影响抽屉显示）
   if (sidebarCollapsed.value) sidebarCollapsed.value = false;
+  sidebarHoverOpen.value = false;
   mobileSidebarOpen.value = true;
+}
+
+function openSidebarHover() {
+  if (!sidebarCollapsed.value || window.matchMedia('(max-width: 720px)').matches) return;
+  sidebarHoverOpen.value = true;
+}
+
+function closeSidebarHover() {
+  if (!sidebarCollapsed.value) return;
+  sidebarHoverOpen.value = false;
+}
+
+function toggleSidebarPinned() {
+  if (sidebarCollapsed.value) {
+    sidebarCollapsed.value = false;
+    sidebarHoverOpen.value = false;
+    return;
+  }
+  sidebarCollapsed.value = true;
+}
+
+function expandSidebar() {
+  sidebarCollapsed.value = false;
+  sidebarHoverOpen.value = false;
 }
 
 function createConversationInGroup(group: ConversationGroup) {
@@ -2644,14 +2671,14 @@ watch([settingsVisible, settingsSection], () => {
         </div>
       </div>
     </div>
-    <div v-else class="app-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed }" :style="appShellStyle">
-      <aside class="sidebar" :class="{ 'mobile-open': mobileSidebarOpen }">
+    <div v-else class="app-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed, 'sidebar-hover-open': sidebarHoverOpen }" :style="appShellStyle">
+      <aside class="sidebar" :class="{ 'mobile-open': mobileSidebarOpen }" @mouseleave="closeSidebarHover">
         <div class="brand">
           <div class="brand-mark"><img src="/agentrazor-icon.png" alt="" /></div>
-          <div v-if="!sidebarCollapsed" class="brand-copy">
+          <div v-if="sidebarExpanded" class="brand-copy">
             <strong>AgentRazor</strong>
           </div>
-          <n-button v-if="!sidebarCollapsed" quaternary circle class="collapse-button" @click="sidebarCollapsed = true">
+          <n-button v-if="sidebarExpanded" quaternary circle class="collapse-button" @click="toggleSidebarPinned">
             <template #icon>
               <Icon icon="solar:sidebar-code-outline" />
             </template>
@@ -2660,10 +2687,10 @@ watch([settingsVisible, settingsSection], () => {
 
         <n-button class="new-chat" secondary @click="createConversation">
           <template #icon><Icon icon="solar:pen-new-square-outline" /></template>
-          <span v-if="!sidebarCollapsed">新建对话</span>
+          <span v-if="sidebarExpanded">新建对话</span>
         </n-button>
 
-        <div v-if="!sidebarCollapsed" class="sidebar-section">
+        <div v-if="sidebarExpanded" class="sidebar-section">
           <n-spin :show="loadingList">
             <n-scrollbar class="conversation-scroll" @scroll="hideConversationPreview">
               <div v-if="pinnedConversations.length" class="conversation-group">
@@ -2893,7 +2920,7 @@ watch([settingsVisible, settingsSection], () => {
         </div>
 
         <div
-          v-if="!sidebarCollapsed"
+          v-if="sidebarExpanded"
           class="sidebar-footer"
           :class="{ 'login-footer': !currentUser }"
         >
@@ -2946,7 +2973,7 @@ watch([settingsVisible, settingsSection], () => {
       />
 
       <div
-        v-if="conversationPreview && !sidebarCollapsed"
+        v-if="conversationPreview && sidebarExpanded"
         class="conversation-hover-card"
         :style="{ top: `${conversationPreviewTop}px` }"
       >
@@ -2971,7 +2998,7 @@ watch([settingsVisible, settingsSection], () => {
           <n-button quaternary circle class="mobile-menu-button" aria-label="打开左侧边栏" title="打开左侧边栏" @click="openMobileSidebar">
             <template #icon><Icon icon="solar:sidebar-minimalistic-outline" /></template>
           </n-button>
-          <n-button v-if="sidebarCollapsed" quaternary circle class="topbar-sidebar-toggle" @click="sidebarCollapsed = false">
+          <n-button v-if="sidebarCollapsed" quaternary circle class="topbar-sidebar-toggle" @mouseenter="openSidebarHover" @click="expandSidebar">
             <template #icon><Icon icon="solar:sidebar-minimalistic-outline" /></template>
           </n-button>
           <div class="topbar-inner">
