@@ -38,6 +38,7 @@ import {
 
 interface SidebarViewState {
   sidebarCollapsed?: boolean;
+  sidebarWidth?: number;
   pinnedExpanded?: boolean;
   groupsExpanded?: boolean;
   conversationsExpanded?: boolean;
@@ -68,6 +69,9 @@ interface ParsedAgentMessage {
 }
 
 const SIDEBAR_VIEW_KEY = 'agentrazor_sidebar_view';
+const DEFAULT_SIDEBAR_WIDTH = 320;
+const MIN_SIDEBAR_WIDTH = 280;
+const MAX_SIDEBAR_WIDTH = 520;
 const CONVERSATION_LIST_DROP_TARGET = 'conversation-list';
 const DRAFT_CONVERSATION_ID = '__draft_conversation__';
 
@@ -324,6 +328,7 @@ const workspacePanelStyle = computed(() => workspaceWidth.value
   ? { '--workspace-width': `${workspaceWidth.value}px` }
   : {});
 let workspaceResizeStart: { x: number; width: number } | null = null;
+let sidebarResizeStart: { x: number; width: number } | null = null;
 const workspacesByConversation = reactive(new Map<string, WorkspaceDescriptor>());
 const workspaceVisibilityByConversation = reactive(new Map<string, boolean>());
 const workspaceVisible = computed({
@@ -364,6 +369,8 @@ let turnTimer: number | undefined;
 const locallyStoppedRunIds = new Set<string>();
 const locallyStoppedConversationIds = new Set<string>();
 const sidebarCollapsed = ref(savedSidebarView.sidebarCollapsed ?? false);
+const sidebarWidth = ref(Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, savedSidebarView.sidebarWidth || DEFAULT_SIDEBAR_WIDTH)));
+const appShellStyle = computed(() => ({ '--sidebar-width': `${sidebarWidth.value}px` }));
 const mobileSidebarOpen = ref(false);
 const renameVisible = ref(false);
 const renameValue = ref('');
@@ -2538,13 +2545,36 @@ function stopWorkspaceResize() {
   document.body.classList.remove('workspace-resizing');
 }
 
+function startSidebarResize(event: PointerEvent) {
+  if (sidebarCollapsed.value || window.matchMedia('(max-width: 720px)').matches) return;
+  sidebarResizeStart = { x: event.clientX, width: sidebarWidth.value };
+  document.body.classList.add('sidebar-resizing');
+  event.preventDefault();
+}
+
+function resizeSidebar(event: PointerEvent) {
+  if (!sidebarResizeStart) return;
+  sidebarWidth.value = Math.min(
+    MAX_SIDEBAR_WIDTH,
+    Math.max(MIN_SIDEBAR_WIDTH, sidebarResizeStart.width + event.clientX - sidebarResizeStart.x)
+  );
+}
+
+function stopSidebarResize() {
+  if (!sidebarResizeStart) return;
+  sidebarResizeStart = null;
+  document.body.classList.remove('sidebar-resizing');
+}
+
 onMounted(() => {
   document.addEventListener('pointerdown', handleDocumentPointerDown);
   document.addEventListener('pointerover', handleDocumentPointerOver);
   window.addEventListener('pointermove', onDragPointerMove);
   window.addEventListener('pointermove', resizeWorkspace);
+  window.addEventListener('pointermove', resizeSidebar);
   window.addEventListener('pointerup', onDragPointerUp);
   window.addEventListener('pointerup', stopWorkspaceResize);
+  window.addEventListener('pointerup', stopSidebarResize);
   window.addEventListener('touchmove', onWindowTouchMove, { passive: false });
   window.addEventListener('touchend', onWindowTouchEnd);
   window.addEventListener('touchcancel', onWindowTouchEnd);
@@ -2561,8 +2591,10 @@ onBeforeUnmount(() => {
   document.removeEventListener('pointerover', handleDocumentPointerOver);
   window.removeEventListener('pointermove', onDragPointerMove);
   window.removeEventListener('pointermove', resizeWorkspace);
+  window.removeEventListener('pointermove', resizeSidebar);
   window.removeEventListener('pointerup', onDragPointerUp);
   window.removeEventListener('pointerup', stopWorkspaceResize);
+  window.removeEventListener('pointerup', stopSidebarResize);
   window.removeEventListener('touchmove', onWindowTouchMove);
   window.removeEventListener('touchend', onWindowTouchEnd);
   window.removeEventListener('touchcancel', onWindowTouchEnd);
@@ -2580,13 +2612,14 @@ watch(isDarkAppearance, value => {
   toastProviderProps.theme = activeTheme.value;
 }, { immediate: true });
 watch(
-  [sidebarCollapsed, pinnedExpanded, groupsExpanded, conversationsExpanded, conversationGroups],
+  [sidebarCollapsed, sidebarWidth, pinnedExpanded, groupsExpanded, conversationsExpanded, conversationGroups],
   () => {
     const collapsedGroups = Object.fromEntries(
       conversationGroups.value.map(group => [group.id, group.collapsed])
     );
     localStorage.setItem(SIDEBAR_VIEW_KEY, JSON.stringify({
       sidebarCollapsed: sidebarCollapsed.value,
+      sidebarWidth: sidebarWidth.value,
       pinnedExpanded: pinnedExpanded.value,
       groupsExpanded: groupsExpanded.value,
       conversationsExpanded: conversationsExpanded.value,
@@ -2611,7 +2644,7 @@ watch([settingsVisible, settingsSection], () => {
         </div>
       </div>
     </div>
-    <div v-else class="app-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+    <div v-else class="app-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed }" :style="appShellStyle">
       <aside class="sidebar" :class="{ 'mobile-open': mobileSidebarOpen }">
         <div class="brand">
           <div class="brand-mark"><img src="/agentrazor-icon.png" alt="" /></div>
@@ -2903,6 +2936,7 @@ watch([settingsVisible, settingsSection], () => {
             </span>
           </button>
         </div>
+        <div v-if="!sidebarCollapsed" class="sidebar-resize-handle" role="separator" aria-orientation="vertical" title="拖动调整侧边栏宽度" @pointerdown="startSidebarResize" />
       </aside>
 
       <div

@@ -204,6 +204,41 @@ textarea {
   overflow: hidden;
 }
 
+.sidebar-resize-handle {
+  position: absolute;
+  z-index: 6;
+  top: 0;
+  right: -4px;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+}
+
+.sidebar-resize-handle::after {
+  position: absolute;
+  top: 0;
+  right: 3px;
+  bottom: 0;
+  width: 1px;
+  content: '';
+  background: transparent;
+  transition: background 120ms ease;
+}
+
+.sidebar-resize-handle:hover::after,
+body.sidebar-resizing .sidebar-resize-handle::after {
+  background: #3186c7;
+}
+
+body.sidebar-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.sidebar-resizing .app-shell {
+  transition: none;
+}
+
 .group-section-heading {
   display: flex;
   min-height: 34px;
@@ -2404,6 +2439,11 @@ html[data-theme='dark'] .confirm-modal-body p {
 :root[data-theme="dark"] .sidebar {
   border-right-color: #303030;
   background: #212121;
+}
+
+:root[data-theme="dark"] .sidebar-resize-handle:hover::after,
+:root[data-theme="dark"] body.sidebar-resizing .sidebar-resize-handle::after {
+  background: #78bceb;
 }
 
 :root[data-theme="dark"] .brand-copy span,
