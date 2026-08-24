@@ -1,7 +1,7 @@
 {
-  "name": "agentrazor-admin",
+  "name": "agentrazor-docs",
   "version": "1.0.0",
-  "description": "agentrazor-admin docs",
+  "description": "AgentRazor documentation",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -12,6 +12,7 @@
   },
   "devDependencies": {
     "@vuepress/bundler-vite": "2.0.0-rc.26",
+    "mermaid": "^11.17.0",
     "sass-embedded": "^1.97.3",
     "vue": "^3.5.29",
     "vuepress": "2.0.0-rc.26",

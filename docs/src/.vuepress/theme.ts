@@ -5,7 +5,7 @@ import { enSidebarConfig, zhSidebarConfig } from "./sidebar/index.js";
 
 // @ts-ignore
 export default hopeTheme({
-  hostname: "https://docs.admin.jzero.io",
+  hostname: "https://docs.agentrazor.jzero.io",
 
   author: {
     name: "jaronnie",
@@ -16,9 +16,9 @@ export default hopeTheme({
 
   // made by https://gopherize.me
   // favicon.ico made by https://www.bitbug.net
-  logo: "agentrazor.png",
+  logo: "/favicon.ico",
 
-  repo: "jzero-io/agentrazor-admin",
+  repo: "jzero-io/agentrazor",
 
   docsDir: "docs/src",
 
@@ -105,7 +105,7 @@ export default hopeTheme({
     // flowchart: true,
 
     // install mermaid before enabling it
-    // mermaid: true,
+    mermaid: true,
 
     // playground: {
     //   presets: ["ts", "vue"],

@@ -8,18 +8,15 @@ export default defineUserConfig({
   locales: {
     "/": {
       lang: "zh-CN",
-      title: "agentrazor-admin",
-      description: "agentrazor-admin 文档",
+      title: "AgentRazor",
+      description: "AgentRazor 文档",
     },
     "/en/": {
       lang: "en-US",
-      title: "agentrazor-admin",
-      description: "docs for agentrazor-admin",
+      title: "AgentRazor",
+      description: "AgentRazor documentation",
     },
   },
 
   theme,
-
-  // 和 PWA 一起启用
-  // shouldPrefetch: false,
 });
