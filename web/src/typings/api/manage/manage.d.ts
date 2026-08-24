@@ -310,5 +310,30 @@ declare namespace Api {
       file: string;
       content: string;
     };
+
+
+    type AgentConfigFile = {
+      name: string;
+    };
+
+    type ListAgentConfigFilesResponse = {
+      files: AgentConfigFile[];
+    };
+
+    type AgentConfigFileDetail = {
+      name: string;
+      content: string;
+    };
+
+    type AgentRuntimeStatus = {
+      running: boolean;
+      restarting: boolean;
+      activeRunCount: number;
+      lastRestartTime?: string;
+    };
+
+    type UpdateAgentConfigFileResponse = {
+      runtime: AgentRuntimeStatus;
+    };
   }
 }

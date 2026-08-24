@@ -179,6 +179,7 @@ const routeMap: RouteMap = {
   "404": "/404",
   "500": "/500",
   "agent": "/agent",
+  "agent_config": "/agent/config",
   "agent_skills": "/agent/skills",
   "home": "/home",
   "iframe-page": "/iframe-page/:url",

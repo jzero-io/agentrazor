@@ -9,6 +9,19 @@ var (
 	_ = time.Now()
 )
 
+type AgentConfigFile struct {
+	Name string `json:"name"`
+}
+
+type ConfigFileRequest struct {
+	Name string `form:"name" validate:"required"`
+}
+
+type ConfigFileResponse struct {
+	Name    string `json:"name"`
+	Content string `json:"content"`
+}
+
 type DeleteSkillRequest struct {
 	SkillName string `path:"skill_name" validate:"required"`
 }
@@ -16,11 +29,31 @@ type DeleteSkillRequest struct {
 type DeleteSkillResponse struct {
 }
 
+type ListConfigFilesRequest struct {
+}
+
+type ListConfigFilesResponse struct {
+	Files []AgentConfigFile `json:"files"`
+}
+
 type ListSkillsRequest struct {
 }
 
 type ListSkillsResponse struct {
 	Skills []Skill `json:"skills"`
+}
+
+type RestartRuntimeRequest struct {
+}
+
+type RuntimeStatus struct {
+	Running         bool   `json:"running"`
+	Restarting      bool   `json:"restarting"`
+	ActiveRunCount  int64  `json:"activeRunCount"`
+	LastRestartTime string `json:"lastRestartTime,optional"`
+}
+
+type RuntimeStatusRequest struct {
 }
 
 type Skill struct {
@@ -44,6 +77,16 @@ type SkillFile struct {
 	Path     string      `json:"path"`
 	Type     string      `json:"type,options=file|directory"`
 	Children []SkillFile `json:"children,optional"`
+}
+
+type UpdateConfigFileRequest struct {
+	Name    string `json:"name" validate:"required"`
+	Content string `json:"content"`
+	Restart bool   `json:"restart,optional"`
+}
+
+type UpdateConfigFileResponse struct {
+	Runtime RuntimeStatus `json:"runtime"`
 }
 
 type UpdateSkillFileRequest struct {

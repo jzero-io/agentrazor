@@ -52,6 +52,17 @@ export const generatedRoutes: GeneratedRoute[] = [
     },
     children: [
       {
+        name: 'agent_config',
+        path: '/agent/config',
+        component: 'view.agent_config',
+        meta: {
+          title: 'agent_config',
+          i18nKey: 'route.agent_config',
+          icon: 'carbon:settings-services',
+          order: 2
+        }
+      },
+      {
         name: 'agent_skills',
         path: '/agent/skills',
         component: 'view.agent_skills',

@@ -1420,6 +1420,17 @@ function beginActiveTurn(options: BeginActiveTurnOptions = {}): Turn {
 }
 
 function confirmSentTurn(conversationId: string, turn: Turn) {
+  const targetDetail = detailsByConversation.get(conversationId);
+  const persisted = targetDetail?.turns.find(item => item.id === turn.id);
+  if (targetDetail && persisted && !isRunningTurnStatus(persisted)) {
+    if (!persisted.startedAt) persisted.startedAt = turn.startedAt;
+    persisted.items = mergeTurnItems(persisted.items, turn.items);
+    setConversationDetail(targetDetail);
+    setConversationProcessing(conversationId, false);
+    if (conversationId === selectedConversationId.value) clearDisplayedActiveTurn();
+    return;
+  }
+
   const current = cachedActiveTurn(conversationId);
   if (!current) {
     beginActiveTurn({ conversationId, turn, resetResultSeen: true, restartTimer: true });
@@ -1696,10 +1707,11 @@ function mergeTurnForDisplay(target: Turn, source: Turn, keepStatus = false) {
   if (!keepStatus) target.status = source.status;
   if (source.durationMs !== undefined) target.durationMs = source.durationMs;
   if (source.completedAt) target.completedAt = source.completedAt;
+  if (source.error !== undefined) target.error = source.error;
   target.items = mergeTurnItems(target.items, source.items, { skipIncomingReasoning: true });
 }
 
-function finishActiveTurn(status: 'completed' | 'failed' | 'stopped', conversationId = selectedConversationId.value) {
+function finishActiveTurn(status: 'completed' | 'failed' | 'stopped', conversationId = selectedConversationId.value, error?: string) {
   const selected = conversationId === selectedConversationId.value;
   const durationMs = stopTurnTimer(conversationId);
   const finishedTurn = conversationId ? activeTurnsByConversation.get(conversationId) || null : null;
@@ -1709,6 +1721,7 @@ function finishActiveTurn(status: 'completed' | 'failed' | 'stopped', conversati
   }
 
   finishedTurn.status = status;
+  if (error) finishedTurn.error = error;
   if (finishedTurn.durationMs === undefined && durationMs !== undefined) finishedTurn.durationMs = durationMs;
   if (status === 'stopped') {
     if (finishedTurn.id) locallyStoppedRunIds.add(finishedTurn.id);
@@ -1951,6 +1964,12 @@ function stopAllTurnTimers() {
   turnTimer = undefined;
 }
 
+function streamErrorMessage(data: unknown) {
+  const value = data as { error?: unknown; message?: unknown } | undefined;
+  const message = value?.error ?? value?.message;
+  return typeof message === 'string' ? message : '';
+}
+
 async function handleStreamEvent(event: StreamEvent) {
   const isSelectedConversation = event.conversationId === selectedConversationId.value;
   const locallyStopped = Boolean(event.runId && locallyStoppedRunIds.has(event.runId)) || locallyStoppedConversationIds.has(event.conversationId);
@@ -2109,7 +2128,11 @@ async function handleStreamEvent(event: StreamEvent) {
 
     const completedConversationId = event.conversationId;
     setConversationProcessing(completedConversationId, false);
-    const completedTurn = finishActiveTurn(event.type === 'run.completed' ? 'completed' : 'failed', completedConversationId);
+    const completedTurn = finishActiveTurn(
+      event.type === 'run.completed' ? 'completed' : 'failed',
+      completedConversationId,
+      event.type === 'run.failed' ? streamErrorMessage(event.data) : undefined
+    );
     await nextTick();
     await loadConversations();
     closeIdleConversationStreams();

@@ -172,6 +172,7 @@ const local: App.I18n.Schema = {
     manage_role: '角色管理',
     manage_menu: '菜单管理',
     agent: 'Agent 管理',
+    'agent_config': '配置管理',
     'agent_skills': 'Skills 管理',
     exception: '异常页',
     exception_403: '403',

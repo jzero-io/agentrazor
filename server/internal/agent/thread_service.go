@@ -18,7 +18,8 @@ var (
 	ErrInvalidThreadID = errors.New("invalid Codex thread id")
 	// ErrThreadNotFound 表示会话在业务库有记录，但 Codex thread 已不存在
 	// （读不到也无法 resume，通常是孤儿数据）。
-	ErrThreadNotFound = errors.New("agent thread not found")
+	ErrThreadNotFound    = errors.New("agent thread not found")
+	ErrRuntimeRestarting = errors.New("agent runtime is restarting")
 )
 
 const turnIdleTimeout = 10 * time.Minute
@@ -80,6 +81,15 @@ type TokenUsageEvent struct {
 
 type TokenUsageRecorder func(context.Context, TokenUsageEvent) error
 
+type RuntimeFactory func() (ThreadRuntime, error)
+
+type RuntimeStatus struct {
+	Running         bool
+	Restarting      bool
+	ActiveRunCount  int
+	LastRestartTime time.Time
+}
+
 type activeRun struct {
 	id        string
 	createdAt time.Time
@@ -87,24 +97,44 @@ type activeRun struct {
 }
 
 type ThreadService struct {
-	runtime     ThreadRuntime
-	idleTimeout time.Duration
-	events      *EventHub
+	runtime        ThreadRuntime
+	runtimeFactory RuntimeFactory
+	idleTimeout    time.Duration
+	events         *EventHub
 
-	mu     sync.Mutex
-	runs   map[string]activeRun
-	closed bool
+	mu              sync.Mutex
+	runs            map[string]activeRun
+	closed          bool
+	restarting      bool
+	lastRestartTime time.Time
 
 	tokenUsageRecorder TokenUsageRecorder
 }
 
-func NewThreadService(runtime ThreadRuntime) *ThreadService {
+func NewThreadService(runtime ThreadRuntime, factory RuntimeFactory) *ThreadService {
 	return &ThreadService{
-		runtime:     runtime,
-		idleTimeout: turnIdleTimeout,
-		events:      NewEventHub(32, 256),
-		runs:        make(map[string]activeRun),
+		runtime:         runtime,
+		runtimeFactory:  factory,
+		idleTimeout:     turnIdleTimeout,
+		events:          NewEventHub(32, 256),
+		runs:            make(map[string]activeRun),
+		lastRestartTime: time.Now().UTC(),
 	}
+}
+
+func (s *ThreadService) currentRuntime() (ThreadRuntime, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil, ErrServiceStopped
+	}
+	if s.restarting {
+		return nil, ErrRuntimeRestarting
+	}
+	if s.runtime == nil {
+		return nil, ErrRuntimeClosed
+	}
+	return s.runtime, nil
 }
 
 func (s *ThreadService) SetTokenUsageRecorder(recorder TokenUsageRecorder) {
@@ -114,13 +144,17 @@ func (s *ThreadService) SetTokenUsageRecorder(recorder TokenUsageRecorder) {
 }
 
 func (s *ThreadService) Create(ctx context.Context, title string) (StoredThread, error) {
-	thread, err := s.runtime.CreateStoredThread(ctx)
+	runtime, err := s.currentRuntime()
+	if err != nil {
+		return StoredThread{}, err
+	}
+	thread, err := runtime.CreateStoredThread(ctx)
 	if err != nil {
 		return StoredThread{}, err
 	}
 	title = strings.TrimSpace(title)
 	if title != "" {
-		if err := s.runtime.SetThreadName(ctx, thread.ID, title); err != nil {
+		if err := runtime.SetThreadName(ctx, thread.ID, title); err != nil {
 			s.deleteCreatedThread(thread.ID)
 			return StoredThread{}, err
 		}
@@ -130,11 +164,15 @@ func (s *ThreadService) Create(ctx context.Context, title string) (StoredThread,
 }
 
 func (s *ThreadService) List(ctx context.Context) ([]StoredThread, error) {
-	active, err := s.runtime.ListStoredThreads(ctx, false)
+	runtime, err := s.currentRuntime()
 	if err != nil {
 		return nil, err
 	}
-	archived, err := s.runtime.ListStoredThreads(ctx, true)
+	active, err := runtime.ListStoredThreads(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+	archived, err := runtime.ListStoredThreads(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -145,14 +183,22 @@ func (s *ThreadService) Metadata(ctx context.Context, threadID string) (StoredTh
 	if err := validateThreadID(threadID); err != nil {
 		return StoredThread{}, err
 	}
-	return s.runtime.ReadStoredThread(ctx, threadID, false)
+	runtime, err := s.currentRuntime()
+	if err != nil {
+		return StoredThread{}, err
+	}
+	return runtime.ReadStoredThread(ctx, threadID, false)
 }
 
 func (s *ThreadService) Get(ctx context.Context, threadID string) (StoredThread, error) {
 	if err := validateThreadID(threadID); err != nil {
 		return StoredThread{}, err
 	}
-	return s.runtime.ReadStoredThread(ctx, threadID, true)
+	runtime, err := s.currentRuntime()
+	if err != nil {
+		return StoredThread{}, err
+	}
+	return runtime.ReadStoredThread(ctx, threadID, true)
 }
 
 func (s *ThreadService) ActiveRun(threadID string) (ActiveRun, bool) {
@@ -180,7 +226,11 @@ func (s *ThreadService) SetName(ctx context.Context, threadID, title string) err
 	if title == "" {
 		return errors.New("conversation title is required")
 	}
-	if err := s.runtime.SetThreadName(ctx, threadID, title); err != nil {
+	runtime, err := s.currentRuntime()
+	if err != nil {
+		return err
+	}
+	if err := runtime.SetThreadName(ctx, threadID, title); err != nil {
 		// thread/name/set needs the rollout, which is moved away when the
 		// thread is archived, so it fails with -32600. Surface that as a clear
 		// "archived" error instead of leaking the raw "no rollout found".
@@ -197,7 +247,11 @@ func (s *ThreadService) SetPinned(ctx context.Context, threadID string, pinned b
 	if err := validateThreadID(threadID); err != nil {
 		return err
 	}
-	return s.runtime.SetThreadPinned(ctx, threadID, pinned)
+	runtime, err := s.currentRuntime()
+	if err != nil {
+		return err
+	}
+	return runtime.SetThreadPinned(ctx, threadID, pinned)
 }
 
 func (s *ThreadService) SetArchived(ctx context.Context, threadID string, archived bool) error {
@@ -211,9 +265,17 @@ func (s *ThreadService) SetArchived(ctx context.Context, threadID string, archiv
 		if running {
 			return ErrThreadTurnRunning
 		}
-		return s.runtime.ArchiveStoredThread(ctx, threadID)
+		runtime, err := s.currentRuntime()
+		if err != nil {
+			return err
+		}
+		return runtime.ArchiveStoredThread(ctx, threadID)
 	}
-	_, err := s.runtime.UnarchiveStoredThread(ctx, threadID)
+	runtime, err := s.currentRuntime()
+	if err != nil {
+		return err
+	}
+	_, err = runtime.UnarchiveStoredThread(ctx, threadID)
 	return err
 }
 
@@ -229,6 +291,10 @@ func (s *ThreadService) Send(threadID, prompt string) (ThreadRun, error) {
 	if s.closed {
 		s.mu.Unlock()
 		return ThreadRun{}, ErrServiceStopped
+	}
+	if s.restarting {
+		s.mu.Unlock()
+		return ThreadRun{}, ErrRuntimeRestarting
 	}
 	if _, ok := s.runs[threadID]; ok {
 		s.mu.Unlock()
@@ -276,7 +342,12 @@ func (s *ThreadService) execute(ctx context.Context, cancel context.CancelFunc, 
 		// server does not retain intermediate display state between subscribers.
 		s.events.Broadcast(run.ThreadID, run.ID, "codex."+eventType, event)
 	}
-	err := s.runtime.Resume(ctx, run.ThreadID, run.Prompt, emit)
+	runtime, runtimeErr := s.currentRuntime()
+	if runtimeErr != nil {
+		s.events.Publish(run.ThreadID, run.ID, "run.failed", map[string]any{"error": runtimeErr.Error()})
+		return
+	}
+	err := runtime.Resume(ctx, run.ThreadID, run.Prompt, emit)
 	if err != nil {
 		s.events.Publish(run.ThreadID, run.ID, "run.failed", map[string]any{"error": err.Error()})
 		return
@@ -286,6 +357,57 @@ func (s *ThreadService) execute(ctx context.Context, cancel context.CancelFunc, 
 
 func (s *ThreadService) Subscribe(threadID string, afterID int64) *Subscription {
 	return s.events.Subscribe(threadID, afterID)
+}
+
+func (s *ThreadService) RuntimeStatus() RuntimeStatus {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return RuntimeStatus{
+		Running:         !s.closed && s.runtime != nil,
+		Restarting:      s.restarting,
+		ActiveRunCount:  len(s.runs),
+		LastRestartTime: s.lastRestartTime,
+	}
+}
+
+func (s *ThreadService) RestartRuntime() error {
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return ErrServiceStopped
+	}
+	if s.restarting {
+		s.mu.Unlock()
+		return ErrRuntimeRestarting
+	}
+	if len(s.runs) > 0 {
+		s.mu.Unlock()
+		return ErrThreadTurnRunning
+	}
+	factory := s.runtimeFactory
+	old := s.runtime
+	if factory == nil {
+		s.mu.Unlock()
+		return errors.New("agent runtime factory is not configured")
+	}
+	s.restarting = true
+	s.mu.Unlock()
+
+	next, err := factory()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err != nil {
+		s.restarting = false
+		return err
+	}
+	s.runtime = next
+	s.lastRestartTime = time.Now().UTC()
+	s.restarting = false
+	if old != nil {
+		go func() { _ = old.Close() }()
+	}
+	return nil
 }
 
 func (s *ThreadService) Cancel(threadID string) error {
@@ -320,12 +442,17 @@ func (s *ThreadService) Close() error {
 		cancels = append(cancels, run.cancel)
 	}
 	s.runs = make(map[string]activeRun)
+	runtime := s.runtime
+	s.runtime = nil
 	s.mu.Unlock()
 
 	for _, cancel := range cancels {
 		cancel()
 	}
-	err := s.runtime.Close()
+	err := error(nil)
+	if runtime != nil {
+		err = runtime.Close()
+	}
 	s.events.Close()
 	return err
 }
@@ -340,7 +467,11 @@ func (s *ThreadService) Delete(ctx context.Context, threadID string) error {
 	if running {
 		return ErrThreadTurnRunning
 	}
-	if err := s.runtime.DeleteThread(ctx, threadID); err != nil {
+	runtime, err := s.currentRuntime()
+	if err != nil {
+		return err
+	}
+	if err := runtime.DeleteThread(ctx, threadID); err != nil {
 		return err
 	}
 	s.events.Release(threadID)
@@ -369,7 +500,11 @@ func (s *ThreadService) ValidateThread(ctx context.Context, threadID string) err
 	if err := validateThreadID(threadID); err != nil {
 		return err
 	}
-	if _, err := s.runtime.ReadStoredThread(ctx, threadID, false); err != nil {
+	runtime, err := s.currentRuntime()
+	if err != nil {
+		return err
+	}
+	if _, err := runtime.ReadStoredThread(ctx, threadID, false); err != nil {
 		return fmt.Errorf("read Codex thread: %w", err)
 	}
 	return nil
@@ -388,5 +523,9 @@ func validateThreadID(threadID string) error {
 func (s *ThreadService) deleteCreatedThread(threadID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	_ = s.runtime.DeleteThread(ctx, threadID)
+	runtime, err := s.currentRuntime()
+	if err != nil {
+		return
+	}
+	_ = runtime.DeleteThread(ctx, threadID)
 }

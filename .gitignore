@@ -3,3 +3,4 @@ deploy/docker-compose/postgres/data
 deploy/docker-compose/server/data
 deploy/docker-compose/server/logs
 deploy/docker-compose/server/etc
+server/desc/swagger/

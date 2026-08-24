@@ -53,6 +53,46 @@ type UploadSkillResponse {
 	Name string `json:"name"`
 }
 
+type AgentConfigFile {
+	Name string `json:"name"`
+}
+
+type ListConfigFilesRequest {}
+
+type ListConfigFilesResponse {
+	Files []AgentConfigFile `json:"files"`
+}
+
+type ConfigFileRequest {
+	Name string `form:"name" validate:"required"`
+}
+
+type ConfigFileResponse {
+	Name    string `json:"name"`
+	Content string `json:"content"`
+}
+
+type UpdateConfigFileRequest {
+	Name    string `json:"name" validate:"required"`
+	Content string `json:"content"`
+	Restart bool   `json:"restart,optional"`
+}
+
+type UpdateConfigFileResponse {
+	Runtime RuntimeStatus `json:"runtime"`
+}
+
+type RestartRuntimeRequest {}
+
+type RuntimeStatusRequest {}
+
+type RuntimeStatus {
+	Running         bool   `json:"running"`
+	Restarting      bool   `json:"restarting"`
+	ActiveRunCount  int64  `json:"activeRunCount"`
+	LastRestartTime string `json:"lastRestartTime,optional"`
+}
+
 @server (
 	prefix:          /api/v1
 	group:           v1/manage/agent
@@ -75,5 +115,20 @@ service server {
 
 	@handler UpdateSkillFile
 	post /manage/agent/skills/:skill_name/file (UpdateSkillFileRequest) returns (UpdateSkillFileResponse)
+
+	@handler ListConfigFiles
+	get /manage/agent/config/files (ListConfigFilesRequest) returns (ListConfigFilesResponse)
+
+	@handler ConfigFile
+	get /manage/agent/config/file (ConfigFileRequest) returns (ConfigFileResponse)
+
+	@handler UpdateConfigFile
+	post /manage/agent/config/file (UpdateConfigFileRequest) returns (UpdateConfigFileResponse)
+
+	@handler RuntimeStatus
+	get /manage/agent/runtime/status (RuntimeStatusRequest) returns (RuntimeStatus)
+
+	@handler RestartRuntime
+	post /manage/agent/runtime/restart (RestartRuntimeRequest) returns (RuntimeStatus)
 }
 

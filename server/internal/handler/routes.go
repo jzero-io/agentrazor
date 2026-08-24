@@ -104,13 +104,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				{
 
 					Method:  http.MethodGet,
-					Path:    "/conversations/stats",
-					Handler: v1conversation.Stats(serverCtx),
-				},
-
-				{
-
-					Method:  http.MethodGet,
 					Path:    "/conversations/:conversation_id",
 					Handler: v1conversation.Get(serverCtx),
 				},
@@ -137,6 +130,12 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Method:  http.MethodPost,
 					Path:    "/conversations/:conversation_id/turn/cancel",
 					Handler: v1conversation.CancelTurn(serverCtx),
+				},
+				{
+
+					Method:  http.MethodGet,
+					Path:    "/conversations/stats",
+					Handler: v1conversation.Stats(serverCtx),
 				},
 			},
 			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
@@ -202,6 +201,31 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			rest.WithMiddlewares(
 				[]rest.Middleware{serverCtx.Authx},
 				[]rest.Route{
+					{
+						Method:  http.MethodGet,
+						Path:    "/manage/agent/config/file",
+						Handler: v1manageagent.ConfigFile(serverCtx),
+					},
+					{
+						Method:  http.MethodPost,
+						Path:    "/manage/agent/config/file",
+						Handler: v1manageagent.UpdateConfigFile(serverCtx),
+					},
+					{
+						Method:  http.MethodGet,
+						Path:    "/manage/agent/config/files",
+						Handler: v1manageagent.ListConfigFiles(serverCtx),
+					},
+					{
+						Method:  http.MethodPost,
+						Path:    "/manage/agent/runtime/restart",
+						Handler: v1manageagent.RestartRuntime(serverCtx),
+					},
+					{
+						Method:  http.MethodGet,
+						Path:    "/manage/agent/runtime/status",
+						Handler: v1manageagent.RuntimeStatus(serverCtx),
+					},
 					{
 						Method:  http.MethodGet,
 						Path:    "/manage/agent/skills",

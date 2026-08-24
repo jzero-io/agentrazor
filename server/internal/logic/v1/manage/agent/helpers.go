@@ -3,6 +3,7 @@ package agent
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,8 +12,11 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
+	agentdomain "github.com/jzero-io/agentrazor/server/internal/agent"
 	managetypes "github.com/jzero-io/agentrazor/server/internal/types/v1/manage/agent"
+	"github.com/pelletier/go-toml/v2"
 )
 
 func skillsRoot(codexHome string) (string, error) {
@@ -372,4 +376,143 @@ func deleteSkill(codexHome, name string) error {
 		return errors.New("system skills cannot be deleted")
 	}
 	return os.RemoveAll(pathReal)
+}
+
+var allowedConfigFiles = []string{"config.toml", "models.json", "auth.json"}
+
+func listAgentConfigFiles() []managetypes.AgentConfigFile {
+	result := make([]managetypes.AgentConfigFile, 0, len(allowedConfigFiles))
+	for _, name := range allowedConfigFiles {
+		result = append(result, managetypes.AgentConfigFile{Name: name})
+	}
+	return result
+}
+
+func codexHomeRoot(codexHome string) (string, error) {
+	if strings.TrimSpace(codexHome) == "" {
+		codexHome = "data/codex-home"
+	}
+	return filepath.Abs(codexHome)
+}
+
+func resolveAgentConfigFile(codexHome, name string) (string, string, error) {
+	name = strings.TrimSpace(name)
+	allowed := false
+	for _, item := range allowedConfigFiles {
+		if name == item {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return "", "", fmt.Errorf("unsupported config file %q", name)
+	}
+	root, err := codexHomeRoot(codexHome)
+	if err != nil {
+		return "", "", err
+	}
+	path := filepath.Join(root, name)
+	rel, err := filepath.Rel(root, path)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", "", errors.New("invalid config file path")
+	}
+	return name, path, nil
+}
+
+func readAgentConfigFile(codexHome, name string) (managetypes.ConfigFileResponse, error) {
+	resolvedName, path, err := resolveAgentConfigFile(codexHome, name)
+	if err != nil {
+		return managetypes.ConfigFileResponse{}, err
+	}
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return managetypes.ConfigFileResponse{Name: resolvedName, Content: ""}, nil
+	}
+	if err != nil {
+		return managetypes.ConfigFileResponse{}, err
+	}
+	if len(data) > 4<<20 {
+		return managetypes.ConfigFileResponse{}, errors.New("config file is larger than 4 MiB")
+	}
+	return managetypes.ConfigFileResponse{Name: resolvedName, Content: string(data)}, nil
+}
+
+func writeAgentConfigFile(codexHome, name, content string) error {
+	_, path, err := resolveAgentConfigFile(codexHome, name)
+	if err != nil {
+		return err
+	}
+	if len(content) > 4<<20 {
+		return errors.New("config content is larger than 4 MiB")
+	}
+	if err := validateAgentConfigContent(name, content); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	perm := os.FileMode(0o600)
+	if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
+		perm = info.Mode().Perm()
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }()
+	if _, err := tmp.WriteString(content); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
+}
+
+func validateAgentConfigContent(name, content string) error {
+	switch name {
+	case "config.toml":
+		var value map[string]any
+		if err := toml.Unmarshal([]byte(content), &value); err != nil {
+			return fmt.Errorf("invalid TOML: %w", err)
+		}
+	case "models.json":
+		if strings.TrimSpace(content) == "" {
+			return nil
+		}
+		var value any
+		if err := json.Unmarshal([]byte(content), &value); err != nil {
+			return fmt.Errorf("invalid JSON: %w", err)
+		}
+	case "auth.json":
+		if strings.TrimSpace(content) == "" {
+			return nil
+		}
+		var value any
+		if err := json.Unmarshal([]byte(content), &value); err != nil {
+			return fmt.Errorf("invalid JSON: %w", err)
+		}
+	default:
+		return fmt.Errorf("unsupported config file %q", name)
+	}
+	return nil
+}
+
+func runtimeStatus(status agentdomain.RuntimeStatus) managetypes.RuntimeStatus {
+	lastRestartTime := ""
+	if !status.LastRestartTime.IsZero() {
+		lastRestartTime = status.LastRestartTime.Format(time.RFC3339)
+	}
+	return managetypes.RuntimeStatus{
+		Running:         status.Running,
+		Restarting:      status.Restarting,
+		ActiveRunCount:  int64(status.ActiveRunCount),
+		LastRestartTime: lastRestartTime,
+	}
 }

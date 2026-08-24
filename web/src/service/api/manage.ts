@@ -216,3 +216,41 @@ export function UpdateAgentSkillFile(name: string, file: string, content: string
     data: { file, content }
   });
 }
+
+
+export function GetAgentConfigFiles() {
+  return request<Api.Manage.ListAgentConfigFilesResponse>({
+    url: '/api/v1/manage/agent/config/files',
+    method: 'get'
+  });
+}
+
+export function GetAgentConfigFile(name: string) {
+  return request<Api.Manage.AgentConfigFileDetail>({
+    url: '/api/v1/manage/agent/config/file',
+    method: 'get',
+    params: { name }
+  });
+}
+
+export function UpdateAgentConfigFile(name: string, content: string, restart = false) {
+  return request<Api.Manage.UpdateAgentConfigFileResponse>({
+    url: '/api/v1/manage/agent/config/file',
+    method: 'post',
+    data: { name, content, restart }
+  });
+}
+
+export function GetAgentRuntimeStatus() {
+  return request<Api.Manage.AgentRuntimeStatus>({
+    url: '/api/v1/manage/agent/runtime/status',
+    method: 'get'
+  });
+}
+
+export function RestartAgentRuntime() {
+  return request<Api.Manage.AgentRuntimeStatus>({
+    url: '/api/v1/manage/agent/runtime/restart',
+    method: 'post'
+  });
+}

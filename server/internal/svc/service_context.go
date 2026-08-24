@@ -30,11 +30,14 @@ func NewServiceContext(cc configcenter.ConfigCenter[config.Config], route2code f
 	svcCtx.Model = model.NewModel(svcCtx.SqlxConn, modelx.WithCachedConn(modelx.NewConnWithCache(svcCtx.SqlxConn, svcCtx.Cache)))
 	svcCtx.Middleware = NewMiddleware(svcCtx)
 	agentOptions := svcCtx.AgentOptionsFromConfig(cc.MustGetConfig().Agent)
-	runtime, err := agent.NewCodexAppServerRuntime(agentOptions)
+	runtimeFactory := func() (agent.ThreadRuntime, error) {
+		return agent.NewCodexAppServerRuntime(agentOptions)
+	}
+	runtime, err := runtimeFactory()
 	if err != nil {
 		panic(err)
 	}
-	svcCtx.AgentThreads = agent.NewThreadService(runtime)
+	svcCtx.AgentThreads = agent.NewThreadService(runtime, runtimeFactory)
 	svcCtx.installAgentTokenUsageRecorder()
 	return svcCtx
 }
