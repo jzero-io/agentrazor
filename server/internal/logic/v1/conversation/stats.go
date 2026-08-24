@@ -55,7 +55,7 @@ func (l *Stats) Stats() (resp *types.StatsResponse, err error) {
 		return threads[i].ID > threads[j].ID
 	})
 
-	resp := &types.StatsResponse{}
+	resp = &types.StatsResponse{}
 	for _, thread := range threads {
 		conversation := toConversation(thread)
 		setConversationActiveRun(&conversation, l.svcCtx.AgentThreads, thread.ID)
