@@ -1,4 +1,4 @@
 User-agent:*
 Disallow:
 
-Sitemap: https://docs.admin.jzero.io/sitemap.xml
+Sitemap: https://docs.agentrazor.jzero.io/sitemap.xml
