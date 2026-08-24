@@ -178,7 +178,6 @@ const routeMap: RouteMap = {
   "403": "/403",
   "404": "/404",
   "500": "/500",
-  "about": "/about",
   "agent": "/agent",
   "agent_skills": "/agent/skills",
   "home": "/home",

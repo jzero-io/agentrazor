@@ -42,6 +42,14 @@ type (
 	ListResponse {
 		Conversations []Conversation `json:"conversations"`
 	}
+	StatsResponse {
+		TotalConversations    int64 `json:"totalConversations"`
+		ActiveConversations   int64 `json:"activeConversations"`
+		RunningConversations  int64 `json:"runningConversations"`
+		ArchivedConversations int64 `json:"archivedConversations"`
+		TotalTokens           int64 `json:"totalTokens"`
+		TokenUsageAvailable   bool  `json:"tokenUsageAvailable"`
+	}
 	CreateRequest {
 		Title string `json:"title,optional"`
 	}
@@ -94,6 +102,10 @@ service server {
 	@doc "获取会话列表"
 	@handler List
 	get /conversations returns (ListResponse)
+
+	@doc "获取会话统计"
+	@handler Stats
+	get /conversations/stats returns (StatsResponse)
 
 	@doc "创建会话"
 	@handler Create

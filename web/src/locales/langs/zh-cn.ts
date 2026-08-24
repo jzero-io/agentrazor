@@ -166,7 +166,6 @@ const local: App.I18n.Schema = {
     document_naive: 'Naive UI文档',
     document_antd: 'Ant Design Vue文档',
     'user-center': '个人中心',
-    about: '关于',
     manage: '系统管理',
     manage_user: '用户管理',
     'manage_user-detail': '用户详情',
@@ -251,19 +250,6 @@ const local: App.I18n.Schema = {
       bindWeChat: {
         title: '绑定微信'
       }
-    },
-    about: {
-      title: '关于',
-      introduction: `agentrazor-admin 基于 jzero 脚手架搭建后台系统并配备代码生成, 前端基于 soybean-admin 搭建。`,
-      projectInfo: {
-        title: '项目信息',
-        version: '版本',
-        latestBuildTime: '最新构建时间',
-        githubLink: 'Github 地址',
-        previewLink: '预览地址'
-      },
-      prdDep: '生产依赖',
-      devDep: '开发依赖'
     },
     home: {
       branchDesc:

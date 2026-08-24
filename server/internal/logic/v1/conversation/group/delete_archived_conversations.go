@@ -66,6 +66,9 @@ func (l *DeleteArchivedConversations) DeleteArchivedConversations(req *types.Pat
 				); dbErr != nil {
 					return nil, dbErr
 				}
+				if dbErr := l.svcCtx.DeleteConversationTokenUsageEvents(l.ctx, conv.Id, user.Uuid); dbErr != nil {
+					return nil, dbErr
+				}
 				continue
 			}
 			return nil, err
@@ -83,6 +86,9 @@ func (l *DeleteArchivedConversations) DeleteArchivedConversations(req *types.Pat
 				Equal(conversationmodel.UserUuid, user.Uuid).
 				Build()...,
 		); err != nil {
+			return nil, err
+		}
+		if err := l.svcCtx.DeleteConversationTokenUsageEvents(l.ctx, conv.Id, user.Uuid); err != nil {
 			return nil, err
 		}
 	}

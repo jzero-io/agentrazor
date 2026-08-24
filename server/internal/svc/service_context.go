@@ -35,5 +35,6 @@ func NewServiceContext(cc configcenter.ConfigCenter[config.Config], route2code f
 		panic(err)
 	}
 	svcCtx.AgentThreads = agent.NewThreadService(runtime)
+	svcCtx.installAgentTokenUsageRecorder()
 	return svcCtx
 }

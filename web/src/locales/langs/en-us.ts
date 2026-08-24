@@ -166,7 +166,6 @@ const local: App.I18n.Schema = {
     document_naive: 'Naive UI Document',
     document_antd: 'Ant Design Vue Document',
     'user-center': 'User Center',
-    about: 'About',
     manage: 'System Manage',
     manage_user: 'User Manage',
     'manage_user-detail': 'User Detail',
@@ -251,19 +250,6 @@ const local: App.I18n.Schema = {
       bindWeChat: {
         title: 'Bind WeChat'
       }
-    },
-    about: {
-      title: 'About',
-      introduction: `agentrazor-admin builds the backend system based on jzero scaffolding and is equipped with code generation, and the front end is built based on soybean-admin.`,
-      projectInfo: {
-        title: 'Project Info',
-        version: 'Version',
-        latestBuildTime: 'Latest Build Time',
-        githubLink: 'Github Link',
-        previewLink: 'Preview Link'
-      },
-      prdDep: 'Production Dependency',
-      devDep: 'Development Dependency'
     },
     home: {
       branchDesc:

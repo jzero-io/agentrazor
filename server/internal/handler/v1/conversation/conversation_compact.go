@@ -27,6 +27,19 @@ func List(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
+// 获取会话统计
+func Stats(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		l := conversation.NewStats(r.Context(), svcCtx, r)
+		resp, err := l.Stats()
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.OkJsonCtx(r.Context(), w, resp)
+		}
+	}
+}
+
 // 创建会话
 func Create(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

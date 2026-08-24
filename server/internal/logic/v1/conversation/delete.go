@@ -62,5 +62,8 @@ func (l *Delete) Delete(req *types.PathRequest) (resp *types.DeleteResponse, err
 	); err != nil {
 		return nil, err
 	}
+	if err := l.svcCtx.DeleteConversationTokenUsageEvents(l.ctx, req.ConversationId, uuid); err != nil {
+		return nil, err
+	}
 	return nil, nil
 }

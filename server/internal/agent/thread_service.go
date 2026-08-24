@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
 var (
@@ -60,6 +61,25 @@ type ActiveRun struct {
 	CreatedAt time.Time
 }
 
+type TokenUsageBreakdown struct {
+	InputTokens           int64
+	CachedInputTokens     int64
+	CacheWriteInputTokens int64
+	OutputTokens          int64
+	ReasoningOutputTokens int64
+	TotalTokens           int64
+}
+
+type TokenUsageEvent struct {
+	ConversationID     string
+	TurnID             string
+	Last               TokenUsageBreakdown
+	Total              TokenUsageBreakdown
+	ModelContextWindow *int64
+}
+
+type TokenUsageRecorder func(context.Context, TokenUsageEvent) error
+
 type activeRun struct {
 	id        string
 	createdAt time.Time
@@ -74,6 +94,8 @@ type ThreadService struct {
 	mu     sync.Mutex
 	runs   map[string]activeRun
 	closed bool
+
+	tokenUsageRecorder TokenUsageRecorder
 }
 
 func NewThreadService(runtime ThreadRuntime) *ThreadService {
@@ -83,6 +105,12 @@ func NewThreadService(runtime ThreadRuntime) *ThreadService {
 		events:      NewEventHub(32, 256),
 		runs:        make(map[string]activeRun),
 	}
+}
+
+func (s *ThreadService) SetTokenUsageRecorder(recorder TokenUsageRecorder) {
+	s.mu.Lock()
+	s.tokenUsageRecorder = recorder
+	s.mu.Unlock()
 }
 
 func (s *ThreadService) Create(ctx context.Context, title string) (StoredThread, error) {
@@ -241,6 +269,9 @@ func (s *ThreadService) execute(ctx context.Context, cancel context.CancelFunc, 
 		if eventType == "" {
 			eventType = "event"
 		}
+		if eventType == "thread.tokenUsage.updated" {
+			s.recordTokenUsage(event)
+		}
 		// Codex process events are UI progress only. Keep them live-only so the
 		// server does not retain intermediate display state between subscribers.
 		s.events.Broadcast(run.ThreadID, run.ID, "codex."+eventType, event)
@@ -314,6 +345,24 @@ func (s *ThreadService) Delete(ctx context.Context, threadID string) error {
 	}
 	s.events.Release(threadID)
 	return nil
+}
+
+func (s *ThreadService) recordTokenUsage(event map[string]any) {
+	usage, ok := tokenUsageEventFromCodex(event)
+	if !ok {
+		return
+	}
+	s.mu.Lock()
+	recorder := s.tokenUsageRecorder
+	s.mu.Unlock()
+	if recorder == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := recorder(ctx, usage); err != nil {
+		logx.Errorf("record Codex token usage failed: %v", err)
+	}
 }
 
 func (s *ThreadService) ValidateThread(ctx context.Context, threadID string) error {

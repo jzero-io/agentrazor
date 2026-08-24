@@ -104,6 +104,13 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				{
 
 					Method:  http.MethodGet,
+					Path:    "/conversations/stats",
+					Handler: v1conversation.Stats(serverCtx),
+				},
+
+				{
+
+					Method:  http.MethodGet,
 					Path:    "/conversations/:conversation_id",
 					Handler: v1conversation.Get(serverCtx),
 				},

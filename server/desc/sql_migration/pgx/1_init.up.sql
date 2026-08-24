@@ -63,7 +63,6 @@ FOR EACH ROW EXECUTE FUNCTION update_update_time_column();
 
 INSERT INTO "manage_menu" (uuid, create_time, update_time, status, parent_uuid, menu_type, menu_name, hide_in_menu, active_menu, "order", route_name, route_path, component, icon, icon_type, i18n_key, keep_alive, href, multi_tab, fixed_index_in_tab, query, permissions, constant, button_code)
 VALUES
-    ('93b45888-417e-4963-a08c-50ccdf2460e3','2024-11-10 21:12:35','2024-11-10 21:12:35','1','','2','关于',0,'',9999,'about','/about','layout.base$view.about','fluent:book-information-24-regular','1','route.about',0,'',0,0,'[]','[]',0,''),
     ('f7e8d9c6-b5a4-4382-8271-605f4e3d2c1b','2024-11-10 21:43:39','2024-11-10 21:43:39','1','','2','首页',0,'',1,'home','/home','layout.base$view.home','mdi:monitor-dashboard','1','route.home',0,'',0,0,'[]','[]',0,''),
     ('a1b2c3d4-e5f6-4782-91a0-b9c8d7e6f5a4','2024-11-11 09:19:18','2024-11-11 09:19:18','1','','1','系统管理',0,'',5,'manage','/manage','layout.base','carbon:cloud-service-management','1','route.manage',0,'',0,0,'[]','[]',0,''),
     ('b3c4d5e6-f7a8-4912-83b4-c5d6e7f8a9b0','2024-11-11 09:20:26','2024-11-11 09:20:26','1','a1b2c3d4-e5f6-4782-91a0-b9c8d7e6f5a4','2','用户管理',0,'',1,'manage_user','/manage/user','view.manage_user','ic:round-manage-accounts','1','route.manage_user',0,'',0,0,'[]','[{"code":"v1:manage:user:list","desc":"用户列表"}]',0,''),
@@ -127,7 +126,6 @@ FOR EACH ROW EXECUTE FUNCTION update_update_time_column();
 
 INSERT INTO "manage_role_menu" (uuid, create_time, update_time, role_uuid, menu_uuid, is_home)
 VALUES
-    ('2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e','2024-12-04 01:33:23','2024-12-04 01:33:23','1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d','93b45888-417e-4963-a08c-50ccdf2460e3',0),
     ('3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f','2024-12-04 01:33:23','2024-12-04 01:33:23','1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d','d7e8f9a0-b1c2-4334-87d8-e9f0a1b2c3d4',0),
     ('4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a','2024-12-04 01:33:23','2024-12-04 01:33:23','1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d','c5d6e7f8-a9b0-4123-95c6-d7e8f9a0b1c2',0),
     ('5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b','2024-12-04 01:33:23','2024-12-04 01:33:23','1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d','b3c4d5e6-f7a8-4912-83b4-c5d6e7f8a9b0',0),
