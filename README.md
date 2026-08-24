@@ -29,34 +29,34 @@ AgentRazor 是一个围绕 Codex app-server 协议构建的插件化 AI Agent �
 
 ## 本地开发
 
-### 服务端
+本地开发默认使用 Docker Compose 启动完整依赖和前后端服务，避免本机环境、Codex home、数据库和 Redis 配置不一致。
 
 ```shell
-cd server
-go test ./...
-go run . server -c etc/etc.yaml
+cd deploy/docker-compose
+docker compose up -d --build
 ```
 
-主要运行配置位于 `server/etc/etc.yaml` 和配置的 Codex home 目录中。Codex app-server 会从 Codex home 中读取 `config.toml`、`models.json` 和 `auth.json`。
+服务启动后：
 
-### Agent 用户端
+- Agent 用户端由 `agent` 服务提供。
+- 管理后台由 `web` 服务提供。
+- 服务端配置、数据和日志位于 `deploy/docker-compose/server` 下。
+- Codex app-server 会从服务端数据目录中的 Codex home 读取 `config.toml`、`models.json` 和 `auth.json`。
+
+常用单服务重建：
 
 ```shell
-cd agent
-pnpm install
-pnpm typecheck
-pnpm dev
+docker compose build server && docker compose up -d --no-deps server
+docker compose build agent && docker compose up -d --no-deps agent
+docker compose build web && docker compose up -d --no-deps web
 ```
 
-开发服务默认监听 `http://localhost:5174`，并将 `/api` 代理到 `http://localhost:8001`。
-
-### 管理后台
+提交前按改动范围运行验证命令：
 
 ```shell
-cd web
-pnpm install
-pnpm typecheck
-pnpm dev
+cd server && go test ./...
+cd agent && npm run build
+cd web && npm run build
 ```
 
 ## 部署
