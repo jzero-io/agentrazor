@@ -61,15 +61,6 @@ type ListResponse struct {
 	Conversations []Conversation `json:"conversations"`
 }
 
-type StatsResponse struct {
-	TotalConversations    int64 `json:"totalConversations"`
-	ActiveConversations   int64 `json:"activeConversations"`
-	RunningConversations  int64 `json:"runningConversations"`
-	ArchivedConversations int64 `json:"archivedConversations"`
-	TotalTokens           int64 `json:"totalTokens"`
-	TokenUsageAvailable   bool  `json:"tokenUsageAvailable"`
-}
-
 type PathRequest struct {
 	ConversationId string `path:"conversation_id" validate:"required"`
 }
@@ -88,6 +79,15 @@ type SendMessageResponse struct {
 	ConversationId string       `json:"conversationId"`
 	Conversation   Conversation `json:"conversation"`
 	Run            Run          `json:"run"`
+}
+
+type StatsResponse struct {
+	TotalConversations    int64 `json:"totalConversations"`
+	ActiveConversations   int64 `json:"activeConversations"`
+	RunningConversations  int64 `json:"runningConversations"`
+	ArchivedConversations int64 `json:"archivedConversations"`
+	TotalTokens           int64 `json:"totalTokens"`
+	TokenUsageAvailable   bool  `json:"tokenUsageAvailable"`
 }
 
 type Turn struct {

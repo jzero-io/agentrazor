@@ -30,7 +30,7 @@ func NewStats(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Request) 
 	}
 }
 
-func (l *Stats) Stats() (*types.StatsResponse, error) {
+func (l *Stats) Stats() (resp *types.StatsResponse, err error) {
 	if l.svcCtx.AgentThreads == nil {
 		return nil, errors.New("agent runtime is disabled")
 	}

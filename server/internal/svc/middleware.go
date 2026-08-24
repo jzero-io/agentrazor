@@ -1,7 +1,9 @@
 package svc
 
-type Middleware struct{}
+import (
+	"github.com/zeromicro/go-zero/rest"
+)
 
-func NewMiddleware(svcCtx *ServiceContext) Middleware {
-	return Middleware{}
+type Middleware struct {
+	Agent rest.Middleware
 }

@@ -10,16 +10,16 @@ info (
 
 type (
 	Conversation {
-		Id         string  `json:"id"`
-		Title      string  `json:"title"`
-		Status     string  `json:"status"`
-		PinnedAt   *string `json:"pinnedAt,omitempty"`
-		ArchivedAt *string `json:"archivedAt,omitempty"`
-		GroupId    *string `json:"groupId,omitempty"`
+		Id               string  `json:"id"`
+		Title            string  `json:"title"`
+		Status           string  `json:"status"`
+		PinnedAt         *string `json:"pinnedAt,omitempty"`
+		ArchivedAt       *string `json:"archivedAt,omitempty"`
+		GroupId          *string `json:"groupId,omitempty"`
 		Running          bool    `json:"running"`
 		RunningStartedAt *string `json:"runningStartedAt,omitempty"`
 		CreatedAt        string  `json:"createdAt"`
-		UpdatedAt  string  `json:"updatedAt"`
+		UpdatedAt        string  `json:"updatedAt"`
 	}
 	Run {
 		Id        string `json:"id"`
@@ -86,9 +86,9 @@ type (
 		Content        string `json:"content" validate:"required"`
 	}
 	SendMessageResponse {
-		ConversationId string `json:"conversationId"`
+		ConversationId string       `json:"conversationId"`
 		Conversation   Conversation `json:"conversation"`
-		Run            Run    `json:"run"`
+		Run            Run          `json:"run"`
 	}
 )
 
@@ -97,6 +97,7 @@ type (
 	group:           v1/conversation
 	compact_handler: true
 	jwt:             Jwt
+	middleware:      Agent
 )
 service server {
 	@doc "获取会话列表"
@@ -138,6 +139,7 @@ service server {
 	compact_handler: true
 	sse:             true
 	jwt:             Jwt
+	middleware:      Agent
 )
 service server {
 	@doc "订阅会话与 Agent 流式事件"

@@ -76,6 +76,7 @@ func Delete(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
+// 归档分组内所有对话
 func ArchiveConversations(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req types.PathRequest
@@ -94,6 +95,7 @@ func ArchiveConversations(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
+// 删除分组内所有已归档对话
 func DeleteArchivedConversations(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req types.PathRequest

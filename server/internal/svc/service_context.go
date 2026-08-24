@@ -28,7 +28,6 @@ func NewServiceContext(cc configcenter.ConfigCenter[config.Config], route2code f
 
 	svcCtx.ServiceContext = svc.NewServiceContext(svcCtx.ConfigCenter.MustGetConfig().Config, route2code)
 	svcCtx.Model = model.NewModel(svcCtx.SqlxConn, modelx.WithCachedConn(modelx.NewConnWithCache(svcCtx.SqlxConn, svcCtx.Cache)))
-	svcCtx.Middleware = NewMiddleware(svcCtx)
 	agentOptions := svcCtx.AgentOptionsFromConfig(cc.MustGetConfig().Agent)
 	runtimeFactory := func() (agent.ThreadRuntime, error) {
 		return agent.NewCodexAppServerRuntime(agentOptions)

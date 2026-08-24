@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/common-nighthawk/go-figure"
+	"github.com/jzero-io/agentrazor/server/internal/global"
 	"github.com/jzero-io/jzero/core/configcenter"
 	"github.com/jzero-io/jzero/core/configcenter/subscriber"
 	"github.com/spf13/cobra"
@@ -15,7 +16,6 @@ import (
 
 	"github.com/jzero-io/agentrazor/server/internal/config"
 	"github.com/jzero-io/agentrazor/server/internal/custom"
-	"github.com/jzero-io/agentrazor/server/internal/global"
 	"github.com/jzero-io/agentrazor/server/internal/handler"
 	"github.com/jzero-io/agentrazor/server/internal/middleware"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
@@ -53,9 +53,12 @@ var serverCmd = &cobra.Command{
 		logx.Must(runMigrations(cc.MustGetConfig().Sqlx.SqlConf))
 
 		svcCtx := svc.NewServiceContext(cc, handler.Route2Code)
-		global.ServiceContext = *svcCtx
+		svcCtx.Middleware = middleware.NewMiddleware()
 		middleware.Register(restServer)
 		handler.RegisterHandlers(restServer, svcCtx)
+		global.ServiceContext = *svcCtx
+
+		// load plugins
 		plugins.LoadPlugins(restServer, svcCtx)
 
 		customServer := custom.New(svcCtx.AgentThreads)

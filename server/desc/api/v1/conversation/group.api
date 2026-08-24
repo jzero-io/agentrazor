@@ -10,10 +10,10 @@ info (
 
 type (
 	ConversationGroup {
-		Id        string  `json:"id"`
-		Name      string  `json:"name"`
-		CreatedAt string  `json:"createdAt"`
-		UpdatedAt string  `json:"updatedAt"`
+		Id        string `json:"id"`
+		Name      string `json:"name"`
+		CreatedAt string `json:"createdAt"`
+		UpdatedAt string `json:"updatedAt"`
 	}
 	ListResponse {
 		Groups []ConversationGroup `json:"groups"`
@@ -25,8 +25,8 @@ type (
 		GroupId string `path:"group_id" validate:"required"`
 	}
 	DeleteResponse  {}
-	ArchiveConversationsResponse {}
-	DeleteArchivedConversationsResponse {}
+	ArchiveConversationsResponse  {}
+	DeleteArchivedConversationsResponse  {}
 	UpdateRequest {
 		GroupId string  `path:"group_id" validate:"required"`
 		Name    *string `json:"name,optional" validate:"omitempty,max=40"`
@@ -38,6 +38,7 @@ type (
 	group:           v1/conversation/group
 	compact_handler: true
 	jwt:             Jwt
+	middleware:      Agent
 )
 service server {
 	@handler List
@@ -60,3 +61,4 @@ service server {
 	@handler DeleteArchivedConversations
 	post /conversation-groups/:group_id/delete-archived-conversations (PathRequest) returns (DeleteArchivedConversationsResponse)
 }
+
