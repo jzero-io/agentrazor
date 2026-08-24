@@ -14,7 +14,7 @@ go test ./...
 go run . server -c etc/etc.yaml
 ```
 
-服务端遵循 jzero 的 API 描述和代码生成模式。新增接口时，先修改 `server/desc/api`，再生成 handler、types 和 route，最后补 logic。
+服务端遵循 jzero 的 API 描述和代码生成模式。新增接口时，先修改 `server/desc/api`，再生成 handler、types 和 route，最后补 logic。提交前需要根据改动范围选择对应测试。
 
 ## Agent 用户端开发
 
