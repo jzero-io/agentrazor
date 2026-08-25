@@ -54,6 +54,17 @@ func (l *RefreshToken) RefreshToken(req *types.RefreshTokenRequest) (resp *types
 	if !ok {
 		return nil, jwt.ErrTokenInvalidClaims
 	}
+	userUUID, ok := claims["uuid"].(string)
+	if !ok || userUUID == "" {
+		return nil, jwt.ErrTokenInvalidClaims
+	}
+	user, err := l.svcCtx.Model.ManageUser.FindOneByUuid(l.ctx, nil, userUUID)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureUserEnabled(user.Status); err != nil {
+		return nil, err
+	}
 
 	// 设置新的过期时间
 	claims["exp"] = time.Now().Add(time.Duration(l.svcCtx.MustGetConfig().Jwt.AccessExpire) * time.Second).Unix()

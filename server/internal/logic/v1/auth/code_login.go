@@ -57,6 +57,9 @@ func (l *CodeLogin) CodeLogin(req *types.CodeLoginRequest) (resp *types.LoginRes
 	if err != nil {
 		return nil, errors.New("用户名/密码错误")
 	}
+	if err := ensureUserEnabled(user.Status); err != nil {
+		return nil, err
+	}
 
 	userRoles, err := l.svcCtx.Model.ManageUserRole.FindByCondition(l.ctx, nil, condition.NewChain().
 		Equal(manage_user_role.UserUuid, user.Uuid).
