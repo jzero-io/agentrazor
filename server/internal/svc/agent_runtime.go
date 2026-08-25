@@ -15,7 +15,6 @@ func (sc *ServiceContext) AgentOptionsFromConfig(agentConfig config.AgentConf) a
 		Sandbox:            agentConfig.Sandbox,
 		DisableApps:        agentConfig.DisableApps,
 		DisabledMCPServers: agentConfig.DisabledMCPServers,
-		MaxEvents:          10_000,
 		StartTimeout:       time.Duration(agentConfig.StartTimeoutSeconds) * time.Second,
 		ModelProvider:      agentConfig.ModelProvider,
 		Model:              agentConfig.Model,

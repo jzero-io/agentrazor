@@ -32,7 +32,7 @@ ARG TARGETARCH
 ARG CODEX_VERSION=0.147.0
 
 RUN set -o pipefail \
-    && apk add --no-cache bubblewrap ca-certificates curl tar tzdata \
+    && apk add --no-cache bubblewrap ca-certificates curl python3 tar tzdata \
     && case "$TARGETARCH" in \
          amd64) codex_arch="x86_64" ;; \
          arm64) codex_arch="aarch64" ;; \

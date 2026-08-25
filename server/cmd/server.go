@@ -54,9 +54,9 @@ var serverCmd = &cobra.Command{
 
 		svcCtx := svc.NewServiceContext(cc, handler.Route2Code)
 		svcCtx.Middleware = middleware.NewMiddleware()
+		global.ServiceContext = *svcCtx
 		middleware.Register(restServer)
 		handler.RegisterHandlers(restServer, svcCtx)
-		global.ServiceContext = *svcCtx
 
 		// load plugins
 		plugins.LoadPlugins(restServer, svcCtx)

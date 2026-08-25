@@ -21,7 +21,6 @@ var (
 	ErrRuntimeClosed       = errors.New("agent runtime is closed")
 	ErrThreadTurnRunning   = errors.New("agent thread already has an active turn")
 	ErrAppServerTerminated = errors.New("codex app-server terminated")
-	ErrEventLimitExceeded  = errors.New("Codex app-server event limit exceeded")
 )
 
 type EventHandler func(map[string]any)
@@ -34,7 +33,6 @@ type CodexAppServerOptions struct {
 	Sandbox            string
 	DisableApps        bool
 	DisabledMCPServers []string
-	MaxEvents          int
 	StartTimeout       time.Duration
 	ModelProvider      string
 	Model              string
@@ -103,14 +101,10 @@ type threadLoad struct {
 }
 
 type appServerTurn struct {
-	threadID  string
-	maxEvents int
-	emit      EventHandler
-
-	mu         sync.Mutex
-	eventCount int
-	done       chan turnOutcome
-	once       sync.Once
+	threadID string
+	emit     EventHandler
+	done     chan turnOutcome
+	once     sync.Once
 }
 
 func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRuntime, error) {
@@ -124,9 +118,6 @@ func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRun
 	case "read-only", "workspace-write", "danger-full-access":
 	default:
 		return nil, fmt.Errorf("unsupported Codex sandbox %q", options.Sandbox)
-	}
-	if options.MaxEvents <= 0 {
-		options.MaxEvents = 10_000
 	}
 	if options.StartTimeout <= 0 {
 		options.StartTimeout = 15 * time.Second
@@ -340,10 +331,9 @@ func (r *CodexAppServerRuntime) runTurn(ctx context.Context, threadID, prompt st
 		return err
 	}
 	execution := &appServerTurn{
-		threadID:  threadID,
-		maxEvents: r.options.MaxEvents,
-		emit:      emit,
-		done:      make(chan turnOutcome, 1),
+		threadID: threadID,
+		emit:     emit,
+		done:     make(chan turnOutcome, 1),
 	}
 	if err := r.registerExecution(execution); err != nil {
 		return err
@@ -383,9 +373,6 @@ func (r *CodexAppServerRuntime) runTurn(ctx context.Context, threadID, prompt st
 	}
 	select {
 	case outcome := <-execution.done:
-		if errors.Is(outcome.err, ErrEventLimitExceeded) {
-			r.interruptTurn(threadID, turnID)
-		}
 		return outcome.err
 	case <-ctx.Done():
 		r.interruptTurn(threadID, turnID)
@@ -643,15 +630,6 @@ func (t *appServerTurn) handleNotification(method string, params map[string]any)
 		"method": method,
 		"params": params,
 	}
-	t.mu.Lock()
-	t.eventCount++
-	if t.eventCount > t.maxEvents {
-		t.mu.Unlock()
-		t.finish(turnOutcome{err: fmt.Errorf("%w: maximum %d", ErrEventLimitExceeded, t.maxEvents)})
-		return
-	}
-	t.mu.Unlock()
-
 	if t.emit != nil {
 		t.emit(event)
 	}
