@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import { $t } from '@/locales';
 import { useFormRules, useNaiveForm } from '@/hooks/common/form';
-import { enableStatusOptions, userGenderOptions } from '@/constants/business';
+import { enableStatusOptions } from '@/constants/business';
 import { translateOptions } from '@/utils/common';
 
 defineOptions({
@@ -50,19 +50,6 @@ async function search() {
           <NGrid responsive="screen" item-responsive>
             <NFormItemGi span="24 s:12 m:6" :label="$t('page.manage.user.username')" path="username" class="pr-24px">
               <NInput v-model:value="model.username" :placeholder="$t('page.manage.user.form.username')" />
-            </NFormItemGi>
-            <NFormItemGi
-              span="24 s:12 m:6"
-              :label="$t('page.manage.user.userGender')"
-              path="userGender"
-              class="pr-24px"
-            >
-              <NSelect
-                v-model:value="model.userGender"
-                :placeholder="$t('page.manage.user.form.userGender')"
-                :options="translateOptions(userGenderOptions)"
-                clearable
-              />
             </NFormItemGi>
             <NFormItemGi span="24 s:12 m:6" :label="$t('page.manage.user.nickName')" path="nickName" class="pr-24px">
               <NInput v-model:value="model.nickName" :placeholder="$t('page.manage.user.form.nickName')" />

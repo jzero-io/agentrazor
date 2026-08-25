@@ -295,7 +295,6 @@ const local: App.I18n.Schema = {
       user: {
         title: 'User List',
         username: 'User Name',
-        userGender: 'Gender',
         nickName: 'Nick Name',
         userPhone: 'Phone Number',
         userEmail: 'Email',
@@ -304,7 +303,6 @@ const local: App.I18n.Schema = {
         password: 'Password',
         form: {
           username: 'Please enter user name',
-          userGender: 'Please select gender',
           nickName: 'Please enter nick name',
           userPhone: 'Please enter phone number',
           userEmail: 'Please enter email',
@@ -313,12 +311,7 @@ const local: App.I18n.Schema = {
           password: 'Please enter password'
         },
         addUser: 'Add User',
-        editUser: 'Edit User',
-        gender: {
-          male: 'Male',
-          female: 'Female'
-        }
-      },
+        editUser: 'Edit User'      },
       menu: {
         home: 'Home',
         title: 'Menu List',

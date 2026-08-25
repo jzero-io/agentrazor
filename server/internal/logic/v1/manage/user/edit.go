@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -31,6 +32,10 @@ func NewEdit(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Request) *
 }
 
 func (l *Edit) Edit(req *types.EditRequest) (resp *types.EditResponse, err error) {
+	if len(req.UserRoles) == 0 {
+		return nil, errors.New("用户角色不能为空")
+	}
+
 	data, err := l.svcCtx.Model.ManageUser.FindOneByUuid(l.ctx, nil, req.Uuid)
 	if err != nil {
 		return nil, err
@@ -41,7 +46,6 @@ func (l *Edit) Edit(req *types.EditRequest) (resp *types.EditResponse, err error
 	newData.Nickname = req.NickName
 	newData.Email = req.UserEmail
 	newData.Phone = req.UserPhone
-	newData.Gender = req.UserGender
 	newData.Status = req.Status
 
 	if err = l.svcCtx.Model.ManageUser.Update(l.ctx, nil, lo.ToPtr(newData)); err != nil {

@@ -52,7 +52,6 @@ func (l *Register) Register(req *types.RegisterRequest) (resp *types.RegisterRes
 		Username: req.Username,
 		Password: req.Password,
 		Email:    req.Email,
-		Gender:   "1",
 		Status:   "1",
 	})
 

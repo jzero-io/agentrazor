@@ -513,7 +513,6 @@ declare namespace App {
           user: {
             title: string;
             username: string;
-            userGender: string;
             nickName: string;
             userPhone: string;
             userEmail: string;
@@ -522,8 +521,7 @@ declare namespace App {
             password: string;
             form: {
               username: string;
-              userGender: string;
-              nickName: string;
+                nickName: string;
               userPhone: string;
               userEmail: string;
               userStatus: string;
@@ -532,10 +530,6 @@ declare namespace App {
             };
             addUser: string;
             editUser: string;
-            gender: {
-              male: string;
-              female: string;
-            };
           };
           menu: {
             home: string;

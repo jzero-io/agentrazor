@@ -33,7 +33,6 @@ const (
 	Username   condition.Field = "username"
 	Password   condition.Field = "password"
 	Nickname   condition.Field = "nickname"
-	Gender     condition.Field = "gender"
 	Phone      condition.Field = "phone"
 	Status     condition.Field = "status"
 	Email      condition.Field = "email"
@@ -89,7 +88,6 @@ type (
 		Username   string    `db:"username"`
 		Password   string    `db:"password"`
 		Nickname   string    `db:"nickname"`
-		Gender     string    `db:"gender"`
 		Phone      string    `db:"phone"`
 		Status     string    `db:"status"`
 		Email      string    `db:"email"`
@@ -223,7 +221,7 @@ func (m *defaultManageUserModel) Insert(ctx context.Context, session sqlx.Sessio
 	statement, args := sqlbuilder.NewInsertBuilder().
 		InsertInto(m.table).
 		Cols(manageUserRowsExpectAutoSet).
-		Values(data.Uuid, data.Username, data.Password, data.Nickname, data.Gender, data.Phone, data.Status, data.Email).BuildWithFlavor(m.flavor)
+		Values(data.Uuid, data.Username, data.Password, data.Nickname, data.Phone, data.Status, data.Email).BuildWithFlavor(m.flavor)
 	if session != nil {
 		return session.ExecCtx(ctx, statement, args...)
 	}
@@ -237,12 +235,12 @@ func (m *defaultManageUserModel) InsertV2(ctx context.Context, session sqlx.Sess
 		statement, args = sqlbuilder.NewInsertBuilder().
 			InsertInto(m.table).
 			Cols(manageUserRowsExpectAutoSet).
-			Values(data.Uuid, data.Username, data.Password, data.Nickname, data.Gender, data.Phone, data.Status, data.Email).Returning("id").BuildWithFlavor(m.flavor)
+			Values(data.Uuid, data.Username, data.Password, data.Nickname, data.Phone, data.Status, data.Email).Returning("id").BuildWithFlavor(m.flavor)
 	} else {
 		statement, args = sqlbuilder.NewInsertBuilder().
 			InsertInto(m.table).
 			Cols(manageUserRowsExpectAutoSet).
-			Values(data.Uuid, data.Username, data.Password, data.Nickname, data.Gender, data.Phone, data.Status, data.Email).BuildWithFlavor(m.flavor)
+			Values(data.Uuid, data.Username, data.Password, data.Nickname, data.Phone, data.Status, data.Email).BuildWithFlavor(m.flavor)
 	}
 	var primaryKey int64
 	var err error
@@ -306,9 +304,6 @@ func (m *defaultManageUserModel) Update(ctx context.Context, session sqlx.Sessio
 	if slices.Contains(manageUserRowsExpectAutoFieldNames, condition.QuoteWithFlavor(m.flavor, "nickname")) {
 		assigns = append(assigns, sb.Assign(condition.QuoteWithFlavor(m.flavor, "nickname"), data.Nickname))
 	}
-	if slices.Contains(manageUserRowsExpectAutoFieldNames, condition.QuoteWithFlavor(m.flavor, "gender")) {
-		assigns = append(assigns, sb.Assign(condition.QuoteWithFlavor(m.flavor, "gender"), data.Gender))
-	}
 	if slices.Contains(manageUserRowsExpectAutoFieldNames, condition.QuoteWithFlavor(m.flavor, "phone")) {
 		assigns = append(assigns, sb.Assign(condition.QuoteWithFlavor(m.flavor, "phone"), data.Phone))
 	}
@@ -361,7 +356,7 @@ func (m *customManageUserModel) BulkInsert(ctx context.Context, session sqlx.Ses
 	sb.Cols(manageUserRowsExpectAutoSet)
 
 	for _, data := range datas {
-		sb.Values(data.Uuid, data.Username, data.Password, data.Nickname, data.Gender, data.Phone, data.Status, data.Email)
+		sb.Values(data.Uuid, data.Username, data.Password, data.Nickname, data.Phone, data.Status, data.Email)
 	}
 
 	statement, args := sb.BuildWithFlavor(m.flavor)

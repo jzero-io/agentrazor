@@ -157,7 +157,6 @@ CREATE TABLE "manage_user" (
     username varchar(30) NOT NULL UNIQUE,
     password varchar(100) NOT NULL,
     nickname varchar(30) NOT NULL,
-    gender varchar(1) NOT NULL,
     phone varchar(20) NOT NULL,
     status varchar(1) NOT NULL,
     email varchar(100) NOT NULL,
@@ -167,9 +166,9 @@ CREATE TABLE "manage_user" (
 CREATE TRIGGER update_manage_user_update_time BEFORE UPDATE ON "manage_user"
 FOR EACH ROW EXECUTE FUNCTION update_update_time_column();
 
-INSERT INTO "manage_user" (uuid, create_time, update_time, username, password, nickname, gender, phone, status, email)
+INSERT INTO "manage_user" (uuid, create_time, update_time, username, password, nickname, phone, status, email)
 VALUES
-    ('1c2d3e4f-5a6b-7c8d-9e0f-1a2b3c4d5e6f','2024-10-24 09:45:00','2024-10-31 09:40:13','admin','123456','超级管理员','1','','1','');
+    ('1c2d3e4f-5a6b-7c8d-9e0f-1a2b3c4d5e6f','2024-10-24 09:45:00','2024-10-31 09:40:13','admin','123456','超级管理员','','1','');
 
 DROP TABLE IF EXISTS "manage_user_role";
 

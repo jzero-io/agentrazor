@@ -295,7 +295,6 @@ const local: App.I18n.Schema = {
       user: {
         title: '用户列表',
         username: '用户名',
-        userGender: '性别',
         nickName: '昵称',
         userPhone: '手机号',
         userEmail: '邮箱',
@@ -304,7 +303,6 @@ const local: App.I18n.Schema = {
         password: '密码',
         form: {
           username: '请输入用户名',
-          userGender: '请选择性别',
           nickName: '请输入昵称',
           userPhone: '请输入手机号',
           userEmail: '请输入邮箱',
@@ -313,12 +311,7 @@ const local: App.I18n.Schema = {
           password: '请输入密码'
         },
         addUser: '新增用户',
-        editUser: '编辑用户',
-        gender: {
-          male: '男',
-          female: '女'
-        }
-      },
+        editUser: '编辑用户'      },
       menu: {
         home: '首页',
         title: '菜单列表',

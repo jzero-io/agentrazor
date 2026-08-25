@@ -4,7 +4,7 @@ import { useLoading } from '@sa/hooks';
 import { useFormRules, useNaiveForm } from '@/hooks/common/form';
 import { AddUser, EditUser, GetAllRoles } from '@/service/api';
 import { $t } from '@/locales';
-import { enableStatusOptions, userGenderOptions } from '@/constants/business';
+import { enableStatusOptions } from '@/constants/business';
 
 defineOptions({
   name: 'UserOperateDrawer'
@@ -43,7 +43,7 @@ const title = computed(() => {
 
 type Model = Pick<
   Api.Manage.AddUserRequest,
-  'username' | 'userGender' | 'nickName' | 'userPhone' | 'userEmail' | 'userRoles' | 'status' | 'password'
+  'username' | 'nickName' | 'userPhone' | 'userEmail' | 'userRoles' | 'status' | 'password'
 >;
 
 const model: Model = reactive(createDefaultModel());
@@ -52,7 +52,6 @@ function createDefaultModel(): Model {
   return {
     username: '',
     password: '',
-    userGender: null,
     nickName: '',
     userPhone: '',
     userEmail: '',
@@ -61,12 +60,19 @@ function createDefaultModel(): Model {
   };
 }
 
-type RuleKey = Extract<keyof Model, 'username' | 'status' | 'password'>;
+type RuleKey = Extract<keyof Model, 'username' | 'status' | 'password' | 'userRoles'>;
 
 const rules: Record<RuleKey, App.Global.FormRule> = {
   username: defaultRequiredRule,
   status: defaultRequiredRule,
-  password: defaultRequiredRule
+  password: defaultRequiredRule,
+  userRoles: {
+    type: 'array',
+    required: true,
+    min: 1,
+    message: $t('form.required'),
+    trigger: 'change'
+  }
 };
 
 /** the enabled role options */
@@ -103,7 +109,6 @@ async function handleSubmit() {
     // request
     const addUserData: Api.Manage.AddUserRequest = {
       username: model.username,
-      userGender: model.userGender,
       nickName: model.nickName,
       userPhone: model.userPhone,
       userEmail: model.userEmail,
@@ -125,7 +130,6 @@ async function handleSubmit() {
     const editUserData: Api.Manage.EditUserRequest = {
       uuid: props.rowData?.uuid,
       username: model.username,
-      userGender: model.userGender,
       nickName: model.nickName,
       userPhone: model.userPhone,
       userEmail: model.userEmail,
@@ -163,11 +167,6 @@ watch(visible, () => {
             :disabled="props.operateType === 'edit'"
           />
         </NFormItem>
-        <NFormItem :label="$t('page.manage.user.userGender')" path="userGender">
-          <NRadioGroup v-model:value="model.userGender">
-            <NRadio v-for="item in userGenderOptions" :key="item.value" :value="item.value" :label="$t(item.label)" />
-          </NRadioGroup>
-        </NFormItem>
         <NFormItem :label="$t('page.manage.user.nickName')" path="nickName">
           <NInput v-model:value="model.nickName" :placeholder="$t('page.manage.user.form.nickName')" />
         </NFormItem>
@@ -182,7 +181,7 @@ watch(visible, () => {
             <NRadio v-for="item in enableStatusOptions" :key="item.value" :value="item.value" :label="$t(item.label)" />
           </NRadioGroup>
         </NFormItem>
-        <NFormItem :label="$t('page.manage.user.userRole')" path="roles">
+        <NFormItem :label="$t('page.manage.user.userRole')" path="userRoles">
           <NSelect
             v-model:value="model.userRoles"
             multiple

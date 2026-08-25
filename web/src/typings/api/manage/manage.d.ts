@@ -70,14 +70,6 @@ declare namespace Api {
     type AllRole = Pick<Role, 'uuid' | 'roleName' | 'roleCode'>;
 
     /**
-     * user gender
-     *
-     * - "1": "male"
-     * - "2": "female"
-     */
-    type UserGender = '1' | '2';
-
-    /**
      * user status
      *
      * - "1": "Enable"
@@ -89,8 +81,6 @@ declare namespace Api {
     type User = Common.CommonRecord<{
       /** username */
       username: string;
-      /** user gender */
-      userGender: UserGender | null;
       /** user nick name */
       nickName: string;
       /** user phone */
@@ -105,8 +95,6 @@ declare namespace Api {
     type AddUserRequest = {
       /** username */
       username: string;
-      /** user gender */
-      userGender: UserGender | null;
       /** user nick name */
       nickName: string;
       /** user phone */
@@ -128,8 +116,6 @@ declare namespace Api {
       uuid: string | undefined;
       /** username */
       username: string;
-      /** user gender */
-      userGender: UserGender | null;
       /** user nick name */
       nickName: string;
       /** user phone */
@@ -146,7 +132,7 @@ declare namespace Api {
 
     /** user search params */
     type UserSearchParams = CommonType.RecordNullable<
-      Pick<Api.Manage.User, 'username' | 'userGender' | 'nickName' | 'userPhone' | 'userEmail' | 'status'> &
+      Pick<Api.Manage.User, 'username' | 'nickName' | 'userPhone' | 'userEmail' | 'status'> &
         CommonSearchParams
     >;
 

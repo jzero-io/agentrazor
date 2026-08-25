@@ -4,12 +4,14 @@ import { NButton, NPopconfirm, NTag } from 'naive-ui';
 import { DeleteUser, GetUserList } from '@/service/api';
 import { $t } from '@/locales';
 import { useAppStore } from '@/store/modules/app';
-import { enableStatusRecord, userGenderRecord } from '@/constants/business';
+import { useAuth } from '@/hooks/business/auth';
+import { enableStatusRecord } from '@/constants/business';
 import { useTable, useTableOperate } from '@/hooks/common/table';
 import UserOperateDrawer from './modules/user-operate-modal.vue';
 import UserSearch from './modules/user-search.vue';
 
 const appStore = useAppStore();
+const { hasAuth } = useAuth();
 
 type LoadingStatus = Record<string, boolean>;
 const deleteLoadingStatus = reactive<LoadingStatus>({});
@@ -34,7 +36,6 @@ const {
     // the value can not be undefined, otherwise the property in Form will not be reactive
     status: null,
     username: null,
-    userGender: null,
     nickName: null,
     userPhone: null,
     userEmail: null
@@ -56,26 +57,6 @@ const {
       title: $t('page.manage.user.username'),
       align: 'center',
       minWidth: 100
-    },
-    {
-      key: 'userGender',
-      title: $t('page.manage.user.userGender'),
-      align: 'center',
-      width: 100,
-      render: row => {
-        if (row.userGender === null) {
-          return null;
-        }
-
-        const tagMap: Record<Api.Manage.UserGender, NaiveUI.ThemeColor> = {
-          1: 'primary',
-          2: 'error'
-        };
-
-        const label = $t(userGenderRecord[row.userGender]);
-
-        return <NTag type={tagMap[row.userGender]}>{label}</NTag>;
-      }
     },
     {
       key: 'nickName',
@@ -122,19 +103,23 @@ const {
       width: 130,
       render: row => (
         <div class="flex-center gap-8px">
-          <NButton type="primary" ghost size="small" onClick={() => edit(row.uuid)}>
-            {$t('common.edit')}
-          </NButton>
-          <NPopconfirm onPositiveClick={() => handleDelete(row.uuid)}>
-            {{
-              default: () => $t('common.confirmDelete'),
-              trigger: () => (
-                <NButton loading={deleteLoadingStatus[row.uuid]} type="error" ghost size="small">
-                  {$t('common.delete')}
-                </NButton>
-              )
-            }}
-          </NPopconfirm>
+          {hasAuth('v1:manage:user:edit') && (
+            <NButton type="primary" ghost size="small" onClick={() => edit(row.uuid)}>
+              {$t('common.edit')}
+            </NButton>
+          )}
+          {hasAuth('v1:manage:user:delete') && (
+            <NPopconfirm onPositiveClick={() => handleDelete(row.uuid)}>
+              {{
+                default: () => $t('common.confirmDelete'),
+                trigger: () => (
+                  <NButton loading={deleteLoadingStatus[row.uuid]} type="error" ghost size="small">
+                    {$t('common.delete')}
+                  </NButton>
+                )
+              }}
+            </NPopconfirm>
+          )}
         </div>
       )
     }
@@ -211,7 +196,7 @@ function edit(uuid: string) {
         :data="data"
         size="small"
         :flex-height="!appStore.isMobile"
-        :scroll-x="962"
+        :scroll-x="862"
         :loading="loading"
         remote
         :row-key="row => row.uuid"

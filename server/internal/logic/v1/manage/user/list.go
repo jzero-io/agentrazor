@@ -36,7 +36,6 @@ func (l *List) List(req *types.ListRequest) (resp *types.ListResponse, err error
 		Page(req.Current, req.Size).
 		OrderByDesc(manage_user.CreateTime).
 		Like(manage_user.Username, "%"+req.Username+"%").
-		Equal(manage_user.Gender, req.UserGender, condition.WithSkip(req.UserGender == "")).
 		Like(manage_user.Nickname, "%"+req.NickName+"%", condition.WithSkip(req.NickName == "")).
 		Like(manage_user.Phone, "%"+req.UserPhone+"%", condition.WithSkip(req.UserPhone == "")).
 		Like(manage_user.Email, "%"+req.UserEmail+"%", condition.WithSkip(req.UserEmail == "")).
@@ -48,7 +47,6 @@ func (l *List) List(req *types.ListRequest) (resp *types.ListResponse, err error
 		records = append(records, types.ManageUser{
 			Uuid:       user.Uuid,
 			Username:   user.Username,
-			UserGender: user.Gender,
 			NickName:   user.Nickname,
 			UserPhone:  user.Phone,
 			UserEmail:  user.Email,

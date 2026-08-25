@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -31,13 +32,16 @@ func NewAdd(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Request) *A
 }
 
 func (l *Add) Add(req *types.AddRequest) (resp *types.AddResponse, err error) {
+	if len(req.UserRoles) == 0 {
+		return nil, errors.New("用户角色不能为空")
+	}
+
 	userUuid := uuid.New().String()
 	if err = l.svcCtx.Model.ManageUser.InsertV2(l.ctx, nil, &manage_user.ManageUser{
 		Uuid:     userUuid,
 		Username: req.Username,
 		Password: req.Password,
 		Nickname: req.NickName,
-		Gender:   req.UserGender,
 		Phone:    req.UserPhone,
 		Status:   req.Status,
 		Email:    req.UserEmail,

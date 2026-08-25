@@ -10,14 +10,13 @@ var (
 )
 
 type AddRequest struct {
-	Username   string   `json:"username"`
-	UserGender string   `json:"userGender,default=1"`
-	NickName   string   `json:"nickName,optional"`
-	UserPhone  string   `json:"userPhone,optional"`
-	UserEmail  string   `json:"userEmail,optional"`
-	Status     string   `json:"status,default=1"`
-	Password   string   `json:"password"`
-	UserRoles  []string `json:"userRoles"`
+	Username  string   `json:"username"`
+	NickName  string   `json:"nickName,optional"`
+	UserPhone string   `json:"userPhone,optional"`
+	UserEmail string   `json:"userEmail,optional"`
+	Status    string   `json:"status,default=1"`
+	Password  string   `json:"password"`
+	UserRoles []string `json:"userRoles"`
 }
 
 type AddResponse struct {
@@ -31,14 +30,13 @@ type DeleteResponse struct {
 }
 
 type EditRequest struct {
-	Uuid       string   `json:"uuid"`
-	Username   string   `json:"username"`
-	UserGender string   `json:"userGender"`
-	NickName   string   `json:"nickName"`
-	UserPhone  string   `json:"userPhone"`
-	UserEmail  string   `json:"userEmail"`
-	Status     string   `json:"status"`
-	UserRoles  []string `json:"userRoles"`
+	Uuid      string   `json:"uuid"`
+	Username  string   `json:"username"`
+	NickName  string   `json:"nickName"`
+	UserPhone string   `json:"userPhone"`
+	UserEmail string   `json:"userEmail"`
+	Status    string   `json:"status"`
+	UserRoles []string `json:"userRoles"`
 }
 
 type EditResponse struct {
@@ -46,12 +44,11 @@ type EditResponse struct {
 
 type ListRequest struct {
 	PageRequest
-	Username   string `form:"username,optional"`
-	UserGender string `form:"userGender,optional"`
-	NickName   string `form:"nickName,optional"`
-	UserPhone  string `form:"userPhone,optional"`
-	UserEmail  string `form:"userEmail,optional"`
-	Status     string `form:"status,optional"`
+	Username  string `form:"username,optional"`
+	NickName  string `form:"nickName,optional"`
+	UserPhone string `form:"userPhone,optional"`
+	UserEmail string `form:"userEmail,optional"`
+	Status    string `form:"status,optional"`
 }
 
 type ListResponse struct {
@@ -62,7 +59,6 @@ type ListResponse struct {
 type ManageUser struct {
 	Uuid       string   `json:"uuid"`
 	Username   string   `json:"username"`
-	UserGender string   `json:"userGender"`
 	NickName   string   `json:"nickName"`
 	UserPhone  string   `json:"userPhone"`
 	UserEmail  string   `json:"userEmail"`
