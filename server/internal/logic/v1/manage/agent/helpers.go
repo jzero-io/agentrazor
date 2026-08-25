@@ -180,6 +180,8 @@ func skillDetail(codexHome, name, file string) (managetypes.SkillDetailResponse,
 	}, nil
 }
 
+const hiddenPluginSkillMarker = ".agentrazor-plugin-skill.json"
+
 func skillFileTree(root string) ([]managetypes.SkillFile, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
@@ -187,6 +189,9 @@ func skillFileTree(root string) ([]managetypes.SkillFile, error) {
 	}
 	result := make([]managetypes.SkillFile, 0, len(entries))
 	for _, entry := range entries {
+		if isHiddenSkillFile(entry.Name()) {
+			continue
+		}
 		item, err := skillFileNode(root, entry.Name(), entry)
 		if err != nil {
 			continue
@@ -198,6 +203,9 @@ func skillFileTree(root string) ([]managetypes.SkillFile, error) {
 }
 
 func skillFileNode(root, rel string, entry os.DirEntry) (managetypes.SkillFile, error) {
+	if isHiddenSkillFile(entry.Name()) {
+		return managetypes.SkillFile{}, errors.New("skip hidden skill file")
+	}
 	if entry.Type()&os.ModeSymlink != 0 {
 		return managetypes.SkillFile{}, errors.New("skip symlink")
 	}
@@ -212,6 +220,9 @@ func skillFileNode(root, rel string, entry os.DirEntry) (managetypes.SkillFile, 
 	}
 	item.Children = make([]managetypes.SkillFile, 0, len(children))
 	for _, child := range children {
+		if isHiddenSkillFile(child.Name()) {
+			continue
+		}
 		childItem, err := skillFileNode(root, filepath.Join(rel, child.Name()), child)
 		if err != nil {
 			continue
@@ -220,6 +231,10 @@ func skillFileNode(root, rel string, entry os.DirEntry) (managetypes.SkillFile, 
 	}
 	sortSkillFiles(item.Children)
 	return item, nil
+}
+
+func isHiddenSkillFile(name string) bool {
+	return name == hiddenPluginSkillMarker
 }
 
 func sortSkillFiles(files []managetypes.SkillFile) {
@@ -255,6 +270,9 @@ func resolveSkillFile(root, file string) (string, error) {
 	if file == "" || file == "." || filepath.IsAbs(file) {
 		return "", errors.New("file is required")
 	}
+	if isHiddenSkillPath(file) {
+		return "", errors.New("file is hidden")
+	}
 	rootReal, err := filepath.EvalSymlinks(root)
 	if err != nil {
 		return "", err
@@ -269,6 +287,15 @@ func resolveSkillFile(root, file string) (string, error) {
 		return "", errors.New("invalid file path")
 	}
 	return pathReal, nil
+}
+
+func isHiddenSkillPath(file string) bool {
+	for _, part := range strings.Split(filepath.ToSlash(file), "/") {
+		if isHiddenSkillFile(part) {
+			return true
+		}
+	}
+	return false
 }
 
 func readSkillFile(root, file string) (string, error) {
