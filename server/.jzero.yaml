@@ -1,9 +1,8 @@
+home: .template/agentrazor-plugin
+
 hooks:
   before:
     - go install tool
-
-new:
-  home: .template/agentrazor-plugin
 
 gen:
   hooks:
