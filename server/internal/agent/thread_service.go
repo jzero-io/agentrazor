@@ -474,8 +474,22 @@ func (s *ThreadService) Delete(ctx context.Context, threadID string) error {
 	if err := runtime.DeleteThread(ctx, threadID); err != nil {
 		return err
 	}
+	if err := runtime.DeleteConversationHome(threadID); err != nil {
+		return err
+	}
 	s.events.Release(threadID)
 	return nil
+}
+
+func (s *ThreadService) DeleteConversationHome(threadID string) error {
+	if err := validateThreadID(threadID); err != nil {
+		return err
+	}
+	runtime, err := s.currentRuntime()
+	if err != nil {
+		return err
+	}
+	return runtime.DeleteConversationHome(threadID)
 }
 
 func (s *ThreadService) recordTokenUsage(event map[string]any) {

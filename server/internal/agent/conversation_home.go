@@ -48,3 +48,14 @@ func (r *CodexAppServerRuntime) conversationDir(conversationID string) (string, 
 	}
 	return filepath.Join(r.options.AgentrazorHome, conversationID), nil
 }
+
+func (r *CodexAppServerRuntime) DeleteConversationHome(conversationID string) error {
+	dir, err := r.conversationDir(conversationID)
+	if err != nil {
+		return err
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return fmt.Errorf("delete conversation home: %w", err)
+	}
+	return nil
+}

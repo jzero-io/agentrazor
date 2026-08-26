@@ -52,6 +52,8 @@ func (l *Delete) Delete(req *types.PathRequest) (resp *types.DeleteResponse, err
 		if err := l.svcCtx.AgentThreads.Delete(l.ctx, req.ConversationId); err != nil {
 			return nil, err
 		}
+	} else if err := l.svcCtx.AgentThreads.DeleteConversationHome(req.ConversationId); err != nil {
+		return nil, err
 	}
 	// 线程已不存在（孤儿数据）时忽略该错误，仅清理业务库记录
 	if err := l.svcCtx.Model.Conversation.DeleteByCondition(l.ctx, nil,

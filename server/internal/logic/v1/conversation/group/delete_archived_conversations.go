@@ -58,6 +58,9 @@ func (l *DeleteArchivedConversations) DeleteArchivedConversations(req *types.Pat
 		if err != nil {
 			// 线程已不存在（孤儿数据）：跳过 thread 侧，直接清理业务库记录
 			if errors.Is(err, agentdomain.ErrThreadNotFound) {
+				if dbErr := l.svcCtx.AgentThreads.DeleteConversationHome(conv.Id); dbErr != nil {
+					return nil, dbErr
+				}
 				if dbErr := l.svcCtx.Model.Conversation.DeleteByCondition(l.ctx, nil,
 					condition.NewChain().
 						Equal(conversationmodel.Id, conv.Id).

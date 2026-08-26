@@ -20,6 +20,7 @@ type ThreadRuntime interface {
 	ArchiveStoredThread(ctx context.Context, threadID string) error
 	UnarchiveStoredThread(ctx context.Context, threadID string) (StoredThread, error)
 	DeleteThread(ctx context.Context, threadID string) error
+	DeleteConversationHome(threadID string) error
 	Resume(ctx context.Context, threadID, prompt string, emit EventHandler) error
 	Close() error
 }
