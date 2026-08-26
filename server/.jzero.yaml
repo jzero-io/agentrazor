@@ -1,5 +1,3 @@
-home: .template/agentrazor-plugin
-
 hooks:
   before:
     - go install tool
