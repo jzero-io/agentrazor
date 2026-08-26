@@ -49,7 +49,7 @@ async function search() {
         <NForm ref="formRef" :model="model" :rules="rules" label-placement="left" :label-width="80">
           <NGrid responsive="screen" item-responsive>
             <NFormItemGi span="24 s:12 m:6" :label="$t('page.manage.user.username')" path="username" class="pr-24px">
-              <NInput v-model:value="model.username" :placeholder="$t('page.manage.user.form.username')" />
+              <NInput v-model:value="model.username" :placeholder="$t('page.manage.user.form.username')" :maxlength="20" />
             </NFormItemGi>
             <NFormItemGi span="24 s:12 m:6" :label="$t('page.manage.user.nickName')" path="nickName" class="pr-24px">
               <NInput v-model:value="model.nickName" :placeholder="$t('page.manage.user.form.nickName')" />

@@ -6,7 +6,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jzero-io/jzero/core/stores/condition"
-	"github.com/pkg/errors"
 	"github.com/spf13/cast"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
@@ -34,9 +33,8 @@ func NewAdd(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Request) *A
 }
 
 func (l *Add) Add(req *types.AddRequest) (resp *types.AddResponse, err error) {
-	// role code 唯一
-	if _, err := l.svcCtx.Model.ManageRole.FindOneByCondition(l.ctx, nil, condition.NewChain().Equal(manage_role.Code, req.RoleCode).Build()...); err == nil {
-		return nil, errors.New("角色编码已存在")
+	if err := ensureRoleUnique(l.ctx, l.svcCtx, req.RoleName, req.RoleCode, ""); err != nil {
+		return nil, err
 	}
 
 	// find home menu

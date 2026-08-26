@@ -30,7 +30,7 @@ const visible = defineModel<boolean>('visible', {
 });
 
 const { formRef, validate, restoreValidation } = useNaiveForm();
-const { defaultRequiredRule } = useFormRules();
+const { defaultRequiredRule, createRequiredRule } = useFormRules();
 const { loading: confirmLoading, startLoading: confirmStartLoding, endLoading: confirmEndLoading } = useLoading();
 
 const title = computed(() => {
@@ -62,8 +62,15 @@ function createDefaultModel(): Model {
 
 type RuleKey = Extract<keyof Model, 'username' | 'status' | 'password' | 'userRoles'>;
 
-const rules: Record<RuleKey, App.Global.FormRule> = {
-  username: defaultRequiredRule,
+const rules: Record<RuleKey, App.Global.FormRule | App.Global.FormRule[]> = {
+  username: [
+    createRequiredRule($t('form.required')),
+    {
+      max: 20,
+      message: '用户名不能超过20个字符',
+      trigger: ['input', 'blur']
+    }
+  ],
   status: defaultRequiredRule,
   password: defaultRequiredRule,
   userRoles: {
@@ -164,6 +171,8 @@ watch(visible, () => {
           <NInput
             v-model:value="model.username"
             :placeholder="$t('page.manage.user.form.username')"
+            :maxlength="20"
+            show-count
             :disabled="props.operateType === 'edit'"
           />
         </NFormItem>

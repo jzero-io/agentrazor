@@ -32,8 +32,14 @@ func NewAdd(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Request) *A
 }
 
 func (l *Add) Add(req *types.AddRequest) (resp *types.AddResponse, err error) {
+	if err := validateUsername(req.Username); err != nil {
+		return nil, err
+	}
 	if len(req.UserRoles) == 0 {
 		return nil, errors.New("用户角色不能为空")
+	}
+	if err := ensureUsernameUnique(l.ctx, l.svcCtx, req.Username, ""); err != nil {
+		return nil, err
 	}
 
 	userUuid := uuid.New().String()

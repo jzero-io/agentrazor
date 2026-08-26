@@ -10,7 +10,7 @@ var (
 )
 
 type AddRequest struct {
-	Username  string   `json:"username"`
+	Username  string   `json:"username" validate:"required,max=20"`
 	NickName  string   `json:"nickName,optional"`
 	UserPhone string   `json:"userPhone,optional"`
 	UserEmail string   `json:"userEmail,optional"`
@@ -31,7 +31,7 @@ type DeleteResponse struct {
 
 type EditRequest struct {
 	Uuid      string   `json:"uuid"`
-	Username  string   `json:"username"`
+	Username  string   `json:"username" validate:"required,max=20"`
 	NickName  string   `json:"nickName"`
 	UserPhone string   `json:"userPhone"`
 	UserEmail string   `json:"userEmail"`

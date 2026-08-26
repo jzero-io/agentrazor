@@ -57,6 +57,7 @@ services:
     image: postgres
     restart: always
     container_name: agentrazor-postgres
+    shm_size: "1gb"
     environment:
       TZ: Asia/Shanghai
       POSTGRES_PASSWORD: 123456

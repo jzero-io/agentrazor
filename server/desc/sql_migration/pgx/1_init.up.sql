@@ -101,6 +101,9 @@ CREATE TABLE "manage_role" (
     PRIMARY KEY (id)
 );
 
+CREATE UNIQUE INDEX uniq_manage_role_name ON "manage_role" (name);
+CREATE UNIQUE INDEX uniq_manage_role_code ON "manage_role" (code);
+
 CREATE TRIGGER update_manage_role_update_time BEFORE UPDATE ON "manage_role"
 FOR EACH ROW EXECUTE FUNCTION update_update_time_column();
 
@@ -154,7 +157,7 @@ CREATE TABLE "manage_user" (
     uuid varchar(36) NOT NULL UNIQUE,
     create_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    username varchar(30) NOT NULL UNIQUE,
+    username varchar(20) NOT NULL UNIQUE,
     password varchar(100) NOT NULL,
     nickname varchar(30) NOT NULL,
     phone varchar(20) NOT NULL,
