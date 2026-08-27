@@ -10,7 +10,7 @@ var (
 )
 
 type AddRequest struct {
-	Username  string   `json:"username" validate:"required,max=20"`
+	Username  string   `json:"username" validate:"required,min=4,max=20"`
 	NickName  string   `json:"nickName,optional"`
 	UserPhone string   `json:"userPhone,optional"`
 	UserEmail string   `json:"userEmail,optional"`
@@ -31,7 +31,7 @@ type DeleteResponse struct {
 
 type EditRequest struct {
 	Uuid      string   `json:"uuid"`
-	Username  string   `json:"username" validate:"required,max=20"`
+	Username  string   `json:"username" validate:"required,min=4,max=20"`
 	NickName  string   `json:"nickName"`
 	UserPhone string   `json:"userPhone"`
 	UserEmail string   `json:"userEmail"`
@@ -57,15 +57,16 @@ type ListResponse struct {
 }
 
 type ManageUser struct {
-	Uuid       string   `json:"uuid"`
-	Username   string   `json:"username"`
-	NickName   string   `json:"nickName"`
-	UserPhone  string   `json:"userPhone"`
-	UserEmail  string   `json:"userEmail"`
-	UserRoles  []string `json:"userRoles"`
-	Status     string   `json:"status"`
-	CreateTime string   `json:"createTime"`
-	UpdateTime string   `json:"updateTime"`
+	Uuid          string   `json:"uuid"`
+	Username      string   `json:"username"`
+	NickName      string   `json:"nickName"`
+	UserPhone     string   `json:"userPhone"`
+	UserEmail     string   `json:"userEmail"`
+	UserRoles     []string `json:"userRoles"`
+	UserRoleNames []string `json:"userRoleNames"`
+	Status        string   `json:"status"`
+	CreateTime    string   `json:"createTime"`
+	UpdateTime    string   `json:"updateTime"`
 }
 
 type PageRequest struct {

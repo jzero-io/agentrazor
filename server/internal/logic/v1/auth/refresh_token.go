@@ -65,6 +65,11 @@ func (l *RefreshToken) RefreshToken(req *types.RefreshTokenRequest) (resp *types
 	if err := ensureUserEnabled(user.Status); err != nil {
 		return nil, err
 	}
+	roleUuids, err := enabledRoleUuidsByUser(l.ctx, l.svcCtx, user.Uuid)
+	if err != nil {
+		return nil, err
+	}
+	claims["role_uuids"] = roleUuids
 
 	// 设置新的过期时间
 	claims["exp"] = time.Now().Add(time.Duration(l.svcCtx.MustGetConfig().Jwt.AccessExpire) * time.Second).Unix()

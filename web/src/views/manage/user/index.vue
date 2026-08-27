@@ -77,6 +77,28 @@ const {
       minWidth: 200
     },
     {
+      key: 'userRoles',
+      title: $t('page.manage.user.userRole'),
+      align: 'center',
+      minWidth: 180,
+      render: row => {
+        const roles = row.userRoleNames || [];
+        if (roles.length === 0) {
+          return '-';
+        }
+
+        return (
+          <div class="flex-center flex-wrap gap-6px">
+            {roles.map(role => (
+              <NTag key={role} size="small" bordered={false} type="info">
+                {role}
+              </NTag>
+            ))}
+          </div>
+        );
+      }
+    },
+    {
       key: 'status',
       title: $t('page.manage.user.userStatus'),
       align: 'center',
@@ -196,7 +218,7 @@ function edit(uuid: string) {
         :data="data"
         size="small"
         :flex-height="!appStore.isMobile"
-        :scroll-x="862"
+        :scroll-x="1042"
         :loading="loading"
         remote
         :row-key="row => row.uuid"

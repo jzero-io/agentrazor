@@ -89,6 +89,8 @@ declare namespace Api {
       userEmail: string;
       /** user role code collection */
       userRoles: string[];
+      /** user role name collection */
+      userRoleNames?: string[];
     }>;
 
     /** add user request */

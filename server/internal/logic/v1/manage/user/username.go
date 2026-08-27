@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"errors"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -12,16 +13,22 @@ import (
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 )
 
-const maxUsernameLength = 20
+const (
+	minUsernameLength = 4
+	maxUsernameLength = 20
+)
 
 var (
-	errUsernameTooLong = errors.New("用户名不能超过20个字符")
+	usernamePattern    = regexp.MustCompile(`^[\p{Han}A-Za-z0-9_-]+$`)
+	errUsernameInvalid = errors.New("用户名格式不正确")
 	errUsernameExists  = errors.New("用户名已存在")
 )
 
 func validateUsername(username string) error {
-	if utf8.RuneCountInString(strings.TrimSpace(username)) > maxUsernameLength {
-		return errUsernameTooLong
+	username = strings.TrimSpace(username)
+	length := utf8.RuneCountInString(username)
+	if length < minUsernameLength || length > maxUsernameLength || !usernamePattern.MatchString(username) {
+		return errUsernameInvalid
 	}
 	return nil
 }

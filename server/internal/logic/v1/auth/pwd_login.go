@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/zeromicro/go-zero/core/logx"
 
+	"github.com/jzero-io/agentrazor/server/internal/model/manage_role"
 	"github.com/jzero-io/agentrazor/server/internal/model/manage_user_role"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/auth"
@@ -20,6 +21,48 @@ import (
 func CreateToken(secret string, claims jwt.MapClaims) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(secret))
+}
+
+const enabledRoleStatus = "1"
+
+var ErrRoleDisabled = errors.New("用户角色已被禁用")
+
+func enabledRoleUuidsByUser(ctx context.Context, svcCtx *svc.ServiceContext, userUuid string) ([]string, error) {
+	userRoles, err := svcCtx.Model.ManageUserRole.FindByCondition(ctx, nil, condition.NewChain().
+		Equal(manage_user_role.UserUuid, userUuid).
+		Build()...)
+	if err != nil {
+		return nil, err
+	}
+
+	roleUuids := make([]string, 0, len(userRoles))
+	for _, userRole := range userRoles {
+		roleUuids = append(roleUuids, userRole.RoleUuid)
+	}
+	return enabledRoleUuids(ctx, svcCtx, roleUuids)
+}
+
+func enabledRoleUuids(ctx context.Context, svcCtx *svc.ServiceContext, roleUuids []string) ([]string, error) {
+	if len(roleUuids) == 0 {
+		return nil, ErrRoleDisabled
+	}
+
+	roles, err := svcCtx.Model.ManageRole.FindByCondition(ctx, nil, condition.NewChain().
+		In(manage_role.Uuid, roleUuids).
+		Equal(manage_role.Status, enabledRoleStatus).
+		Build()...)
+	if err != nil {
+		return nil, err
+	}
+
+	enabledRoleUuids := make([]string, 0, len(roles))
+	for _, role := range roles {
+		enabledRoleUuids = append(enabledRoleUuids, role.Uuid)
+	}
+	if len(enabledRoleUuids) == 0 {
+		return nil, ErrRoleDisabled
+	}
+	return enabledRoleUuids, nil
 }
 
 type PwdLogin struct {
@@ -53,15 +96,9 @@ func (l *PwdLogin) PwdLogin(req *types.PwdLoginRequest) (resp *types.LoginRespon
 	if err := ensureUserEnabled(user.Status); err != nil {
 		return nil, err
 	}
-	userRoles, err := l.svcCtx.Model.ManageUserRole.FindByCondition(l.ctx, nil, condition.NewChain().
-		Equal(manage_user_role.UserUuid, user.Uuid).
-		Build()...)
+	roleIds, err := enabledRoleUuidsByUser(l.ctx, l.svcCtx, user.Uuid)
 	if err != nil {
 		return nil, err
-	}
-	var roleIds []string
-	for _, userRole := range userRoles {
-		roleIds = append(roleIds, userRole.RoleUuid)
 	}
 
 	marshal, err := json.Marshal(auth.Auth{

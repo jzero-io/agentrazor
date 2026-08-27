@@ -1442,7 +1442,7 @@ function confirmSentTurn(conversationId: string, turn: Turn) {
     conversationId,
     turn: {
       ...current,
-      id: current.id || turn.id,
+      id: current.id && !current.id.startsWith('pending-') ? current.id : turn.id,
       status: 'inProgress',
       startedAt: current.startedAt || turn.startedAt,
       items: mergeTurnItems(current.items, turn.items)
@@ -1450,6 +1450,41 @@ function confirmSentTurn(conversationId: string, turn: Turn) {
     resetResultSeen: !hasStreamedItems,
     restartTimer: true
   });
+}
+
+function createOptimisticTurn(content: string): Turn {
+  const pendingId = `pending-${Date.now()}`;
+  return {
+    id: pendingId,
+    status: 'pending',
+    startedAt: new Date().toISOString(),
+    items: [{
+      id: `local-user-${pendingId}`,
+      type: 'userMessage',
+      content: [{ type: 'text', text: content }]
+    }]
+  };
+}
+
+function showOptimisticTurn(conversationId: string, turn: Turn) {
+  activeTurnsByConversation.set(conversationId, cloneTurnForStream(turn));
+  activeTurnResultSeenByConversation.delete(conversationId);
+}
+
+function moveOptimisticTurn(fromConversationId: string, toConversationId: string, pendingTurnId: string) {
+  const turn = cachedActiveTurn(fromConversationId);
+  if (!turn || turn.id !== pendingTurnId) return;
+  activeTurnsByConversation.delete(fromConversationId);
+  activeTurnResultSeenByConversation.delete(fromConversationId);
+  activeTurnsByConversation.set(toConversationId, turn);
+}
+
+function discardOptimisticTurn(conversationId: string, pendingTurnId: string) {
+  const turn = cachedActiveTurn(conversationId);
+  if (!turn || turn.id !== pendingTurnId) return false;
+  activeTurnsByConversation.delete(conversationId);
+  activeTurnResultSeenByConversation.delete(conversationId);
+  return true;
 }
 
 function activeTurnError(error: unknown) {
@@ -1575,9 +1610,15 @@ async function sendMessage() {
   const content = draft.value.trim();
   if (!content || sendingRequest.value) return;
 
+  const optimisticTurn = createOptimisticTurn(content);
+
   sendingRequest.value = true;
   autoScrollEnabled.value = true;
   let conversationId = selectedConversationId.value;
+  showOptimisticTurn(conversationId, optimisticTurn);
+  setConversationDraft(draftKey, '');
+  await nextTick();
+  await scrollToBottom({ force: true });
 
   try {
     conversationId = selectedConversationId.value;
@@ -1593,6 +1634,7 @@ async function sendMessage() {
       upsertConversationListItem(nextConversation);
       revealConversationSection(nextConversation);
       conversationId = nextConversation.id;
+      moveOptimisticTurn(draftKey, conversationId, optimisticTurn.id);
       selectedConversationId.value = conversationId;
       syncConversationUrl(conversationId);
       setConversationDetail({ conversation: nextConversation, eventCursor: 0, turns: [] });
@@ -1600,7 +1642,6 @@ async function sendMessage() {
 
     if (isConversationRunning(conversationId)) return;
 
-    setConversationDraft(draftKey, '');
     if (draftKey !== conversationId) setConversationDraft(conversationId, '');
     ensureConversationStream(conversationId, activeDetail.value?.conversation.id === conversationId ? activeDetail.value.eventCursor : 0);
     const sent = await conversationApi.send(conversationId, content);
@@ -1616,23 +1657,31 @@ async function sendMessage() {
         id: sent.run?.id || `run-${Date.now()}`,
         status: 'inProgress',
         startedAt: sent.run?.createdAt || new Date().toISOString(),
-        items: [{
-          id: `local-user-${sent.run?.id || Date.now()}`,
-          type: 'userMessage',
-          content: [{ type: 'text', text: content }]
-        }]
+        items: optimisticTurn.items
       };
       confirmSentTurn(conversationId, confirmedTurn);
       await scrollToBottom({ force: true });
     }
   } catch (error) {
-    if (selectedConversationId.value === conversationId) setConversationDraft(conversationId, content);
-    else if (selectedConversationId.value === draftKey) setConversationDraft(draftKey, content);
     if (activeTurnError(error)) {
       setConversationProcessing(conversationId, true);
       ensureConversationStream(conversationId, activeDetail.value?.conversation.id === conversationId ? activeDetail.value.eventCursor : 0);
       if (selectedConversationId.value === conversationId) await refreshDetail();
       return;
+    }
+
+    const discarded = discardOptimisticTurn(conversationId, optimisticTurn.id)
+      || (conversationId !== draftKey && discardOptimisticTurn(draftKey, optimisticTurn.id));
+    if (!discarded && cachedActiveTurn(conversationId)) {
+      // SSE 可能先于 POST 响应确认任务已启动；此时网络请求即使报错，
+      // 也要保留已被服务端接收的 turn，并继续等待流式结果。
+      setConversationProcessing(conversationId, true);
+      ensureConversationStream(conversationId, activeDetail.value?.conversation.id === conversationId ? activeDetail.value.eventCursor : 0);
+      return;
+    }
+    if (discarded) {
+      if (selectedConversationId.value === conversationId) setConversationDraft(conversationId, content);
+      else if (selectedConversationId.value === draftKey) setConversationDraft(draftKey, content);
     }
     setConversationProcessing(conversationId, false);
     if (selectedConversationId.value === conversationId) resetActiveTurn();

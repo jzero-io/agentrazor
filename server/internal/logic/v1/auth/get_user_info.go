@@ -11,7 +11,6 @@ import (
 	"github.com/jzero-io/agentrazor/server/internal/model/manage_menu"
 	"github.com/jzero-io/agentrazor/server/internal/model/manage_role"
 	"github.com/jzero-io/agentrazor/server/internal/model/manage_role_menu"
-	"github.com/jzero-io/agentrazor/server/internal/model/manage_user_role"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/auth"
 )
@@ -42,20 +41,17 @@ func (l *GetUserInfo) GetUserInfo(req *types.GetUserInfoRequest) (resp *types.Ge
 		return nil, err
 	}
 
-	userRoles, err := l.svcCtx.Model.ManageUserRole.FindByCondition(l.ctx, nil, condition.NewChain().
-		Equal(manage_user_role.UserUuid, user.Uuid).
-		Build()...)
+	if err := ensureUserEnabled(user.Status); err != nil {
+		return nil, err
+	}
+	roleUuids, err := enabledRoleUuidsByUser(l.ctx, l.svcCtx, user.Uuid)
 	if err != nil {
 		return nil, err
 	}
 
-	var roleUuids []string
-	for _, userRole := range userRoles {
-		roleUuids = append(roleUuids, userRole.RoleUuid)
-	}
-
 	roles, err := l.svcCtx.Model.ManageRole.FindByCondition(l.ctx, nil, condition.NewChain().
 		In(manage_role.Uuid, roleUuids).
+		Equal(manage_role.Status, enabledRoleStatus).
 		Build()...)
 	if err != nil {
 		return nil, err

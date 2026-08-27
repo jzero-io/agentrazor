@@ -88,10 +88,13 @@ func (l *List) List(req *types.ListRequest) (resp *types.ListResponse, err error
 			return
 		}
 		var roleCodes []string
+		var roleNames []string
 		for _, role := range roles {
 			roleCodes = append(roleCodes, role.Code)
+			roleNames = append(roleNames, role.Name)
 		}
 		records[item].UserRoles = roleCodes
+		records[item].UserRoleNames = roleNames
 	}, func(pipe <-chan types.ManageUser, cancel func(error)) {})
 
 	if err != nil {

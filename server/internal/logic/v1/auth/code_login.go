@@ -14,7 +14,6 @@ import (
 
 	"github.com/jzero-io/agentrazor/server/internal/constant"
 	"github.com/jzero-io/agentrazor/server/internal/model/manage_user"
-	"github.com/jzero-io/agentrazor/server/internal/model/manage_user_role"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/auth"
 )
@@ -61,15 +60,9 @@ func (l *CodeLogin) CodeLogin(req *types.CodeLoginRequest) (resp *types.LoginRes
 		return nil, err
 	}
 
-	userRoles, err := l.svcCtx.Model.ManageUserRole.FindByCondition(l.ctx, nil, condition.NewChain().
-		Equal(manage_user_role.UserUuid, user.Uuid).
-		Build()...)
+	roleUuids, err := enabledRoleUuidsByUser(l.ctx, l.svcCtx, user.Uuid)
 	if err != nil {
 		return nil, err
-	}
-	var roleUuids []string
-	for _, userRole := range userRoles {
-		roleUuids = append(roleUuids, userRole.RoleUuid)
 	}
 
 	marshal, err := json.Marshal(auth.Auth{

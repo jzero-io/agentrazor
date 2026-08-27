@@ -30,7 +30,7 @@ const visible = defineModel<boolean>('visible', {
 });
 
 const { formRef, validate, restoreValidation } = useNaiveForm();
-const { defaultRequiredRule, createRequiredRule } = useFormRules();
+const { defaultRequiredRule, createRequiredRule, patternRules } = useFormRules();
 const { loading: confirmLoading, startLoading: confirmStartLoding, endLoading: confirmEndLoading } = useLoading();
 
 const title = computed(() => {
@@ -63,14 +63,7 @@ function createDefaultModel(): Model {
 type RuleKey = Extract<keyof Model, 'username' | 'status' | 'password' | 'userRoles'>;
 
 const rules: Record<RuleKey, App.Global.FormRule | App.Global.FormRule[]> = {
-  username: [
-    createRequiredRule($t('form.required')),
-    {
-      max: 20,
-      message: '用户名不能超过20个字符',
-      trigger: ['input', 'blur']
-    }
-  ],
+  username: [createRequiredRule($t('form.required')), patternRules.username],
   status: defaultRequiredRule,
   password: defaultRequiredRule,
   userRoles: {
@@ -82,8 +75,26 @@ const rules: Record<RuleKey, App.Global.FormRule | App.Global.FormRule[]> = {
   }
 };
 
+type RoleOption = CommonType.Option<string> & { disabled?: boolean };
+
 /** the enabled role options */
-const roleOptions = ref<CommonType.Option<string>[]>([]);
+const roleOptions = ref<RoleOption[]>([]);
+
+function appendCurrentUserRoleOptions(options: RoleOption[]) {
+  if (props.operateType !== 'edit' || !props.rowData) return options;
+
+  const optionMap = new Map(options.map(item => [item.value, item]));
+  props.rowData.userRoles?.forEach((roleCode, index) => {
+    if (!roleCode || optionMap.has(roleCode)) return;
+    optionMap.set(roleCode, {
+      label: props.rowData?.userRoleNames?.[index] || roleCode,
+      value: roleCode,
+      disabled: true
+    });
+  });
+
+  return [...optionMap.values()];
+}
 
 async function getRoleOptions() {
   const { error, data } = await GetAllRoles();
@@ -94,7 +105,7 @@ async function getRoleOptions() {
       value: item.roleCode
     }));
 
-    roleOptions.value = [...options];
+    roleOptions.value = appendCurrentUserRoleOptions(options);
   }
 }
 
