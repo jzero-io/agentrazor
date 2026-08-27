@@ -30,7 +30,6 @@ type CodexAppServerOptions struct {
 	CodexHome          string
 	PluginsRoot        string
 	AgentrazorHome     string
-	Sandbox            string
 	DisableApps        bool
 	DisabledMCPServers []string
 	StartTimeout       time.Duration
@@ -111,14 +110,6 @@ func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRun
 	if options.Binary == "" {
 		options.Binary = "codex"
 	}
-	if options.Sandbox == "" {
-		options.Sandbox = "read-only"
-	}
-	switch options.Sandbox {
-	case "read-only", "workspace-write", "danger-full-access":
-	default:
-		return nil, fmt.Errorf("unsupported Codex sandbox %q", options.Sandbox)
-	}
 	if options.StartTimeout <= 0 {
 		options.StartTimeout = 15 * time.Second
 	}
@@ -130,8 +121,8 @@ func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRun
 		if err != nil {
 			return nil, fmt.Errorf("resolve Codex home: %w", err)
 		}
-		if err := os.MkdirAll(codexHome, 0o700); err != nil {
-			return nil, fmt.Errorf("create Codex home: %w", err)
+		if err := ensureDefaultCodexConfig(codexHome); err != nil {
+			return nil, err
 		}
 		options.CodexHome = codexHome
 		if err := syncPluginSkills(options.PluginsRoot, options.CodexHome); err != nil {
@@ -250,7 +241,6 @@ func (r *CodexAppServerRuntime) Resume(ctx context.Context, threadID, prompt str
 func (r *CodexAppServerRuntime) startThread(ctx context.Context) (string, error) {
 	result, err := r.request(ctx, "thread/start", map[string]any{
 		"approvalPolicy": "never",
-		"sandbox":        r.options.Sandbox,
 	})
 	if err != nil {
 		return "", fmt.Errorf("start Codex thread: %w", err)
@@ -301,7 +291,6 @@ func (r *CodexAppServerRuntime) ensureThread(ctx context.Context, threadID strin
 	result, err := r.request(ctx, "thread/resume", map[string]any{
 		"threadId":       threadID,
 		"approvalPolicy": "never",
-		"sandbox":        r.options.Sandbox,
 	})
 	if err != nil {
 		err = fmt.Errorf("resume Codex thread %s: %w", threadID, err)

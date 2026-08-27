@@ -28,5 +28,4 @@ agent:
     binaryPath: "${CODEX_BINARY_PATH:-codex}"
     codexHome: "${CODEX_HOME_PATH:-data/codex-home}"
     agentrazorHome: "${AGENTRAZOR_HOME_PATH:-data/agentrazor-home}"
-    sandbox: "${AGENT_SANDBOX:-workspace-write}"
     startTimeoutSeconds: 15

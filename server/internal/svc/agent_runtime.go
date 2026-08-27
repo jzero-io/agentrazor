@@ -12,7 +12,6 @@ func (sc *ServiceContext) AgentOptionsFromConfig(agentConfig config.AgentConf) a
 		Binary:             agentConfig.BinaryPath,
 		CodexHome:          agentConfig.CodexHome,
 		AgentrazorHome:     agentConfig.AgentrazorHome,
-		Sandbox:            agentConfig.Sandbox,
 		DisableApps:        agentConfig.DisableApps,
 		DisabledMCPServers: agentConfig.DisabledMCPServers,
 		StartTimeout:       time.Duration(agentConfig.StartTimeoutSeconds) * time.Second,

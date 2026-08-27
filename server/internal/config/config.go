@@ -11,7 +11,6 @@ type AgentConf struct {
 	BinaryPath          string   `json:",default=codex"`
 	CodexHome           string   `json:",default=data/codex-home"`
 	AgentrazorHome      string   `json:",default=data/agentrazor-home"`
-	Sandbox             string   `json:",default=workspace-write,options=read-only|workspace-write|danger-full-access"`
 	DisableApps         bool     `json:",default=true"`
 	DisabledMCPServers  []string `json:",optional"`
 	StartTimeoutSeconds int      `json:",default=15"`
