@@ -110,7 +110,7 @@ export function activityTitle(item: ThreadItem, live = false) {
     case 'mcpToolCall': return `${live ? '正在调用' : '调用'} ${item.server || 'MCP'} · ${item.tool || '工具'}`;
     case 'dynamicToolCall': return `${live ? '正在调用' : '调用'} ${item.tool || '工具'}`;
     case 'collabAgentToolCall': return live ? '正在协作处理' : '协作处理';
-    case 'contextCompaction': return live ? '正在整理上下文' : '整理上下文';
+    case 'contextCompaction': return live ? '正在自动压缩上下文' : '已自动压缩上下文';
     case 'plan': return '计划';
     default: return live ? '正在处理' : String(item.type);
   }

@@ -323,5 +323,24 @@ declare namespace Api {
     type UpdateAgentConfigFileResponse = {
       runtime: AgentRuntimeStatus;
     };
+
+    type EmailConfig = {
+      from: string;
+      host: string;
+      port: number;
+      username: string;
+      enableSsl: boolean;
+      isVerify: boolean;
+      hasPassword: boolean;
+    };
+
+    type GetEmailConfigResponse = {
+      configured: boolean;
+      config: EmailConfig;
+    };
+
+    type SaveEmailConfigRequest = Omit<EmailConfig, 'hasPassword'> & {
+      password: string;
+    };
   }
 }

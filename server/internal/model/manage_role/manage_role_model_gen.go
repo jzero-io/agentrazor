@@ -50,6 +50,8 @@ type (
 		Insert(ctx context.Context, session sqlx.Session, data *ManageRole) (sql.Result, error)
 		InsertV2(ctx context.Context, session sqlx.Session, data *ManageRole) error
 		FindOne(ctx context.Context, session sqlx.Session, id int64) (*ManageRole, error)
+		FindOneByCode(ctx context.Context, session sqlx.Session, code string) (*ManageRole, error)
+		FindOneByName(ctx context.Context, session sqlx.Session, name string) (*ManageRole, error)
 		FindOneByUuid(ctx context.Context, session sqlx.Session, uuid string) (*ManageRole, error)
 		Update(ctx context.Context, session sqlx.Session, data *ManageRole) error
 		Delete(ctx context.Context, session sqlx.Session, id int64) error
@@ -150,6 +152,58 @@ func (m *defaultManageRoleModel) FindOne(ctx context.Context, session sqlx.Sessi
 	} else {
 		err = m.conn.QueryRowCtx(ctx, &resp, sql, args...)
 	}
+	switch err {
+	case nil:
+		return &resp, nil
+	case sqlx.ErrNotFound:
+		return nil, ErrNotFound
+	default:
+		return nil, err
+	}
+}
+
+func (m *defaultManageRoleModel) FindOneByCode(ctx context.Context, session sqlx.Session, code string) (*ManageRole, error) {
+	var resp ManageRole
+	var err error
+
+	sb := sqlbuilder.Select(manageRoleRows).From(m.table)
+	condition.SelectByWhereRawSql(sb, "code = $1", code)
+	sb.Limit(1)
+
+	sql, args := sb.BuildWithFlavor(m.flavor)
+
+	if session != nil {
+		err = session.QueryRowCtx(ctx, &resp, sql, args...)
+	} else {
+		err = m.conn.QueryRowCtx(ctx, &resp, sql, args...)
+	}
+
+	switch err {
+	case nil:
+		return &resp, nil
+	case sqlx.ErrNotFound:
+		return nil, ErrNotFound
+	default:
+		return nil, err
+	}
+}
+
+func (m *defaultManageRoleModel) FindOneByName(ctx context.Context, session sqlx.Session, name string) (*ManageRole, error) {
+	var resp ManageRole
+	var err error
+
+	sb := sqlbuilder.Select(manageRoleRows).From(m.table)
+	condition.SelectByWhereRawSql(sb, "name = $1", name)
+	sb.Limit(1)
+
+	sql, args := sb.BuildWithFlavor(m.flavor)
+
+	if session != nil {
+		err = session.QueryRowCtx(ctx, &resp, sql, args...)
+	} else {
+		err = m.conn.QueryRowCtx(ctx, &resp, sql, args...)
+	}
+
 	switch err {
 	case nil:
 		return &resp, nil

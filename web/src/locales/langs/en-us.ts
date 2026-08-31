@@ -171,6 +171,7 @@ const local: App.I18n.Schema = {
     'manage_user-detail': 'User Detail',
     manage_role: 'Role Manage',
     manage_menu: 'Menu Manage',
+    manage_email: 'Email Settings',
     agent: 'Agent Manage',
     'agent_config': 'Config Manage',
     'agent_skills': 'Skills Manage',

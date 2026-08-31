@@ -85,6 +85,7 @@ VALUES
     ('aa10f1d2-8d73-4ff9-9702-4f7395b7a001','2024-12-05 00:00:00','2024-12-05 00:00:00','1','','1','Agent 管理',0,'',6,'agent','/agent','layout.base','carbon:bot','1','route.agent',0,'',0,0,'[]','[]',0,''),
     ('aa10f1d2-8d73-4ff9-9702-4f7395b7a003','2024-12-05 00:00:00','2024-12-05 00:00:00','1','aa10f1d2-8d73-4ff9-9702-4f7395b7a001','2','配置管理',0,'',1,'agent_config','/agent/config','view.agent_config','carbon:settings-services','1','route.agent_config',0,'',0,0,'[]','[{"code":"v1:manage:agent:listConfigFiles","desc":"配置文件列表"},{"code":"v1:manage:agent:configFile","desc":"读取配置文件"},{"code":"v1:manage:agent:updateConfigFile","desc":"更新配置文件"},{"code":"v1:manage:agent:runtimeStatus","desc":"Runtime 状态"},{"code":"v1:manage:agent:restartRuntime","desc":"重启 Runtime"}]',0,''),
     ('aa10f1d2-8d73-4ff9-9702-4f7395b7a002','2024-12-05 00:00:00','2024-12-05 00:00:00','1','aa10f1d2-8d73-4ff9-9702-4f7395b7a001','2','Skills 管理',0,'',2,'agent_skills','/agent/skills','view.agent_skills','carbon:skill-level-basic','1','route.agent_skills',0,'',0,0,'[]','[{"code":"v1:manage:agent:listSkills","desc":"Skills 列表"},{"code":"v1:manage:agent:skillDetail","desc":"Skill 详情"},{"code":"v1:manage:agent:uploadSkill","desc":"上传 Skill"},{"code":"v1:manage:agent:deleteSkill","desc":"删除 Skill"},{"code":"v1:manage:agent:updateSkillFile","desc":"更新 Skill 文件"}]',0,''),
+    ('bb10f1d2-8d73-4ff9-9702-4f7395b7a001','2024-12-06 00:00:00','2024-12-06 00:00:00','1','a1b2c3d4-e5f6-4782-91a0-b9c8d7e6f5a4','2','邮箱配置',0,'',7,'manage_email','/manage/email','view.manage_email','carbon:email','1','route.manage_email',0,'',0,0,'[]','[{"code":"v1:manage:email:getConfig","desc":"读取邮箱配置"},{"code":"v1:manage:email:saveConfig","desc":"保存邮箱配置"},{"code":"v1:manage:email:testConfig","desc":"发送测试邮件"}]',0,''),
     ('c1d2e3f4-a5b6-d7e8-f9c2-d3e4f5a6b7c8','2024-11-30 03:20:13','2024-11-30 03:20:13','1','a1b2c3d4-e5f6-4782-91a0-b9c8d7e6f5a4','2','用户详情',1,'',0,'manage_user-detail','/manage/user-detail/:id','view.manage_user-detail','','1','route.manage_user-detail',0,'',0,0,'[]','[]',0,'');
 
 DROP TABLE IF EXISTS "manage_role";
@@ -148,7 +149,8 @@ VALUES
     ('8f9a0b1c-2d3e-4f5a-6b7c-8d9e0f1a2b3c','2024-12-04 01:33:23','2024-12-04 01:33:23','1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d','c1d2e3f4-a5b6-d7e8-f9c2-d3e4f5a6b7c8',0),
     ('aa20f1d2-8d73-4ff9-9702-4f7395b7a001','2024-12-05 00:00:00','2024-12-05 00:00:00','1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d','aa10f1d2-8d73-4ff9-9702-4f7395b7a001',0),
     ('aa20f1d2-8d73-4ff9-9702-4f7395b7a002','2024-12-05 00:00:00','2024-12-05 00:00:00','1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d','aa10f1d2-8d73-4ff9-9702-4f7395b7a002',0),
-    ('aa20f1d2-8d73-4ff9-9702-4f7395b7a003','2024-12-05 00:00:00','2024-12-05 00:00:00','1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d','aa10f1d2-8d73-4ff9-9702-4f7395b7a003',0);
+    ('aa20f1d2-8d73-4ff9-9702-4f7395b7a003','2024-12-05 00:00:00','2024-12-05 00:00:00','1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d','aa10f1d2-8d73-4ff9-9702-4f7395b7a003',0),
+    ('bb20f1d2-8d73-4ff9-9702-4f7395b7a001','2024-12-06 00:00:00','2024-12-06 00:00:00','1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d','bb10f1d2-8d73-4ff9-9702-4f7395b7a001',0);
 
 DROP TABLE IF EXISTS "manage_user";
 

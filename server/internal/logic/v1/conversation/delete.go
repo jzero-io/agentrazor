@@ -39,14 +39,19 @@ func (l *Delete) Delete(req *types.PathRequest) (resp *types.DeleteResponse, err
 	if l.svcCtx.AgentThreads == nil {
 		return nil, errors.New("agent runtime is disabled")
 	}
-	thread, err := l.svcCtx.AgentThreads.Get(l.ctx, req.ConversationId)
+	_, err = l.svcCtx.AgentThreads.Get(l.ctx, req.ConversationId)
 	threadGone := errors.Is(err, agentdomain.ErrThreadNotFound)
 	if err != nil && !threadGone {
 		return nil, err
 	}
 	if !threadGone {
-		// 只有归档的对话才能删除，避免误删未归档内容
-		if !thread.Archived {
+		// 只有归档的对话才能删除，避免误删未归档内容。
+		// thread/read 不一定返回归档字段，删除判定以 thread/list archived=true 为准。
+		archived, err := l.isArchived(req.ConversationId)
+		if err != nil {
+			return nil, err
+		}
+		if !archived {
 			return nil, errors.New("请先归档对话后再删除")
 		}
 		if err := l.svcCtx.AgentThreads.Delete(l.ctx, req.ConversationId); err != nil {
@@ -64,8 +69,19 @@ func (l *Delete) Delete(req *types.PathRequest) (resp *types.DeleteResponse, err
 	); err != nil {
 		return nil, err
 	}
-	if err := l.svcCtx.DeleteConversationTokenUsageEvents(l.ctx, req.ConversationId, uuid); err != nil {
-		return nil, err
-	}
+	// Token usage is lifetime accounting data and must survive conversation deletion.
 	return nil, nil
+}
+
+func (l *Delete) isArchived(conversationID string) (bool, error) {
+	threads, err := l.svcCtx.AgentThreads.List(l.ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, thread := range threads {
+		if thread.ID == conversationID {
+			return thread.Archived, nil
+		}
+	}
+	return false, agentdomain.ErrThreadNotFound
 }

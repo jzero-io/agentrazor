@@ -1,0 +1,59 @@
+syntax = "v1"
+
+info (
+	go_package: "v1/manage/email"
+)
+
+type EmailConfig {
+	From        string `json:"from"`
+	Host        string `json:"host"`
+	Port        int64  `json:"port"`
+	Username    string `json:"username"`
+	EnableSsl   bool   `json:"enableSsl"`
+	IsVerify    bool   `json:"isVerify"`
+	HasPassword bool   `json:"hasPassword"`
+}
+
+type GetConfigRequest {}
+
+type GetConfigResponse {
+	Configured bool        `json:"configured"`
+	Config     EmailConfig `json:"config"`
+}
+
+type SaveConfigRequest {
+	From      string `json:"from" validate:"required,email"`
+	Host      string `json:"host" validate:"required"`
+	Port      int64  `json:"port" validate:"required,gte=1,lte=65535"`
+	Username  string `json:"username" validate:"required"`
+	Password  string `json:"password,optional"`
+	EnableSsl bool   `json:"enableSsl"`
+	IsVerify  bool   `json:"isVerify"`
+}
+
+type SaveConfigResponse {}
+
+type TestConfigRequest {
+	Recipient string `json:"recipient" validate:"required,email"`
+}
+
+type TestConfigResponse {}
+
+@server (
+	prefix:          /api/v1
+	group:           v1/manage/email
+	compact_handler: true
+	jwt:             Jwt
+	middleware:      Authx
+)
+service server {
+	@handler GetConfig
+	get /manage/email/config (GetConfigRequest) returns (GetConfigResponse)
+
+	@handler SaveConfig
+	post /manage/email/config (SaveConfigRequest) returns (SaveConfigResponse)
+
+	@handler TestConfig
+	post /manage/email/test (TestConfigRequest) returns (TestConfigResponse)
+}
+

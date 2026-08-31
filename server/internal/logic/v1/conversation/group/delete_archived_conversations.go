@@ -69,9 +69,7 @@ func (l *DeleteArchivedConversations) DeleteArchivedConversations(req *types.Pat
 				); dbErr != nil {
 					return nil, dbErr
 				}
-				if dbErr := l.svcCtx.DeleteConversationTokenUsageEvents(l.ctx, conv.Id, user.Uuid); dbErr != nil {
-					return nil, dbErr
-				}
+				// Token usage is lifetime accounting data and must survive conversation deletion.
 				continue
 			}
 			return nil, err
@@ -91,9 +89,7 @@ func (l *DeleteArchivedConversations) DeleteArchivedConversations(req *types.Pat
 		); err != nil {
 			return nil, err
 		}
-		if err := l.svcCtx.DeleteConversationTokenUsageEvents(l.ctx, conv.Id, user.Uuid); err != nil {
-			return nil, err
-		}
+		// Keep token usage events so the historical total remains stable.
 	}
 	return &types.DeleteArchivedConversationsResponse{}, nil
 }

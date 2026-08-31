@@ -52,15 +52,13 @@ type CodexAppServerRuntime struct {
 
 	nextRequestID atomic.Int64
 
-	stateMu      sync.Mutex
-	pending      map[int64]chan rpcEnvelope
-	executions   map[string]*appServerTurn
-	loaded       map[string]bool
-	loads        map[string]*threadLoad
-	archived     map[string]bool
-	archiveKnown map[string]bool
-	closed       bool
-	terminalErr  error
+	stateMu     sync.Mutex
+	pending     map[int64]chan rpcEnvelope
+	executions  map[string]*appServerTurn
+	loaded      map[string]bool
+	loads       map[string]*threadLoad
+	closed      bool
+	terminalErr error
 }
 
 type rpcEnvelope struct {
@@ -168,16 +166,14 @@ func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRun
 	}
 
 	runtime := &CodexAppServerRuntime{
-		options:      options,
-		cmd:          cmd,
-		stdin:        stdin,
-		waitDone:     make(chan struct{}),
-		pending:      make(map[int64]chan rpcEnvelope),
-		executions:   make(map[string]*appServerTurn),
-		loaded:       make(map[string]bool),
-		loads:        make(map[string]*threadLoad),
-		archived:     make(map[string]bool),
-		archiveKnown: make(map[string]bool),
+		options:    options,
+		cmd:        cmd,
+		stdin:      stdin,
+		waitDone:   make(chan struct{}),
+		pending:    make(map[int64]chan rpcEnvelope),
+		executions: make(map[string]*appServerTurn),
+		loaded:     make(map[string]bool),
+		loads:      make(map[string]*threadLoad),
 	}
 	runtime.stderr.limit = 64 << 10
 	cmd.Stderr = &runtime.stderr
@@ -257,8 +253,6 @@ func (r *CodexAppServerRuntime) startThread(ctx context.Context) (string, error)
 	}
 	r.stateMu.Lock()
 	r.loaded[threadID] = true
-	r.archived[threadID] = false
-	r.archiveKnown[threadID] = true
 	r.stateMu.Unlock()
 	return threadID, nil
 }

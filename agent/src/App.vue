@@ -13,6 +13,7 @@ import {
   NImage,
   NInput,
   NModal,
+  NPopover,
   NScrollbar,
   NSpin,
   NTooltip,
@@ -68,10 +69,55 @@ interface ParsedAgentMessage {
   workspaces: WorkspaceDescriptor[];
 }
 
+const ScrollingTitle = defineComponent({
+  name: 'ScrollingTitle',
+  props: {
+    text: {
+      type: String,
+      required: true
+    }
+  },
+  setup(props) {
+    const root = ref<HTMLElement | null>(null);
+    const overflowing = ref(false);
+    const distance = ref(0);
+    let observer: ResizeObserver | undefined;
+
+    const measure = () => {
+      const container = root.value;
+      const content = container?.querySelector<HTMLElement>('.scrolling-title-text');
+      if (!container || !content) return;
+      const overflow = Math.ceil(content.scrollWidth - container.clientWidth);
+      overflowing.value = overflow > 2;
+      distance.value = Math.max(0, overflow);
+    };
+
+    onMounted(() => {
+      nextTick(measure);
+      if ('ResizeObserver' in window && root.value) {
+        observer = new ResizeObserver(measure);
+        observer.observe(root.value);
+      }
+    });
+    onUpdated(() => nextTick(measure));
+    onBeforeUnmount(() => observer?.disconnect());
+    watch(() => props.text, () => nextTick(measure));
+
+    return () => h(
+      'span',
+      {
+        ref: root,
+        class: ['scrolling-title', overflowing.value ? 'is-overflowing' : ''],
+        style: { '--scroll-distance': `${distance.value}px`, '--scroll-duration': `${Math.max(2.4, distance.value * 0.024).toFixed(2)}s` },
+      },
+      [h('span', { class: 'scrolling-title-text' }, props.text)]
+    );
+  }
+});
+
 const SIDEBAR_VIEW_KEY = 'agentrazor_sidebar_view';
 const DEFAULT_SIDEBAR_WIDTH = 320;
 const MIN_SIDEBAR_WIDTH = 280;
-const MAX_SIDEBAR_WIDTH = 520;
 const CONVERSATION_LIST_DROP_TARGET = 'conversation-list';
 const DRAFT_CONVERSATION_ID = '__draft_conversation__';
 
@@ -287,12 +333,17 @@ function collapseWorkspace() {
 }
 
 function toggleRightPanel() {
-  if (workspaceVisible.value || pinnedSummaryOpen.value) {
+  if (rightPanelOpen.value) {
     pinnedSummaryOpen.value = false;
     collapseWorkspace();
     return;
   }
-  pinnedSummaryOpen.value = true;
+  if (activeWorkspace.value) {
+    pinnedSummaryOpen.value = false;
+    workspaceVisible.value = true;
+    return;
+  }
+  if (pinnedSummaryWorkspaces.value.length) pinnedSummaryOpen.value = true;
 }
 
 function toggleWorkspaceExpanded() {
@@ -348,6 +399,7 @@ const activeWorkspace = computed<WorkspaceDescriptor | null>({
     else workspacesByConversation.delete(conversationId);
   }
 });
+const rightPanelOpen = computed(() => workspaceVisible.value || pinnedSummaryOpen.value);
 const detail = ref<ConversationDetail | null>(null);
 const detailsByConversation = reactive(new Map<string, ConversationDetail>());
 const draftsByConversation = reactive(new Map<string, string>());
@@ -369,7 +421,7 @@ let turnTimer: number | undefined;
 const locallyStoppedRunIds = new Set<string>();
 const locallyStoppedConversationIds = new Set<string>();
 const sidebarCollapsed = ref(savedSidebarView.sidebarCollapsed ?? false);
-const sidebarWidth = ref(Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, savedSidebarView.sidebarWidth || DEFAULT_SIDEBAR_WIDTH)));
+const sidebarWidth = ref(Math.max(MIN_SIDEBAR_WIDTH, savedSidebarView.sidebarWidth || DEFAULT_SIDEBAR_WIDTH));
 const sidebarHoverOpen = ref(false);
 const appShellStyle = computed(() => ({ '--sidebar-width': `${sidebarWidth.value}px` }));
 const mobileSidebarOpen = ref(false);
@@ -380,10 +432,13 @@ const messagePane = ref<HTMLElement>();
 const autoScrollEnabled = ref(true);
 const currentUser = ref<UserInfo | null>(null);
 const authChecking = ref(true);
+const hasAuthToken = ref(Boolean(getToken()));
 const loginVisible = ref(false);
 const loginUsername = ref('');
 const loginPassword = ref('');
 const loginLoading = ref(false);
+const copiedMessageId = ref('');
+let copiedMessageTimer: number | undefined;
 const confirmVisible = ref(false);
 const confirmTitle = ref('');
 const confirmContent = ref('');
@@ -442,6 +497,9 @@ const themeOverrides = {
     primaryColorPressed: '#1d6399',
     primaryColorSuppl: '#3186c7',
     borderRadius: '10px'
+  },
+  Tooltip: {
+    boxShadow: 'none'
   }
 };
 
@@ -452,6 +510,15 @@ function conversationCreatedAtMs(item: Conversation) {
 
 function sortConversationsByCreatedAt(items: Conversation[]) {
   return [...items].sort((left, right) => conversationCreatedAtMs(right) - conversationCreatedAtMs(left));
+}
+
+function displayConversationTitle(item?: Pick<Conversation, 'title'> | null) {
+  return item?.title?.trim() || '新对话';
+}
+
+function mergeConversationSnapshot(current: Conversation | undefined, incoming: Conversation): Conversation {
+  const title = incoming.title.trim() || current?.title?.trim() || '';
+  return { ...current, ...incoming, title };
 }
 
 const visibleConversations = computed(() =>
@@ -469,7 +536,7 @@ const conversationList = computed(() =>
 const filteredArchivedConversations = computed(() => {
   const query = archiveQuery.value.trim().toLowerCase();
   return query
-    ? archivedConversations.value.filter(item => item.title.toLowerCase().includes(query))
+    ? archivedConversations.value.filter(item => displayConversationTitle(item).toLowerCase().includes(query))
     : archivedConversations.value;
 });
 // 已归档对话按所属分组归类展示
@@ -492,6 +559,16 @@ const archivedConversationSections = computed(() => {
 const activeConversation = computed(() =>
   conversations.value.find(item => item.id === selectedConversationId.value)
 );
+const activeConversationGroup = computed(() => {
+  const groupId = activeConversation.value?.groupId;
+  if (!groupId) return null;
+  return conversationGroups.value.find(group => group.id === groupId) || null;
+});
+const activeConversationGroupCount = computed(() => {
+  const groupId = activeConversation.value?.groupId;
+  if (!groupId) return 0;
+  return visibleConversations.value.filter(item => item.groupId === groupId && !item.pinnedAt).length;
+});
 const isArchivedActive = computed(() => activeConversation.value?.status === 'archived');
 function isDraftConversation(id = selectedConversationId.value) {
   return id === DRAFT_CONVERSATION_ID;
@@ -546,10 +623,36 @@ function setConversationDraft(conversationId: string, value: string) {
   if (value) draftsByConversation.set(conversationId, value);
   else draftsByConversation.delete(conversationId);
 }
-const userMessages = computed(() =>
-  (activeDetail.value?.turns || []).flatMap(turn => turn.items.filter(item => item.type === 'userMessage'))
-);
 const renderedTurns = computed(() => normalizedRenderedTurns(activeDetail.value?.turns || [], currentStreamingTurn.value));
+const messagePreviews = computed(() => renderedTurns.value.flatMap(turn => {
+  const userItem = turn.items.find(item => item.type === 'userMessage');
+  if (!userItem) return [];
+  const finalAnswer = [...turn.items]
+    .reverse()
+    .find(item => item.type === 'agentMessage' && item.phase === 'final_answer' && item.text?.trim());
+  return [{
+    id: userItem.id,
+    title: messagePreview(userItemText(userItem)),
+    finalAnswer: finalAnswer?.text?.trim() || ''
+  }];
+}));
+const selectedPreviewMessageId = ref('');
+const hoveredPreviewMessageId = ref('');
+const activePreviewMessageId = computed(() => hoveredPreviewMessageId.value || selectedPreviewMessageId.value);
+const activePreviewIndex = computed(() =>
+  messagePreviews.value.findIndex(item => item.id === activePreviewMessageId.value)
+);
+
+function previewTickClasses(index: number) {
+  if (activePreviewIndex.value < 0) return {};
+  const distance = Math.abs(index - activePreviewIndex.value);
+  return {
+    'is-active': distance === 0,
+    'is-near-1': distance === 1,
+    'is-near-2': distance === 2,
+    'is-near-3': distance === 3
+  };
+}
 const pinnedSummaryWorkspaces = computed(() => {
   const byUrl = new Map<string, WorkspaceDescriptor>();
   for (const turn of renderedTurns.value) {
@@ -587,6 +690,11 @@ const conversationOpening = computed(() =>
   Boolean(selectedConversationId.value)
   && !activeDetail.value
   && !currentStreamingTurn.value
+);
+const showBootScreen = computed(() => authChecking.value && !hasAuthToken.value);
+const showConversationLoading = computed(() =>
+  !settingsVisible.value
+  && (authChecking.value && hasAuthToken.value || Boolean(currentUser.value) && (loadingList.value || conversationOpening.value))
 );
 const currentConversationRunning = computed(() =>
   Boolean(selectedConversationId.value && !isDraftConversation() && (cachedActiveTurn(selectedConversationId.value) || isConversationRunning(selectedConversationId.value)))
@@ -666,11 +774,17 @@ function revealConversationSection(item: Conversation) {
 function setConversationProcessing(id: string, processing: boolean) {
   if (!id) return;
   const current = processingConversationIds.value.has(id);
-  if (current === processing) return;
-  const next = new Set(processingConversationIds.value);
-  if (processing) next.add(id);
-  else next.delete(id);
-  processingConversationIds.value = next;
+  if (current !== processing) {
+    const next = new Set(processingConversationIds.value);
+    if (processing) next.add(id);
+    else next.delete(id);
+    processingConversationIds.value = next;
+  }
+
+  const index = conversations.value.findIndex(item => item.id === id);
+  if (index >= 0 && conversations.value[index].running !== processing) {
+    conversations.value[index] = { ...conversations.value[index], running: processing };
+  }
 }
 
 function clearConversationProcessing(ids: string[]) {
@@ -700,8 +814,9 @@ function applyConversationList(next: Conversation[], preserveLocalProcessing = t
     }
   }
   processingConversationIds.value = runningIds;
-  conversations.value = next;
-  for (const item of next) {
+  const previous = new Map(conversations.value.map(item => [item.id, item]));
+  conversations.value = next.map(item => mergeConversationSnapshot(previous.get(item.id), item));
+  for (const item of conversations.value) {
     if (item.running) ensureConversationStream(item.id);
   }
   closeIdleConversationStreams();
@@ -710,7 +825,7 @@ function applyConversationList(next: Conversation[], preserveLocalProcessing = t
 function upsertConversationListItem(item: Conversation) {
   const running = item.running || processingConversationIds.value.has(item.id);
   const index = conversations.value.findIndex(value => value.id === item.id);
-  if (index >= 0) conversations.value[index] = { ...conversations.value[index], ...item, running };
+  if (index >= 0) conversations.value[index] = mergeConversationSnapshot(conversations.value[index], { ...item, running });
   else conversations.value.unshift({ ...item, running });
   setConversationProcessing(item.id, running);
 }
@@ -873,7 +988,7 @@ function activateDrag(item: Conversation, x: number, y: number) {
   document.body.classList.add('is-dragging');
   dragGhostEl = document.createElement('div');
   dragGhostEl.className = 'conversation-drag-ghost';
-  dragGhostEl.textContent = item.title;
+  dragGhostEl.textContent = displayConversationTitle(item);
   document.body.appendChild(dragGhostEl);
   updateDragGhost(x, y);
 }
@@ -1105,6 +1220,8 @@ async function selectConversation(id: string) {
 
   const token = ++conversationSelectionToken;
 
+  loadingDetailId.value = id;
+  loadingDetail.value = true;
   selectedConversationId.value = id;
   syncConversationUrl(id);
   detail.value = detailsByConversation.get(id) || null;
@@ -1626,7 +1743,7 @@ async function sendMessage() {
 
     if (isDraftConversation(conversationId)) {
       creatingConversation.value = true;
-      const created = await conversationApi.create();
+      const created = await conversationApi.create(content);
       const nextConversation = draftConversationGroupId.value
         ? await conversationApi.update(created.id, { groupId: draftConversationGroupId.value })
         : created;
@@ -1847,6 +1964,32 @@ function userItemText(item: ThreadItem) {
     .map(part => typeof part === 'object' ? part.text || '' : '')
     .filter(Boolean)
     .join('\n');
+}
+
+function messageCopyText(item: ThreadItem) {
+  if (item.type === 'userMessage') return userItemText(item);
+  if (typeof item.text === 'string') return parseAgentMessage(item.text, false).markdown || item.text;
+  if (typeof item.aggregatedOutput === 'string') return item.aggregatedOutput;
+  return '';
+}
+
+async function copyMessage(item: ThreadItem) {
+  const text = messageCopyText(item).trim();
+  if (!text) return;
+  try {
+    await writeClipboardText(text);
+    copiedMessageId.value = item.id;
+    window.clearTimeout(copiedMessageTimer);
+    copiedMessageTimer = window.setTimeout(() => {
+      if (copiedMessageId.value === item.id) copiedMessageId.value = '';
+    }, 1200);
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : '复制失败');
+  }
+}
+
+function assistantMessageTime(turn: Turn) {
+  return formatMessageTime(turn.completedAt || turn.startedAt);
 }
 
 function reasoningText(item: ThreadItem) {
@@ -2171,7 +2314,7 @@ async function handleStreamEvent(event: StreamEvent) {
       if (event.runId) locallyStoppedRunIds.delete(event.runId);
       locallyStoppedConversationIds.delete(event.conversationId);
       setConversationProcessing(event.conversationId, false);
-      await loadConversations();
+      closeIdleConversationStreams();
       return;
     }
 
@@ -2183,7 +2326,6 @@ async function handleStreamEvent(event: StreamEvent) {
       event.type === 'run.failed' ? streamErrorMessage(event.data) : undefined
     );
     await nextTick();
-    await loadConversations();
     closeIdleConversationStreams();
     if (completedTurn) {
       const targetDetail = detailsByConversation.get(completedConversationId);
@@ -2199,7 +2341,7 @@ async function handleStreamEvent(event: StreamEvent) {
 
 function openRename() {
   if (!activeConversation.value) return;
-  renameValue.value = activeConversation.value.title;
+  renameValue.value = activeConversation.value.title || "";
   renameVisible.value = true;
 }
 
@@ -2271,7 +2413,7 @@ function confirmDelete() {
   if (!activeConversation.value) return;
   openConfirm(
     '删除对话',
-    `确定删除「${activeConversation.value.title}」吗？此操作不可撤销。`,
+    `确定删除「${displayConversationTitle(activeConversation.value)}」吗？此操作不可撤销。`,
     '删除',
     deleteConversation
   );
@@ -2303,7 +2445,7 @@ function replaceConversation(updated: Conversation) {
   if (index < 0) return;
   const current = conversations.value[index];
   const running = updated.running || current.running || processingConversationIds.value.has(updated.id);
-  conversations.value[index] = { ...current, ...updated, running };
+  conversations.value[index] = mergeConversationSnapshot(current, { ...updated, running });
 }
 
 function handleComposerKeydown(event: KeyboardEvent) {
@@ -2364,6 +2506,7 @@ function messagePreview(content: string) {
 }
 
 function jumpToMessage(id: string) {
+  selectedPreviewMessageId.value = id;
   const target = document.getElementById(`message-${id}`);
   if (!target) return;
   target.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2374,6 +2517,7 @@ async function bootstrap() {
   // 先记住 URL 上的设置页路径（/settings、/settings/archives）
   const settingsPath = window.location.pathname.match(/^\/settings(?:\/([^/]+))?/);
   setAuthErrorHandler(() => {
+    hasAuthToken.value = false;
     currentUser.value = null;
     conversations.value = [];
     settingsVisible.value = false;
@@ -2395,12 +2539,14 @@ async function bootstrap() {
   try {
     if (getToken()) {
       currentUser.value = await authApi.getUserInfo();
-      await Promise.all([loadConversationGroups(), loadConversations(true)]);
       // 刷新后从 URL 恢复设置页
       if (settingsPath) {
         settingsSection.value = settingsPath[1] === 'archives' ? 'archives' : 'appearance';
         settingsVisible.value = true;
       }
+      authChecking.value = false;
+      void Promise.all([loadConversationGroups(), loadConversations(true)]);
+      return;
     }
   } catch {
     currentUser.value = null;
@@ -2418,6 +2564,7 @@ async function submitLogin() {
     const { token, refreshToken } = await authApi.pwdLogin(username, password);
     setToken(token);
     setRefreshToken(refreshToken);
+    hasAuthToken.value = true;
     currentUser.value = await authApi.getUserInfo();
     await loadConversationGroups();
     loginVisible.value = false;
@@ -2436,6 +2583,7 @@ function logout() {
   userMenuVisible.value = false;
   clearToken();
   clearRefreshToken();
+  hasAuthToken.value = false;
   settingsVisible.value = false;
   currentUser.value = null;
   conversationGroups.value = [];
@@ -2485,7 +2633,7 @@ async function restoreArchived(item: Conversation) {
 function confirmDeleteArchived(item: Conversation) {
   openConfirm(
     '删除归档对话',
-    `确定删除「${item.title}」吗？此操作不可撤销。`,
+    `确定删除「${displayConversationTitle(item)}」吗？此操作不可撤销。`,
     '删除',
     async () => {
       try {
@@ -2653,9 +2801,9 @@ function startSidebarResize(event: PointerEvent) {
 
 function resizeSidebar(event: PointerEvent) {
   if (!sidebarResizeStart) return;
-  sidebarWidth.value = Math.min(
-    MAX_SIDEBAR_WIDTH,
-    Math.max(MIN_SIDEBAR_WIDTH, sidebarResizeStart.width + event.clientX - sidebarResizeStart.x)
+  sidebarWidth.value = Math.max(
+    MIN_SIDEBAR_WIDTH,
+    sidebarResizeStart.width + event.clientX - sidebarResizeStart.x
   );
 }
 
@@ -2701,8 +2849,11 @@ onBeforeUnmount(() => {
   colorSchemeMedia.removeEventListener('change', handleSystemAppearanceChange);
   closeAllConversationStreams();
   stopAllTurnTimers();
+  window.clearTimeout(copiedMessageTimer);
 });
 watch(selectedConversationId, () => {
+  selectedPreviewMessageId.value = '';
+  hoveredPreviewMessageId.value = '';
   workspaceExpanded.value = false;
   pinnedSummaryOpen.value = false;
 });
@@ -2734,7 +2885,7 @@ watch([settingsVisible, settingsSection], () => {
 
 <template>
   <n-config-provider :locale="zhCN" :date-locale="dateZhCN" :theme="activeTheme" :theme-overrides="themeOverrides">
-    <div v-if="authChecking" class="app-boot-screen" aria-label="正在加载对话">
+    <div v-if="showBootScreen" class="app-boot-screen" aria-label="正在加载对话">
       <div class="app-boot-card">
         <img class="app-boot-logo" src="/agentrazor-icon.png" alt="" />
         <div class="app-boot-copy">
@@ -2752,14 +2903,14 @@ watch([settingsVisible, settingsSection], () => {
           </div>
           <n-button v-if="sidebarExpanded" quaternary circle class="collapse-button" @click="toggleSidebarPinned">
             <template #icon>
-              <Icon icon="solar:sidebar-code-outline" />
+              <span class="panel-glyph is-left" aria-hidden="true"></span>
             </template>
           </n-button>
         </div>
 
         <n-button class="new-chat" secondary @click="createConversation">
           <template #icon><Icon icon="solar:pen-new-square-outline" /></template>
-          <span v-if="sidebarExpanded">新建对话</span>
+          <span v-if="sidebarExpanded">新对话</span>
         </n-button>
 
         <div v-if="sidebarExpanded" class="sidebar-section">
@@ -2783,7 +2934,7 @@ watch([settingsVisible, settingsSection], () => {
                   >
                     <button class="conversation-item" @click="hideConversationPreview(); selectConversation(item.id)">
                       <Icon icon="solar:pin-bold" class="pin-icon" />
-                      <span>{{ item.title }}</span>
+                      <ScrollingTitle :key="`${item.id}:${displayConversationTitle(item)}`" :text="displayConversationTitle(item)" />
                     </button>
                     <button
                       v-if="isConversationProcessing(item)"
@@ -2840,7 +2991,10 @@ watch([settingsVisible, settingsSection], () => {
               >
                 <div class="custom-group-heading">
                   <button class="conversation-group-toggle" @click="toggleGroup(group)">
-                    <Icon icon="solar:folder-linear" class="group-folder-icon" />
+                    <Icon
+                      :icon="group.collapsed ? 'lucide:folder' : 'lucide:folder-open'"
+                      class="group-folder-icon"
+                    />
                     <span>{{ group.name }}</span>
                   </button>
                   <div class="group-actions">
@@ -2863,7 +3017,7 @@ watch([settingsVisible, settingsSection], () => {
                       ]"
                       @select="key => handleGroupAction(group, String(key))"
                     >
-                      <button type="button" aria-label="更多分组操作"><Icon icon="solar:menu-dots-bold" /></button>
+                      <button type="button" aria-label="更多分组操作"><Icon icon="lucide:ellipsis" /></button>
                     </n-dropdown>
                   </div>
                 </div>
@@ -2879,7 +3033,7 @@ watch([settingsVisible, settingsSection], () => {
                     @mouseleave="hideConversationPreview"
                   >
                     <button class="conversation-item" @click="hideConversationPreview(); selectConversation(item.id)">
-                      <span>{{ item.title }}</span>
+                      <ScrollingTitle :key="`${item.id}:${displayConversationTitle(item)}`" :text="displayConversationTitle(item)" />
                     </button>
                     <button
                       v-if="isConversationProcessing(item)"
@@ -2931,11 +3085,11 @@ watch([settingsVisible, settingsSection], () => {
                   </button>
                   <n-tooltip trigger="hover" placement="top">
                     <template #trigger>
-                      <button class="group-add-button" type="button" aria-label="新建对话" @click="createConversation">
+                      <button class="group-add-button" type="button" aria-label="新对话" @click="createConversation">
                         <Icon icon="solar:pen-new-square-outline" />
                       </button>
                     </template>
-                    新建对话
+                    新对话
                   </n-tooltip>
                 </div>
                 <template v-if="conversationsExpanded">
@@ -2950,7 +3104,7 @@ watch([settingsVisible, settingsSection], () => {
                     @mouseleave="hideConversationPreview"
                   >
                     <button class="conversation-item" @click="hideConversationPreview(); selectConversation(item.id)">
-                      <span>{{ item.title }}</span>
+                      <ScrollingTitle :key="`${item.id}:${displayConversationTitle(item)}`" :text="displayConversationTitle(item)" />
                     </button>
                     <button
                       v-if="isConversationProcessing(item)"
@@ -3049,13 +3203,13 @@ watch([settingsVisible, settingsSection], () => {
         class="conversation-hover-card"
         :style="{ top: `${conversationPreviewTop}px` }"
       >
-        <strong>{{ conversationPreview.title }}</strong>
+        <strong>{{ displayConversationTitle(conversationPreview) }}</strong>
         <div class="pinned-preview-meta">
           <Icon icon="solar:clock-circle-linear" />
           <span>{{ formatConversationDate(conversationPreview.updatedAt) }}</span>
         </div>
         <div v-if="conversationGroupName(conversationPreview)" class="pinned-preview-meta">
-          <Icon icon="solar:folder-linear" />
+          <Icon icon="lucide:folder" />
           <span>{{ conversationGroupName(conversationPreview) }}</span>
         </div>
       </div>
@@ -3068,15 +3222,36 @@ watch([settingsVisible, settingsSection], () => {
       >
         <header class="topbar">
           <n-button quaternary circle class="mobile-menu-button" aria-label="打开左侧边栏" title="打开左侧边栏" @click="openMobileSidebar">
-            <template #icon><Icon icon="solar:sidebar-minimalistic-outline" /></template>
+            <template #icon><span class="panel-glyph is-left" aria-hidden="true"></span></template>
           </n-button>
-          <n-button v-if="sidebarCollapsed" quaternary circle class="topbar-sidebar-toggle" @mouseenter="openSidebarHover" @click="expandSidebar">
-            <template #icon><Icon icon="solar:sidebar-minimalistic-outline" /></template>
-          </n-button>
+          <div v-if="sidebarCollapsed" class="topbar-left-actions">
+            <n-button quaternary class="topbar-sidebar-toggle" aria-label="打开左侧边栏" title="打开左侧边栏" @mouseenter="openSidebarHover" @click="expandSidebar">
+              <template #icon><span class="panel-glyph is-left" aria-hidden="true"></span></template>
+            </n-button>
+            <n-button quaternary circle class="topbar-new-chat" aria-label="新对话" title="新对话" @click="createConversation">
+              <template #icon><Icon icon="solar:pen-new-square-outline" /></template>
+            </n-button>
+          </div>
           <div class="topbar-inner">
-            <div v-if="activeConversation && activeConversation.title !== '新对话'" class="conversation-heading">
-              <Icon icon="solar:chat-round-dots-outline" />
-              <strong>{{ activeConversation?.title || 'AgentRazor' }}</strong>
+            <div v-if="activeConversation && !isDraftConversation(activeConversation.id)" class="conversation-heading">
+              <n-popover v-if="activeConversationGroup" trigger="click" placement="bottom-start" :show-arrow="false" :width="240">
+                <template #trigger>
+                  <button
+                    type="button"
+                    class="conversation-heading-group-button"
+                    :title="`查看分组：${activeConversationGroup.name}`"
+                    :aria-label="`查看分组：${activeConversationGroup.name}`"
+                  >
+                    <Icon icon="lucide:folder" />
+                  </button>
+                </template>
+                <div class="conversation-group-popover">
+                  <span>所属分组</span>
+                  <strong>{{ activeConversationGroup.name }}</strong>
+                  <p>{{ activeConversationGroupCount }} 个对话</p>
+                </div>
+              </n-popover>
+              <strong>{{ displayConversationTitle(activeConversation) }}</strong>
               <n-dropdown
                 v-if="activeConversation"
                 trigger="click"
@@ -3084,22 +3259,21 @@ watch([settingsVisible, settingsSection], () => {
                 :options="menuOptions"
                 @select="key => key === 'rename' ? openRename() : key === 'delete' ? confirmDelete() : key === 'pin' ? togglePinned() : toggleArchived()"
               >
-                <n-button quaternary circle><template #icon><Icon icon="solar:menu-dots-bold" /></template></n-button>
+                <n-button quaternary circle class="conversation-heading-more"><template #icon><Icon icon="lucide:ellipsis" /></template></n-button>
               </n-dropdown>
             </div>
           </div>
+          <n-button
+            v-if="(pinnedSummaryWorkspaces.length || activeWorkspace) && !workspaceVisible"
+            quaternary
+            class="right-panel-toggle topbar-right-panel-toggle"
+            :aria-label="rightPanelOpen ? '收起右侧面板' : '打开右侧面板'"
+            :title="rightPanelOpen ? '收起右侧面板' : '打开右侧面板'"
+            @click="toggleRightPanel"
+          >
+            <template #icon><span class="panel-glyph is-right" aria-hidden="true"></span></template>
+          </n-button>
         </header>
-
-        <n-button
-          v-if="pinnedSummaryWorkspaces.length && !workspaceVisible"
-          quaternary
-          class="right-panel-toggle topbar-right-panel-toggle"
-          :aria-label="pinnedSummaryOpen ? '收起右侧面板' : '打开右侧面板'"
-          :title="pinnedSummaryOpen ? '收起右侧面板' : '打开右侧面板'"
-          @click="toggleRightPanel"
-        >
-          <template #icon><Icon icon="solar:sidebar-minimalistic-outline" /></template>
-        </n-button>
 
         <aside v-if="pinnedSummaryOpen" class="pinned-summary-panel">
           <header>
@@ -3118,13 +3292,12 @@ watch([settingsVisible, settingsSection], () => {
           </button>
         </aside>
 
-        <section v-if="conversationOpening" class="conversation-opening" aria-label="正在加载对话">
+        <section v-if="showConversationLoading" class="conversation-opening" aria-label="正在加载对话">
           <div class="conversation-opening-indicator">
             <Icon icon="solar:chat-round-dots-outline" />
           </div>
           <div class="conversation-opening-copy">
-            <strong>正在加载对话</strong>
-            <span>正在同步消息和处理状态</span>
+            <strong>正在加载会话</strong>
           </div>
         </section>
 
@@ -3165,16 +3338,25 @@ watch([settingsVisible, settingsSection], () => {
         </section>
 
         <template v-else-if="selectedConversationId">
-          <nav v-if="userMessages.length" class="conversation-preview" aria-label="用户消息导航">
+          <nav v-if="messagePreviews.length" class="conversation-preview" aria-label="用户消息导航">
             <button
-              v-for="(item, index) in userMessages"
+              v-for="(item, index) in messagePreviews"
               :key="item.id"
               class="preview-tick"
-              :aria-label="`跳转到第 ${index + 1} 条用户消息：${messagePreview(userItemText(item))}`"
-              :title="messagePreview(userItemText(item))"
-              :data-preview="messagePreview(userItemText(item))"
+              :class="previewTickClasses(index)"
+              :aria-current="item.id === selectedPreviewMessageId ? 'true' : undefined"
+              :aria-label="`跳转到第 ${index + 1} 条用户消息：${item.title}`"
+              @mouseenter="hoveredPreviewMessageId = item.id"
+              @mouseleave="hoveredPreviewMessageId = ''"
+              @focus="hoveredPreviewMessageId = item.id"
+              @blur="hoveredPreviewMessageId = ''"
               @click="jumpToMessage(item.id)"
-            />
+            >
+              <span class="preview-card" aria-hidden="true">
+                <strong>{{ item.title }}</strong>
+                <span v-if="item.finalAnswer">{{ item.finalAnswer }}</span>
+              </span>
+            </button>
           </nav>
           <section :key="selectedConversationId" ref="messagePane" class="message-pane" @scroll="handleMessageScroll">
             <n-spin class="message-spin" :show="loadingCurrentDetail">
@@ -3189,9 +3371,23 @@ watch([settingsVisible, settingsSection], () => {
                   >
                     <div class="message-stack">
                       <div class="message-content">{{ userItemText(item) }}</div>
-                      <time v-if="formatMessageTime(view.turn.startedAt)" class="message-time" :datetime="view.turn.startedAt">
-                        {{ formatMessageTime(view.turn.startedAt) }}
-                      </time>
+                      <div class="message-meta">
+                        <time v-if="formatMessageTime(view.turn.startedAt)" class="message-time" :datetime="view.turn.startedAt">
+                          {{ formatMessageTime(view.turn.startedAt) }}
+                        </time>
+                        <button
+                          v-if="messageCopyText(item)"
+                          type="button"
+                          class="message-copy-button"
+                          :class="{ copied: copiedMessageId === item.id }"
+                          aria-label="复制消息"
+                          title="复制消息"
+                          @click="copyMessage(item)"
+                        >
+                          <span v-if="copiedMessageId === item.id" class="message-copy-tip">已复制</span>
+                          <Icon :key="copiedMessageId === item.id ? 'copied' : 'copy'" :icon="copiedMessageId === item.id ? 'solar:check-circle-linear' : 'solar:copy-linear'" />
+                        </button>
+                      </div>
                     </div>
                   </article>
 
@@ -3250,6 +3446,23 @@ watch([settingsVisible, settingsSection], () => {
                           <span><strong>{{ workspace.title }}</strong><small>在右侧打开工作台</small></span>
                           <Icon icon="solar:arrow-right-linear" />
                         </button>
+                        <div class="message-meta">
+                          <time v-if="assistantMessageTime(view.turn)" class="message-time" :datetime="view.turn.completedAt || view.turn.startedAt">
+                            {{ assistantMessageTime(view.turn) }}
+                          </time>
+                          <button
+                            v-if="messageCopyText(item)"
+                            type="button"
+                            class="message-copy-button"
+                            :class="{ copied: copiedMessageId === item.id }"
+                            aria-label="复制消息"
+                            title="复制消息"
+                            @click="copyMessage(item)"
+                          >
+                            <span v-if="copiedMessageId === item.id" class="message-copy-tip">已复制</span>
+                            <Icon :key="copiedMessageId === item.id ? 'copied' : 'copy'" :icon="copiedMessageId === item.id ? 'solar:check-circle-linear' : 'solar:copy-linear'" />
+                          </button>
+                        </div>
                       </div>
                     </article>
 
@@ -3310,7 +3523,6 @@ watch([settingsVisible, settingsSection], () => {
           <p>登录账号即可使用你的专属 Agent 对话。</p>
           <n-button type="primary" size="large" @click="loginVisible = true">登录</n-button>
         </section>
-
         <section v-else class="empty-state">
           <div class="welcome-icon"><img src="/agentrazor-icon.png" alt="" /></div>
           <h1>从一个想法开始</h1>
@@ -3348,12 +3560,12 @@ watch([settingsVisible, settingsSection], () => {
               <n-button
                 quaternary
                 circle
-                class="workspace-action-button workspace-right-panel-toggle"
+                class="workspace-action-button workspace-collapse-button"
                 aria-label="收起右侧面板"
                 title="收起右侧面板"
                 @click="toggleRightPanel"
               >
-                <template #icon><Icon icon="solar:sidebar-minimalistic-outline" /></template>
+                <template #icon><span class="panel-glyph is-right" aria-hidden="true"></span></template>
               </n-button>
             </div>
           </header>
@@ -3489,7 +3701,7 @@ watch([settingsVisible, settingsSection], () => {
               aria-label="打开设置菜单"
               @click="settingsNavExpanded = true"
             >
-              <Icon icon="solar:sidebar-minimalistic-outline" />
+              <span class="panel-glyph is-left" aria-hidden="true"></span>
             </button>
             <div>
               <h1>外观</h1>
@@ -3520,7 +3732,7 @@ watch([settingsVisible, settingsSection], () => {
               aria-label="打开设置菜单"
               @click="settingsNavExpanded = true"
             >
-              <Icon icon="solar:sidebar-minimalistic-outline" />
+              <span class="panel-glyph is-left" aria-hidden="true"></span>
             </button>
             <div>
               <h1>已归档的对话</h1>
@@ -3550,7 +3762,7 @@ watch([settingsVisible, settingsSection], () => {
                 </div>
                 <div v-for="item in section.items" :key="item.id" class="archive-item">
                   <div class="archive-item-copy">
-                    <strong>{{ item.title }}</strong>
+                    <strong>{{ displayConversationTitle(item) }}</strong>
                     <span>{{ formatConversationDate(item.updatedAt) }}</span>
                   </div>
                   <n-button quaternary circle type="error" aria-label="删除" @click="confirmDeleteArchived(item)">

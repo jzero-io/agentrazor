@@ -12,6 +12,7 @@ import (
 	v1conversation "github.com/jzero-io/agentrazor/server/internal/handler/v1/conversation"
 	v1conversationgroup "github.com/jzero-io/agentrazor/server/internal/handler/v1/conversation/group"
 	v1manageagent "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/agent"
+	v1manageemail "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/email"
 	v1managemenu "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/menu"
 	v1managerole "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/role"
 	v1manageuser "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/user"
@@ -259,6 +260,32 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 						Method:  http.MethodPost,
 						Path:    "/manage/agent/skills/upload",
 						Handler: v1manageagent.UploadSkill(serverCtx),
+					},
+				}...,
+			),
+			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
+			rest.WithPrefix("/api/v1"),
+		)
+	}
+	{
+		server.AddRoutes(
+			rest.WithMiddlewares(
+				[]rest.Middleware{serverCtx.Authx},
+				[]rest.Route{
+					{
+						Method:  http.MethodGet,
+						Path:    "/manage/email/config",
+						Handler: v1manageemail.GetConfig(serverCtx),
+					},
+					{
+						Method:  http.MethodPost,
+						Path:    "/manage/email/config",
+						Handler: v1manageemail.SaveConfig(serverCtx),
+					},
+					{
+						Method:  http.MethodPost,
+						Path:    "/manage/email/test",
+						Handler: v1manageemail.TestConfig(serverCtx),
 					},
 				}...,
 			),

@@ -12,6 +12,7 @@ import (
 
 	agentdomain "github.com/jzero-io/agentrazor/server/internal/agent"
 	conversationmodel "github.com/jzero-io/agentrazor/server/internal/model/conversation"
+	conversationtokenusageeventmodel "github.com/jzero-io/agentrazor/server/internal/model/conversation_token_usage_event"
 	"github.com/jzero-io/agentrazor/server/internal/model/manage_role"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/conversation"
@@ -134,34 +135,31 @@ func (l *Stats) listOwnedThreadMetadata(owned []*conversationmodel.Conversation)
 }
 
 func (l *Stats) tokenUsageTotal(userUUID string, superAdmin bool) (int64, bool, error) {
-	whereClause := "where user_uuid = $1"
-	args := []any{userUUID}
-	if superAdmin {
-		whereClause = ""
-		args = nil
+	chain := condition.NewChain().OrderByDesc(conversationtokenusageeventmodel.Id)
+	if !superAdmin {
+		chain = chain.Equal(conversationtokenusageeventmodel.UserUuid, userUUID)
+	}
+	rows, err := l.svcCtx.Model.ConversationTokenUsageEvent.FindFieldsByCondition(
+		l.ctx,
+		nil,
+		[]condition.Field{
+			conversationtokenusageeventmodel.ConversationId,
+			conversationtokenusageeventmodel.TotalTokens,
+		},
+		chain.Build()...,
+	)
+	if err != nil {
+		return 0, false, err
 	}
 
+	seen := make(map[string]struct{}, len(rows))
 	var total int64
-	err := l.svcCtx.SqlxConn.QueryRowCtx(l.ctx, &total, `
-		select coalesce(sum(total_tokens), 0)
-		from (
-			select distinct on (conversation_id) conversation_id, total_tokens
-			from conversation_token_usage_event
-			`+whereClause+`
-			order by conversation_id, id desc
-		) latest
-	`, args...)
-	if err != nil {
-		return 0, false, err
+	for _, row := range rows {
+		if _, ok := seen[row.ConversationId]; ok {
+			continue
+		}
+		seen[row.ConversationId] = struct{}{}
+		total += row.TotalTokens
 	}
-	var count int64
-	err = l.svcCtx.SqlxConn.QueryRowCtx(l.ctx, &count, `
-		select count(1)
-		from conversation_token_usage_event
-		`+whereClause+`
-	`, args...)
-	if err != nil {
-		return 0, false, err
-	}
-	return total, count > 0, nil
+	return total, len(rows) > 0, nil
 }

@@ -52,18 +52,11 @@ func sendMessage(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 	if thread.Archived {
 		return nil, agentdomain.ErrThreadArchived
 	}
-	if strings.TrimSpace(thread.Name) == "" || thread.Name == "新对话" {
-		title := strings.ReplaceAll(content, "\n", " ")
-		title = strings.Join(strings.Fields(title), " ")
-		if chars := []rune(title); len(chars) > 28 {
-			title = string(chars[:28])
+	if strings.TrimSpace(thread.Name) == "" {
+		if err := svcCtx.AgentThreads.SetName(ctx, conversationID, content); err != nil {
+			return nil, err
 		}
-		if title != "" {
-			if err := svcCtx.AgentThreads.SetName(ctx, conversationID, title); err != nil {
-				return nil, err
-			}
-			thread.Name = title
-		}
+		thread.Name = content
 	}
 	run, err := svcCtx.AgentThreads.Send(conversationID, content)
 	if err != nil {

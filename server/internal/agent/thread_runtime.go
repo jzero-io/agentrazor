@@ -79,7 +79,6 @@ func (r *CodexAppServerRuntime) ListStoredThreads(ctx context.Context, archived 
 				}
 				thread := decodeStoredThread(raw, archived)
 				if thread.ID != "" {
-					r.setArchiveState(thread.ID, archived)
 					threads = append(threads, thread)
 				}
 			}
@@ -115,11 +114,6 @@ func (r *CodexAppServerRuntime) ReadStoredThread(ctx context.Context, threadID s
 	if err != nil {
 		return StoredThread{}, fmt.Errorf("read Codex thread %s: %w", threadID, err)
 	}
-	archived, err := r.archiveState(ctx, threadID)
-	if err != nil {
-		return StoredThread{}, err
-	}
-	thread.Archived = archived
 	return thread, nil
 }
 
@@ -138,7 +132,6 @@ func (r *CodexAppServerRuntime) readThread(ctx context.Context, threadID string,
 	thread := decodeStoredThread(raw, false)
 	if archived, known := archiveValue(raw); known {
 		thread.Archived = archived
-		r.setArchiveState(threadID, archived)
 	}
 	if thread.ID == "" {
 		return StoredThread{}, errors.New("Codex thread/read response did not contain a thread id")
@@ -222,24 +215,28 @@ func (r *CodexAppServerRuntime) pinnedThreadSectionID(ctx context.Context) (stri
 
 func (r *CodexAppServerRuntime) ArchiveStoredThread(ctx context.Context, threadID string) error {
 	if _, err := r.request(ctx, "thread/archive", map[string]any{"threadId": threadID}); err != nil {
-		// thread/archive moves the rollout file, so it fails for threads that
-		// have none (created but never sent a first message, or a stale index
-		// entry whose rollout is gone). The app-server signals this with a
-		// JSON-RPC -32600 (Invalid Request); for a valid thread id that is the
-		// "nothing to archive" case, so treat it as an idempotent success.
-		// Infrastructure failures (closed runtime, transport) are not RPCError
-		// values and still propagate. See openai/codex#14162.
-		var rpcErr *RPCError
-		if !errors.As(err, &rpcErr) || rpcErr.Code != -32600 {
-			return fmt.Errorf("archive Codex thread: %w", err)
+		if threadMissingError(err) && r.threadListed(ctx, threadID, true) {
+			return nil
 		}
+		return fmt.Errorf("archive Codex thread: %w", err)
 	}
 	r.stateMu.Lock()
 	delete(r.loaded, threadID)
-	r.archived[threadID] = true
-	r.archiveKnown[threadID] = true
 	r.stateMu.Unlock()
 	return nil
+}
+
+func (r *CodexAppServerRuntime) threadListed(ctx context.Context, threadID string, archived bool) bool {
+	threads, err := r.ListStoredThreads(ctx, archived)
+	if err != nil {
+		return false
+	}
+	for _, thread := range threads {
+		if thread.ID == threadID {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *CodexAppServerRuntime) DeleteThread(ctx context.Context, threadID string) error {
@@ -248,8 +245,6 @@ func (r *CodexAppServerRuntime) DeleteThread(ctx context.Context, threadID strin
 	}
 	r.stateMu.Lock()
 	delete(r.loaded, threadID)
-	delete(r.archived, threadID)
-	delete(r.archiveKnown, threadID)
 	r.stateMu.Unlock()
 	return nil
 }
@@ -260,45 +255,18 @@ func (r *CodexAppServerRuntime) UnarchiveStoredThread(ctx context.Context, threa
 		return StoredThread{}, fmt.Errorf("unarchive Codex thread: %w", err)
 	}
 	raw, ok := result["thread"].(map[string]any)
-	r.setArchiveState(threadID, false)
 	if !ok {
 		return r.ReadStoredThread(ctx, threadID, false)
 	}
 	return decodeStoredThread(raw, false), nil
 }
 
-func (r *CodexAppServerRuntime) setArchiveState(threadID string, archived bool) {
-	r.stateMu.Lock()
-	r.archived[threadID] = archived
-	r.archiveKnown[threadID] = true
-	r.stateMu.Unlock()
-}
-
-func (r *CodexAppServerRuntime) archiveState(ctx context.Context, threadID string) (bool, error) {
-	r.stateMu.Lock()
-	archived, known := r.archived[threadID], r.archiveKnown[threadID]
-	r.stateMu.Unlock()
-	if known {
-		return archived, nil
-	}
-	if _, err := r.ListStoredThreads(ctx, true); err != nil {
-		return false, fmt.Errorf("resolve Codex thread archive state: %w", err)
-	}
-	r.stateMu.Lock()
-	archived = r.archived[threadID]
-	if !r.archiveKnown[threadID] {
-		r.archived[threadID] = false
-		r.archiveKnown[threadID] = true
-	}
-	r.stateMu.Unlock()
-	return archived, nil
-}
-
 func decodeStoredThread(raw map[string]any, archived bool) StoredThread {
+	preview := stringValue(raw["preview"])
 	thread := StoredThread{
 		ID:        stringValue(raw["id"]),
-		Name:      stringValue(raw["name"]),
-		Preview:   stringValue(raw["preview"]),
+		Name:      threadName(raw, preview),
+		Preview:   preview,
 		IsPinned:  threadInPinnedSection(raw),
 		Archived:  archived,
 		CreatedAt: timeValue(raw["createdAt"]),
@@ -350,6 +318,15 @@ func decodeStoredThread(raw map[string]any, archived bool) StoredThread {
 func threadInPinnedSection(raw map[string]any) bool {
 	section, ok := raw["section"].(map[string]any)
 	return ok && stringValue(section["name"]) == pinnedThreadSectionName
+}
+
+func threadName(raw map[string]any, preview string) string {
+	for _, key := range []string{"name", "threadName", "thread_name", "title"} {
+		if value := strings.TrimSpace(stringValue(raw[key])); value != "" {
+			return value
+		}
+	}
+	return strings.TrimSpace(preview)
 }
 
 func int64Value(value any) (int64, bool) {

@@ -60,10 +60,11 @@ function createDefaultModel(): Model {
   };
 }
 
-type RuleKey = Extract<keyof Model, 'username' | 'status' | 'password' | 'userRoles'>;
+type RuleKey = Extract<keyof Model, 'username' | 'userEmail' | 'status' | 'password' | 'userRoles'>;
 
 const rules: Record<RuleKey, App.Global.FormRule | App.Global.FormRule[]> = {
   username: [createRequiredRule($t('form.required')), patternRules.username],
+  userEmail: [createRequiredRule($t('form.email.required')), patternRules.email],
   status: defaultRequiredRule,
   password: defaultRequiredRule,
   userRoles: {
@@ -193,7 +194,7 @@ watch(visible, () => {
         <NFormItem :label="$t('page.manage.user.userPhone')" path="userPhone">
           <NInput v-model:value="model.userPhone" :placeholder="$t('page.manage.user.form.userPhone')" />
         </NFormItem>
-        <NFormItem :label="$t('page.manage.user.userEmail')" path="email">
+        <NFormItem :label="$t('page.manage.user.userEmail')" path="userEmail">
           <NInput v-model:value="model.userEmail" :placeholder="$t('page.manage.user.form.userEmail')" />
         </NFormItem>
         <NFormItem :label="$t('page.manage.user.userStatus')" path="status">

@@ -20,7 +20,7 @@ interface FormModel {
 }
 
 const model: FormModel = reactive({
-  username: 'admin',
+  username: '',
   password: ''
 });
 
@@ -41,17 +41,32 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <NForm ref="formRef" :model="model" :rules="rules" size="large" :show-label="false" @keyup.enter="handleSubmit">
+  <NForm ref="formRef" class="login-form" :model="model" :rules="rules" size="large" :show-label="false" autocomplete="off" @keyup.enter="handleSubmit">
     <NFormItem path="username">
-      <NInput v-model:value="model.username" :placeholder="$t('page.login.common.usernamePlaceholder')" />
+      <NInput
+        v-model:value="model.username"
+        round
+        autocomplete="off"
+        :placeholder="$t('page.login.common.usernamePlaceholder')"
+      >
+        <template #prefix>
+          <SvgIcon icon="carbon:user" class="text-18px text-gray-400" />
+        </template>
+      </NInput>
     </NFormItem>
     <NFormItem path="password">
       <NInput
         v-model:value="model.password"
         type="password"
+        round
+        autocomplete="new-password"
         show-password-on="click"
         :placeholder="$t('page.login.common.passwordPlaceholder')"
-      />
+      >
+        <template #prefix>
+          <SvgIcon icon="carbon:locked" class="text-18px text-gray-400" />
+        </template>
+      </NInput>
     </NFormItem>
     <div class="mb-18px flex-y-center justify-end">
       <NButton quaternary size="small" class="px-0" @click="toggleLoginModule('reset-pwd')">
@@ -74,4 +89,33 @@ async function handleSubmit() {
   </NForm>
 </template>
 
-<style scoped></style>
+<style scoped>
+.login-form :deep(.n-input) {
+  box-shadow: none !important;
+}
+
+.login-form :deep(.n-input-wrapper) {
+  padding-inline: 16px;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.login-form :deep(.n-input__input-el) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.login-form :deep(input:-webkit-autofill),
+.login-form :deep(input:-webkit-autofill:hover),
+.login-form :deep(input:-webkit-autofill:focus),
+.login-form :deep(input:-webkit-autofill:active) {
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: var(--n-text-color) !important;
+  caret-color: var(--n-text-color);
+  transition: background-color 999999s ease-out 0s;
+}
+</style>

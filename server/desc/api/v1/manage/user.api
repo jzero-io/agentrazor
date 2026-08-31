@@ -10,16 +10,16 @@ import (
 )
 
 type ManageUser {
-	Uuid       string   `json:"uuid"`
-	Username   string   `json:"username"`
-	NickName   string   `json:"nickName"`
-	UserPhone  string   `json:"userPhone"`
-	UserEmail  string   `json:"userEmail"`
+	Uuid          string   `json:"uuid"`
+	Username      string   `json:"username"`
+	NickName      string   `json:"nickName"`
+	UserPhone     string   `json:"userPhone"`
+	UserEmail     string   `json:"userEmail"`
 	UserRoles     []string `json:"userRoles"`
 	UserRoleNames []string `json:"userRoleNames"`
 	Status        string   `json:"status"`
-	CreateTime string   `json:"createTime"`
-	UpdateTime string   `json:"updateTime"`
+	CreateTime    string   `json:"createTime"`
+	UpdateTime    string   `json:"updateTime"`
 }
 
 type ListRequest {
@@ -40,7 +40,7 @@ type AddRequest {
 	Username  string   `json:"username" validate:"required,min=4,max=20"`
 	NickName  string   `json:"nickName,optional"`
 	UserPhone string   `json:"userPhone,optional"`
-	UserEmail string   `json:"userEmail,optional"`
+	UserEmail string   `json:"userEmail" validate:"required,email"`
 	Status    string   `json:"status,default=1"`
 	Password  string   `json:"password"`
 	UserRoles []string `json:"userRoles"`
@@ -53,7 +53,7 @@ type EditRequest {
 	Username  string   `json:"username" validate:"required,min=4,max=20"`
 	NickName  string   `json:"nickName"`
 	UserPhone string   `json:"userPhone"`
-	UserEmail string   `json:"userEmail"`
+	UserEmail string   `json:"userEmail" validate:"required,email"`
 	Status    string   `json:"status"`
 	UserRoles []string `json:"userRoles"`
 }

@@ -13,7 +13,7 @@ type AddRequest struct {
 	Username  string   `json:"username" validate:"required,min=4,max=20"`
 	NickName  string   `json:"nickName,optional"`
 	UserPhone string   `json:"userPhone,optional"`
-	UserEmail string   `json:"userEmail,optional"`
+	UserEmail string   `json:"userEmail" validate:"required,email"`
 	Status    string   `json:"status,default=1"`
 	Password  string   `json:"password"`
 	UserRoles []string `json:"userRoles"`
@@ -34,7 +34,7 @@ type EditRequest struct {
 	Username  string   `json:"username" validate:"required,min=4,max=20"`
 	NickName  string   `json:"nickName"`
 	UserPhone string   `json:"userPhone"`
-	UserEmail string   `json:"userEmail"`
+	UserEmail string   `json:"userEmail" validate:"required,email"`
 	Status    string   `json:"status"`
 	UserRoles []string `json:"userRoles"`
 }

@@ -39,6 +39,7 @@ declare module "@elegant-router/types" {
     "iframe-page": "/iframe-page/:url";
     "login": "/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?";
     "manage": "/manage";
+    "manage_email": "/manage/email";
     "manage_menu": "/manage/menu";
     "manage_role": "/manage/role";
     "manage_user": "/manage/user";
@@ -122,6 +123,7 @@ declare module "@elegant-router/types" {
     | "agent_config"
     | "agent_skills"
     | "home"
+    | "manage_email"
     | "manage_menu"
     | "manage_role"
     | "manage_user-detail"

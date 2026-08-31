@@ -75,14 +75,6 @@ func requireOwner(ctx context.Context, svcCtx *svc.ServiceContext, threadID stri
 
 func toConversation(value agentdomain.StoredThread) types.Conversation {
 	title := strings.TrimSpace(value.Name)
-	if title == "" {
-		// codex does not auto-generate a name; fall back to its preview (a
-		// short summary of the conversation, usually the first user message).
-		title = strings.TrimSpace(value.Preview)
-	}
-	if title == "" {
-		title = "新对话"
-	}
 	status := "active"
 	if value.Archived {
 		status = "archived"

@@ -124,6 +124,15 @@ export const generatedRoutes: GeneratedRoute[] = [
     },
     children: [
       {
+        name: 'manage_email',
+        path: '/manage/email',
+        component: 'view.manage_email',
+        meta: {
+          title: 'manage_email',
+          i18nKey: 'route.manage_email'
+        }
+      },
+      {
         name: 'manage_menu',
         path: '/manage/menu',
         component: 'view.manage_menu',

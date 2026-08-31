@@ -9,6 +9,7 @@ import (
 
 	"github.com/jzero-io/agentrazor/server/internal/model/conversation"
 	"github.com/jzero-io/agentrazor/server/internal/model/conversation_group"
+	"github.com/jzero-io/agentrazor/server/internal/model/conversation_token_usage_event"
 	"github.com/jzero-io/agentrazor/server/internal/model/manage_email"
 	"github.com/jzero-io/agentrazor/server/internal/model/manage_menu"
 	"github.com/jzero-io/agentrazor/server/internal/model/manage_role"
@@ -18,25 +19,27 @@ import (
 )
 
 type Model struct {
-	Conversation      conversation.ConversationModel
-	ConversationGroup conversation_group.ConversationGroupModel
-	ManageEmail       manage_email.ManageEmailModel
-	ManageMenu        manage_menu.ManageMenuModel
-	ManageRole        manage_role.ManageRoleModel
-	ManageRoleMenu    manage_role_menu.ManageRoleMenuModel
-	ManageUser        manage_user.ManageUserModel
-	ManageUserRole    manage_user_role.ManageUserRoleModel
+	Conversation                conversation.ConversationModel
+	ConversationGroup           conversation_group.ConversationGroupModel
+	ConversationTokenUsageEvent conversation_token_usage_event.ConversationTokenUsageEventModel
+	ManageEmail                 manage_email.ManageEmailModel
+	ManageMenu                  manage_menu.ManageMenuModel
+	ManageRole                  manage_role.ManageRoleModel
+	ManageRoleMenu              manage_role_menu.ManageRoleMenuModel
+	ManageUser                  manage_user.ManageUserModel
+	ManageUserRole              manage_user_role.ManageUserRoleModel
 }
 
 func NewModel(conn sqlx.SqlConn, op ...opts.Opt[modelx.ModelOpts]) Model {
 	return Model{
-		Conversation:      conversation.NewConversationModel(conn, op...),
-		ConversationGroup: conversation_group.NewConversationGroupModel(conn, op...),
-		ManageEmail:       manage_email.NewManageEmailModel(conn, op...),
-		ManageMenu:        manage_menu.NewManageMenuModel(conn, op...),
-		ManageRole:        manage_role.NewManageRoleModel(conn, op...),
-		ManageRoleMenu:    manage_role_menu.NewManageRoleMenuModel(conn, op...),
-		ManageUser:        manage_user.NewManageUserModel(conn, op...),
-		ManageUserRole:    manage_user_role.NewManageUserRoleModel(conn, op...),
+		Conversation:                conversation.NewConversationModel(conn, op...),
+		ConversationGroup:           conversation_group.NewConversationGroupModel(conn, op...),
+		ConversationTokenUsageEvent: conversation_token_usage_event.NewConversationTokenUsageEventModel(conn, op...),
+		ManageEmail:                 manage_email.NewManageEmailModel(conn, op...),
+		ManageMenu:                  manage_menu.NewManageMenuModel(conn, op...),
+		ManageRole:                  manage_role.NewManageRoleModel(conn, op...),
+		ManageRoleMenu:              manage_role_menu.NewManageRoleMenuModel(conn, op...),
+		ManageUser:                  manage_user.NewManageUserModel(conn, op...),
+		ManageUserRole:              manage_user_role.NewManageUserRoleModel(conn, op...),
 	}
 }

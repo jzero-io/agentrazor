@@ -19,6 +19,7 @@ gen:
   model-datasource-table:
     - conversation
     - conversation_group
+    - conversation_token_usage_event
     - manage_email
     - manage_menu
     - manage_role

@@ -254,3 +254,26 @@ export function RestartAgentRuntime() {
     method: 'post'
   });
 }
+
+export function GetEmailConfig() {
+  return request<Api.Manage.GetEmailConfigResponse>({
+    url: '/api/v1/manage/email/config',
+    method: 'get'
+  });
+}
+
+export function SaveEmailConfig(data: Api.Manage.SaveEmailConfigRequest) {
+  return request<Api.Common.Empty>({
+    url: '/api/v1/manage/email/config',
+    method: 'post',
+    data
+  });
+}
+
+export function TestEmailConfig(recipient: string) {
+  return request<Api.Common.Empty>({
+    url: '/api/v1/manage/email/test',
+    method: 'post',
+    data: { recipient }
+  });
+}

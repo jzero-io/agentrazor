@@ -2,20 +2,19 @@ package auth
 
 import (
 	"context"
-	"crypto/tls"
+	cryptorand "crypto/rand"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/spf13/cast"
 	"github.com/zeromicro/go-zero/core/logx"
-	gomail "gopkg.in/gomail.v2"
 
 	"github.com/jzero-io/agentrazor/server/internal/constant"
+	"github.com/jzero-io/agentrazor/server/internal/mailer"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/auth"
 )
@@ -45,28 +44,22 @@ func (l *SendVerificationCode) SendVerificationCode(req *types.SendVerificationC
 		}
 
 		verificationUuid := uuid.New().String()
-		verificationCode := genValidateCode(6)
-
-		m := gomail.NewMessage()
-		// 设置发件人
-		m.SetHeader("From", email.From)
-		// 设置收件人
-		m.SetHeader("To", req.Email)
-		// 设置邮件主题
-		m.SetHeader("Subject", "验证码")
-		// 设置邮件正文
-		m.SetBody("text/plain", fmt.Sprintf("agentrazor-admin 邮箱验证码: %s", verificationCode))
-		// 配置 SMTP 服务器信息
-		d := gomail.NewDialer(email.Host, cast.ToInt(email.Port), email.Username, email.Password)
-		d.SSL = cast.ToBool(email.EnableSsl)
-		if !cast.ToBool(email.IsVerify) {
-			tlsConfig := &tls.Config{
-				InsecureSkipVerify: true,
-			}
-			d.TLSConfig = tlsConfig
+		verificationCode, err := genValidateCode()
+		if err != nil {
+			l.Errorf("generate verification code: %v", err)
+			return nil, SendVerificationError
 		}
-		// 发送邮件
-		if err = d.DialAndSend(m); err != nil {
+
+		if err = mailer.Send(mailer.SMTPConfig{
+			From:       email.From,
+			Host:       email.Host,
+			Port:       cast.ToInt(email.Port),
+			Username:   email.Username,
+			Password:   email.Password,
+			EnableSSL:  cast.ToBool(email.EnableSsl),
+			VerifyCert: cast.ToBool(email.IsVerify),
+		}, req.Email, "AgentRazor 验证码", fmt.Sprintf("AgentRazor 邮箱验证码：%s（5 分钟内有效）", verificationCode)); err != nil {
+			l.Errorf("send verification email: %v", err)
 			return nil, SendVerificationError
 		}
 
@@ -74,25 +67,17 @@ func (l *SendVerificationCode) SendVerificationCode(req *types.SendVerificationC
 			return nil, SendVerificationError
 		}
 
-		var cacheVal string
-		if err = l.svcCtx.Cache.Get(fmt.Sprintf("%s:%s", constant.CacheVerificationCodePrefix, verificationUuid), &cacheVal); err == nil {
-			logx.Infof("get cache %s:%s", verificationUuid, cacheVal)
-		}
 		return &types.SendVerificationCodeResponse{
 			VerificationUuid: verificationUuid,
-		}, err
+		}, nil
 	}
 	return nil, errors.New("暂不支持手机号验证码")
 }
 
-func genValidateCode(width int) string {
-	numeric := [10]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	r := len(numeric)
-	rand.New(rand.NewSource(time.Now().UnixNano()))
-	var sb strings.Builder
-
-	for i := 0; i < width; i++ {
-		_, _ = fmt.Fprintf(&sb, "%d", numeric[rand.Intn(r)])
+func genValidateCode() (string, error) {
+	value, err := cryptorand.Int(cryptorand.Reader, big.NewInt(1_000_000))
+	if err != nil {
+		return "", err
 	}
-	return sb.String()
+	return fmt.Sprintf("%06d", value.Int64()), nil
 }
