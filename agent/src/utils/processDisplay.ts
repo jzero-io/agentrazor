@@ -1,4 +1,4 @@
-import type { ThreadItem, Turn } from './api';
+import type { ThreadItem, Turn } from '../service/api';
 
 export type DisplayThreadItem = ThreadItem & {
   memberIds?: string[];
@@ -234,10 +234,8 @@ function webSearchTitle(item: ThreadItem, live = false) {
   return text ? `${prefix}：${text}` : prefix;
 }
 
-function fileChangeTitle(item: ThreadItem, live = false) {
-  const changes = Array.isArray(item.changes) ? item.changes as Array<Record<string, unknown>> : [];
-  const prefix = live ? '正在修改文件' : '修改文件';
-  return changes.length ? `${prefix}：${changes.length} 个` : prefix;
+function fileChangeTitle(_item: ThreadItem, live = false) {
+  return live ? '正在变更文件' : '已变更文件';
 }
 
 function fileChangeDetail(item: ThreadItem) {

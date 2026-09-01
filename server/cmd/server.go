@@ -56,6 +56,7 @@ var serverCmd = &cobra.Command{
 		svcCtx.Middleware = middleware.NewMiddleware()
 		global.ServiceContext = *svcCtx
 		middleware.Register(restServer)
+		custom.RegisterWorkspaceFileServer(restServer, svcCtx)
 		handler.RegisterHandlers(restServer, svcCtx)
 
 		// load plugins
