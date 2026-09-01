@@ -473,24 +473,6 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
     clearDisplayedActiveTurn();
   }
 
-  function restoreRunningConversationFromList(conversationId: string) {
-    const conversation = conversations.value.find(item => item.id === conversationId);
-    if (!conversation || !isConversationProcessing(conversation)) return;
-    setConversationProcessing(conversationId, true);
-    const activeTurn = cachedActiveTurn(conversationId) || markRestoredRunningTurn({
-      id: `running-${conversationId}`,
-      status: 'inProgress',
-      startedAt: conversation.runningStartedAt || conversation.updatedAt || conversation.createdAt,
-      items: []
-    });
-    beginActiveTurn({
-      conversationId,
-      turn: activeTurn,
-      resetResultSeen: !cachedActiveTurn(conversationId),
-      restartTimer: true
-    });
-  }
-
   function activeTurnStartedAt(snapshot: ConversationDetail, turn?: Turn) {
     return snapshot.conversation.runningStartedAt
       || turn?.startedAt
@@ -730,7 +712,6 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
     syncDisplayedActiveTurnState,
     clearDisplayedActiveTurn,
     resetActiveTurn,
-    restoreRunningConversationFromList,
     restoreActiveTurn,
     setConversationDetail,
     clearConversationDetail,

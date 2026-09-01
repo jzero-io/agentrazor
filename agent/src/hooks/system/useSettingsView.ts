@@ -1,56 +1,77 @@
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
 export type SettingsSection = 'appearance' | 'archives';
 
 export function useSettingsView(options: {
   onOpen?: () => void;
 }) {
-  const visible = ref(false);
-  const section = ref<SettingsSection>('appearance');
+  const route = useRoute();
+  const router = useRouter();
   const navExpanded = ref(true);
   const archiveQuery = ref('');
   const returnPath = ref('/');
 
-  function syncUrl() {
-    const path = visible.value
-      ? section.value === 'archives' ? '/settings/archives' : '/settings/appearance'
-      : returnPath.value || '/';
-    window.history.replaceState(window.history.state, '', path);
+  const section = computed<SettingsSection>({
+    get() {
+      return route.path === '/settings/archives' ? 'archives' : 'appearance';
+    },
+    set(value) {
+      void router.push(value === 'archives' ? '/settings/archives' : '/settings/appearance');
+    }
+  });
+
+  const visible = computed<boolean>({
+    get() {
+      return route.path === '/settings/appearance' || route.path === '/settings/archives';
+    },
+    set(value) {
+      if (value) openAppearance();
+      else close();
+    }
+  });
+
+  function isSettingsPath(path: string) {
+    return path === '/settings' || path.startsWith('/settings/');
+  }
+
+  function rememberReturnPath(path = route.fullPath) {
+    if (!isSettingsPath(path)) returnPath.value = path || '/';
   }
 
   function syncConversationUrl(id: string) {
     const path = id ? `/c/${encodeURIComponent(id)}` : '/';
     returnPath.value = path;
-    if (visible.value) return;
-    window.history.replaceState(window.history.state, '', path);
+    if (!visible.value) void router.replace(path);
   }
 
-  function restoreFromPath(pathname = window.location.pathname) {
-    const settingsPath = pathname.match(/^\/settings(?:\/([^/]+))?/);
-    if (!settingsPath) return false;
-    section.value = settingsPath[1] === 'archives' ? 'archives' : 'appearance';
-    visible.value = true;
-    return true;
+  function restoreFromPath() {
+    rememberReturnPath(route.fullPath);
+    return visible.value;
   }
 
-  function openAppearance(currentPath = location.pathname) {
-    returnPath.value = currentPath;
-    section.value = 'appearance';
+  function openAppearance(currentPath = route.fullPath) {
+    rememberReturnPath(currentPath);
     navExpanded.value = true;
-    visible.value = true;
-    options.onOpen?.();
+    void router.push('/settings/appearance');
   }
 
   function openArchives() {
-    section.value = 'archives';
-    options.onOpen?.();
+    void router.push('/settings/archives');
   }
 
   function close() {
-    visible.value = false;
+    void router.push(returnPath.value || '/');
   }
 
-  watch([visible, section], syncUrl);
+  watch(
+    () => route.fullPath,
+    path => {
+      if (visible.value) options.onOpen?.();
+      else rememberReturnPath(path);
+    },
+    { immediate: true }
+  );
 
   return {
     visible,

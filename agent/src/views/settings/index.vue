@@ -1,4 +1,9 @@
 <script setup lang="ts">
+defineOptions({
+  name: 'SettingsView',
+  inheritAttrs: false
+});
+
 import { Icon } from '@iconify/vue';
 import { NButton, NInput, NSpin } from 'naive-ui';
 import type { Conversation } from '../../service/api';

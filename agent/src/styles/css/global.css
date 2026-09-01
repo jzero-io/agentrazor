@@ -81,69 +81,6 @@ body {
   background: var(--app-bg);
 }
 
-.app-boot-screen {
-  display: grid;
-  width: 100%;
-  min-height: 100vh;
-  min-height: 100dvh;
-  place-items: center;
-  background: radial-gradient(circle at 50% 28%, #fff 0, #f4f8fb 48%, #eaf3f7 100%);
-  color: #42545d;
-}
-
-.app-boot-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  opacity: 0;
-  transform: translateY(8px);
-  animation: app-boot-in 260ms ease forwards;
-}
-
-.app-boot-logo {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  box-shadow: 0 12px 32px rgb(31 88 112 / 16%);
-}
-
-.app-boot-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.app-boot-title {
-  font-size: 16px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.app-boot-text {
-  color: #7a8b93;
-  font-size: 13px;
-}
-
-@keyframes app-boot-in {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-:root[data-theme="dark"] .app-boot-screen {
-  background: radial-gradient(circle at 50% 28%, #202a34 0, #121820 48%, #0b0f14 100%);
-  color: #e8edf2;
-}
-
-:root[data-theme="dark"] .app-boot-logo {
-  box-shadow: 0 14px 38px rgb(0 0 0 / 34%);
-}
-
-:root[data-theme="dark"] .app-boot-text {
-  color: #9caab6;
-}
-
 button,
 textarea {
   font: inherit;
@@ -3808,12 +3745,6 @@ html[data-theme="dark"] body.sidebar-resizing .sidebar-resize-handle::after {
   background: var(--app-bg);
 }
 
-.app-boot-screen {
-  background: var(--app-bg);
-  color: var(--muted-strong);
-}
-
-.app-boot-logo,
 .welcome-icon {
   box-shadow: var(--shadow-panel);
 }
@@ -4131,7 +4062,6 @@ html[data-theme="dark"] body.sidebar-resizing .sidebar-resize-handle::after {
   border-bottom-color: var(--border);
 }
 
-:root[data-theme="dark"] .app-boot-screen,
 :root[data-theme="dark"] .empty-state {
   background: var(--app-bg);
 }
