@@ -4,6 +4,7 @@ services:
       context: ../../server
     restart: always
     container_name: agentrazor-server
+    init: true
     privileged: true
     depends_on:
       postgres:

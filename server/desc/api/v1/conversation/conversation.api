@@ -50,9 +50,6 @@ type (
 		TotalTokens           int64 `json:"totalTokens"`
 		TokenUsageAvailable   bool  `json:"tokenUsageAvailable"`
 	}
-	CreateRequest {
-		Title string `json:"title,optional"`
-	}
 	PathRequest {
 		ConversationId string `path:"conversation_id" validate:"required"`
 	}
@@ -82,8 +79,9 @@ type (
 		GroupId        *string `json:"groupId,optional"`
 	}
 	SendMessageRequest {
-		ConversationId string `path:"conversation_id" validate:"required"`
-		Content        string `json:"content" validate:"required"`
+		ConversationId string  `json:"conversationId,optional"`
+		GroupId        *string `json:"groupId,optional"`
+		Content        string  `json:"content" validate:"required"`
 	}
 	SendMessageResponse {
 		ConversationId string       `json:"conversationId"`
@@ -108,9 +106,13 @@ service server {
 	@handler Stats
 	get /conversations/stats returns (StatsResponse)
 
-	@doc "创建会话"
-	@handler Create
-	post /conversations (CreateRequest) returns (Conversation)
+	@doc "创建会话或发送消息"
+	@handler SendMessage
+	post /conversations (SendMessageRequest) returns (SendMessageResponse)
+
+	@doc "获取会话元信息"
+	@handler Metadata
+	get /conversations/:conversation_id/metadata (PathRequest) returns (Conversation)
 
 	@doc "获取会话详情"
 	@handler Get
@@ -123,10 +125,6 @@ service server {
 	@doc "删除会话"
 	@handler Delete
 	delete /conversations/:conversation_id (PathRequest) returns (DeleteResponse)
-
-	@doc "发送消息"
-	@handler SendMessage
-	post /conversations/:conversation_id/messages (SendMessageRequest) returns (SendMessageResponse)
 
 	@doc "停止当前 Turn"
 	@handler CancelTurn

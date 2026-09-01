@@ -226,14 +226,11 @@ export const conversationApi = {
     const result = await request<{ conversations: Conversation[] }>('/api/v1/conversations');
     return result.conversations;
   },
-  create(title = '') {
-    return request<Conversation>('/api/v1/conversations', {
-      method: 'POST',
-      body: JSON.stringify({ title })
-    });
-  },
   get(id: string) {
     return request<ConversationDetail>(`/api/v1/conversations/${encodeURIComponent(id)}`);
+  },
+  metadata(id: string) {
+    return request<Conversation>(`/api/v1/conversations/${encodeURIComponent(id)}/metadata`);
   },
   update(id: string, changes: { title?: string; pinned?: boolean; archived?: boolean; groupId?: string }) {
     return request<Conversation>(`/api/v1/conversations/${encodeURIComponent(id)}`, {
@@ -244,10 +241,10 @@ export const conversationApi = {
   remove(id: string) {
     return request<null>(`/api/v1/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
   },
-  send(id: string, content: string) {
-    return request<SendMessageResponse>(`/api/v1/conversations/${encodeURIComponent(id)}/messages`, {
+  send(conversationId: string, content: string, groupId = '') {
+    return request<SendMessageResponse>('/api/v1/conversations', {
       method: 'POST',
-      body: JSON.stringify({ content })
+      body: JSON.stringify({ conversationId: conversationId || undefined, groupId: groupId || undefined, content })
     });
   },
   cancelTurn(id: string) {

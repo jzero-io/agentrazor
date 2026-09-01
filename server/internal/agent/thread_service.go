@@ -143,24 +143,12 @@ func (s *ThreadService) SetTokenUsageRecorder(recorder TokenUsageRecorder) {
 	s.mu.Unlock()
 }
 
-func (s *ThreadService) Create(ctx context.Context, title string) (StoredThread, error) {
+func (s *ThreadService) Create(ctx context.Context) (StoredThread, error) {
 	runtime, err := s.currentRuntime()
 	if err != nil {
 		return StoredThread{}, err
 	}
-	thread, err := runtime.CreateStoredThread(ctx)
-	if err != nil {
-		return StoredThread{}, err
-	}
-	title = strings.TrimSpace(title)
-	if title != "" {
-		if err := runtime.SetThreadName(ctx, thread.ID, title); err != nil {
-			s.deleteCreatedThread(thread.ID)
-			return StoredThread{}, err
-		}
-		thread.Name = title
-	}
-	return thread, nil
+	return runtime.CreateStoredThread(ctx)
 }
 
 func (s *ThreadService) List(ctx context.Context) ([]StoredThread, error) {

@@ -27,17 +27,17 @@ func List(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
-// 创建会话
-func Create(svcCtx *svc.ServiceContext) http.HandlerFunc {
+// 获取会话元信息
+func Metadata(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.CreateRequest
+		var req types.PathRequest
 		if err := httpx.Parse(r, &req); err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 			return
 		}
 
-		l := conversation.NewCreate(r.Context(), svcCtx, r)
-		resp, err := l.Create(&req)
+		l := conversation.NewMetadata(r.Context(), svcCtx, r)
+		resp, err := l.Metadata(&req)
 		if err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 		} else {
@@ -103,25 +103,6 @@ func Delete(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
-// 发送消息
-func SendMessage(svcCtx *svc.ServiceContext) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.SendMessageRequest
-		if err := httpx.Parse(r, &req); err != nil {
-			httpx.ErrorCtx(r.Context(), w, err)
-			return
-		}
-
-		l := conversation.NewSendMessage(r.Context(), svcCtx, r)
-		resp, err := l.SendMessage(&req)
-		if err != nil {
-			httpx.ErrorCtx(r.Context(), w, err)
-		} else {
-			httpx.OkJsonCtx(r.Context(), w, resp)
-		}
-	}
-}
-
 // 停止当前 Turn
 func CancelTurn(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -133,6 +114,25 @@ func CancelTurn(svcCtx *svc.ServiceContext) http.HandlerFunc {
 
 		l := conversation.NewCancelTurn(r.Context(), svcCtx, r)
 		resp, err := l.CancelTurn(&req)
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.OkJsonCtx(r.Context(), w, resp)
+		}
+	}
+}
+
+// 创建会话或发送消息
+func SendMessage(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req types.SendMessageRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+			return
+		}
+
+		l := conversation.NewSendMessage(r.Context(), svcCtx, r)
+		resp, err := l.SendMessage(&req)
 		if err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 		} else {

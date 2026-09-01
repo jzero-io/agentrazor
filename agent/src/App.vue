@@ -418,6 +418,7 @@ const processActiveConversationIds = reactive(new Set<string>());
 const nowMs = ref(Date.now());
 const stopping = ref(false);
 let turnTimer: number | undefined;
+const titleRefreshTimers = new Map<string, number>();
 const locallyStoppedRunIds = new Set<string>();
 const locallyStoppedConversationIds = new Set<string>();
 const sidebarCollapsed = ref(savedSidebarView.sidebarCollapsed ?? false);
@@ -822,12 +823,62 @@ function applyConversationList(next: Conversation[], preserveLocalProcessing = t
   closeIdleConversationStreams();
 }
 
+
+function syncConversationMetadata(item: Conversation) {
+  upsertConversationListItem(item);
+  const currentDetail = detailsByConversation.get(item.id);
+  if (!currentDetail) return;
+  setConversationDetail({
+    ...currentDetail,
+    conversation: mergeConversationSnapshot(currentDetail.conversation, item)
+  });
+}
+
 function upsertConversationListItem(item: Conversation) {
   const running = item.running || processingConversationIds.value.has(item.id);
   const index = conversations.value.findIndex(value => value.id === item.id);
   if (index >= 0) conversations.value[index] = mergeConversationSnapshot(conversations.value[index], { ...item, running });
   else conversations.value.unshift({ ...item, running });
   setConversationProcessing(item.id, running);
+}
+
+
+function stopConversationTitleRefresh(id: string) {
+  const timer = titleRefreshTimers.get(id);
+  if (timer === undefined) return;
+  window.clearInterval(timer);
+  titleRefreshTimers.delete(id);
+}
+
+function shouldRefreshConversationTitle(item?: Pick<Conversation, 'title'> | null) {
+  return !item?.title?.trim();
+}
+
+function refreshConversationTitle(id: string) {
+  void (async () => {
+    try {
+      const updated = await conversationApi.metadata(id);
+      syncConversationMetadata(updated);
+      if (!shouldRefreshConversationTitle(updated)) stopConversationTitleRefresh(id);
+    } catch {
+      // 标题刷新是体验增强，失败时保留当前会话流，下一轮继续轻量重试。
+    }
+  })();
+}
+
+function scheduleConversationTitleRefresh(id: string, item?: Pick<Conversation, 'title'> | null) {
+  if (!id || !shouldRefreshConversationTitle(item) || titleRefreshTimers.has(id)) return;
+  let remaining = 20;
+  refreshConversationTitle(id);
+  const timer = window.setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) {
+      stopConversationTitleRefresh(id);
+      return;
+    }
+    refreshConversationTitle(id);
+  }, 1500);
+  titleRefreshTimers.set(id, timer);
 }
 
 function closeConversationStream(id: string) {
@@ -1741,34 +1792,54 @@ async function sendMessage() {
     conversationId = selectedConversationId.value;
     if (!conversationId) return;
 
-    if (isDraftConversation(conversationId)) {
+    const creatingFromDraft = isDraftConversation(conversationId);
+    const targetGroupId = creatingFromDraft ? draftConversationGroupId.value : '';
+    if (creatingFromDraft) {
       creatingConversation.value = true;
-      const created = await conversationApi.create(content);
-      const nextConversation = draftConversationGroupId.value
-        ? await conversationApi.update(created.id, { groupId: draftConversationGroupId.value })
-        : created;
-      draftConversationGroupId.value = '';
-      upsertConversationListItem(nextConversation);
-      revealConversationSection(nextConversation);
-      conversationId = nextConversation.id;
-      moveOptimisticTurn(draftKey, conversationId, optimisticTurn.id);
-      selectedConversationId.value = conversationId;
-      syncConversationUrl(conversationId);
-      setConversationDetail({ conversation: nextConversation, eventCursor: 0, turns: [] });
+      conversationId = '';
+    } else {
+      if (isConversationRunning(conversationId)) return;
+      ensureConversationStream(conversationId, activeDetail.value?.conversation.id === conversationId ? activeDetail.value.eventCursor : 0);
     }
 
-    if (isConversationRunning(conversationId)) return;
+    const sent = await conversationApi.send(conversationId, content, targetGroupId);
+    const nextConversationId = sent.conversationId || sent.conversation?.id || conversationId;
+    if (!nextConversationId) throw new Error('conversation id is required');
 
+    if (creatingFromDraft) {
+      draftConversationGroupId.value = '';
+      if (sent.conversation) {
+        syncConversationMetadata(sent.conversation);
+        revealConversationSection(sent.conversation);
+      }
+      moveOptimisticTurn(draftKey, nextConversationId, optimisticTurn.id);
+      selectedConversationId.value = nextConversationId;
+      syncConversationUrl(nextConversationId);
+      if (sent.conversation) {
+        const draftDetail = detail.value?.conversation.id === draftKey ? detail.value : null;
+        setConversationDetail({
+          conversation: sent.conversation,
+          eventCursor: draftDetail?.eventCursor ?? 0,
+          turns: draftDetail?.turns ?? []
+        });
+        scheduleConversationTitleRefresh(nextConversationId, sent.conversation);
+      }
+    } else if (sent.conversation) {
+      syncConversationMetadata(sent.conversation);
+    }
+
+    conversationId = nextConversationId;
+    setConversationProcessing(conversationId, true);
     if (draftKey !== conversationId) setConversationDraft(conversationId, '');
     ensureConversationStream(conversationId, activeDetail.value?.conversation.id === conversationId ? activeDetail.value.eventCursor : 0);
-    const sent = await conversationApi.send(conversationId, content);
-    setConversationProcessing(conversationId, true);
-    if (sent.conversation) replaceConversation(sent.conversation);
+
     if (selectedConversationId.value === conversationId) {
       const selectedDetail = activeDetail.value;
       if (sent.conversation && selectedDetail?.conversation.id === conversationId) {
-        selectedDetail.conversation = sent.conversation;
-        setConversationDetail(selectedDetail);
+        setConversationDetail({
+          ...selectedDetail,
+          conversation: mergeConversationSnapshot(selectedDetail.conversation, sent.conversation)
+        });
       }
       const confirmedTurn: Turn = {
         id: sent.run?.id || `run-${Date.now()}`,
@@ -2149,6 +2220,8 @@ function stopTurnTimer(conversationId: string) {
 }
 
 function stopAllTurnTimers() {
+  for (const timer of titleRefreshTimers.values()) window.clearInterval(timer);
+  titleRefreshTimers.clear();
   activeTurnStartedAtByConversation.clear();
   processStartedAtByConversation.clear();
   processActiveConversationIds.clear();
@@ -2327,6 +2400,10 @@ async function handleStreamEvent(event: StreamEvent) {
     );
     await nextTick();
     closeIdleConversationStreams();
+    scheduleConversationTitleRefresh(
+      completedConversationId,
+      conversations.value.find(item => item.id === completedConversationId)
+    );
     if (completedTurn) {
       const targetDetail = detailsByConversation.get(completedConversationId);
       if (targetDetail) {
@@ -3301,41 +3378,45 @@ watch([settingsVisible, settingsSection], () => {
           </div>
         </section>
 
-        <section v-else-if="selectedConversationId && isNewChat" class="chat-empty">
-          <div class="welcome">
-            <div class="welcome-icon"><img src="/agentrazor-icon.png" alt="" /></div>
-            <h1>今天想完成什么？</h1>
-            <p>输入目标，AgentRazor 会在当前对话中持续处理。</p>
-          </div>
-          <div class="composer">
-            <n-input
-              v-model:value="draft"
-              type="textarea"
-              autosize
-              :maxlength="12000"
-              placeholder="给 AgentRazor 发送消息"
-              @keydown="handleComposerKeydown"
-            />
-            <div class="composer-footer">
-              <n-button
-                type="primary"
-                circle
-                class="composer-action-button"
-                :class="{ 'is-pending': composerActionPending, 'is-running': sending }"
-                :disabled="composerActionDisabled"
-                :aria-label="composerActionLabel"
-                :title="composerActionLabel"
-                @click="handleComposerAction"
-              >
-                <template #icon>
-                  <Transition name="composer-action-icon" mode="out-in">
-                    <Icon :key="composerActionIcon" :icon="composerActionIcon" />
-                  </Transition>
-                </template>
-              </n-button>
+        <template v-else-if="selectedConversationId && isNewChat">
+          <section class="chat-empty">
+            <div class="welcome">
+              <div class="welcome-icon"><img src="/agentrazor-icon.png" alt="" /></div>
+              <h1>今天想完成什么？</h1>
+              <p>输入目标，AgentRazor 会在当前对话中持续处理。</p>
             </div>
-          </div>
-        </section>
+          </section>
+          <footer class="composer-wrap">
+            <div class="composer">
+              <n-input
+                v-model:value="draft"
+                type="textarea"
+                autosize
+                :maxlength="12000"
+                placeholder="给 AgentRazor 发送消息"
+                @keydown="handleComposerKeydown"
+              />
+              <div class="composer-footer">
+                <n-button
+                  type="primary"
+                  circle
+                  class="composer-action-button"
+                  :class="{ 'is-pending': composerActionPending, 'is-running': sending }"
+                  :disabled="composerActionDisabled"
+                  :aria-label="composerActionLabel"
+                  :title="composerActionLabel"
+                  @click="handleComposerAction"
+                >
+                  <template #icon>
+                    <Transition name="composer-action-icon" mode="out-in">
+                      <Icon :key="composerActionIcon" :icon="composerActionIcon" />
+                    </Transition>
+                  </template>
+                </n-button>
+              </div>
+            </div>
+          </footer>
+        </template>
 
         <template v-else-if="selectedConversationId">
           <nav v-if="messagePreviews.length" class="conversation-preview" aria-label="用户消息导航">

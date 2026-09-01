@@ -100,9 +100,21 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					},
 					{
 
+						Method:  http.MethodGet,
+						Path:    "/conversations/stats",
+						Handler: v1conversation.Stats(serverCtx),
+					},
+					{
+
 						Method:  http.MethodPost,
 						Path:    "/conversations",
-						Handler: v1conversation.Create(serverCtx),
+						Handler: v1conversation.SendMessage(serverCtx),
+					},
+					{
+
+						Method:  http.MethodGet,
+						Path:    "/conversations/:conversation_id/metadata",
+						Handler: v1conversation.Metadata(serverCtx),
 					},
 					{
 
@@ -125,20 +137,8 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					{
 
 						Method:  http.MethodPost,
-						Path:    "/conversations/:conversation_id/messages",
-						Handler: v1conversation.SendMessage(serverCtx),
-					},
-					{
-
-						Method:  http.MethodPost,
 						Path:    "/conversations/:conversation_id/turn/cancel",
 						Handler: v1conversation.CancelTurn(serverCtx),
-					},
-					{
-
-						Method:  http.MethodGet,
-						Path:    "/conversations/stats",
-						Handler: v1conversation.Stats(serverCtx),
 					},
 				}...,
 			),

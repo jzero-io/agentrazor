@@ -25,10 +25,6 @@ type Conversation struct {
 	UpdatedAt        string  `json:"updatedAt"`
 }
 
-type CreateRequest struct {
-	Title string `json:"title,optional"`
-}
-
 type DeleteResponse struct {
 }
 
@@ -71,8 +67,9 @@ type Run struct {
 }
 
 type SendMessageRequest struct {
-	ConversationId string `path:"conversation_id" validate:"required"`
-	Content        string `json:"content" validate:"required"`
+	ConversationId string  `json:"conversationId,optional"`
+	GroupId        *string `json:"groupId,optional"`
+	Content        string  `json:"content" validate:"required"`
 }
 
 type SendMessageResponse struct {
