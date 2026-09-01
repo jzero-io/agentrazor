@@ -631,10 +631,12 @@ const messagePreviews = computed(() => renderedTurns.value.flatMap(turn => {
   const finalAnswer = [...turn.items]
     .reverse()
     .find(item => item.type === 'agentMessage' && item.phase === 'final_answer' && item.text?.trim());
+  const finalAnswerText = finalAnswer?.text?.trim() || '';
   return [{
     id: userItem.id,
     title: messagePreview(userItemText(userItem)),
-    finalAnswer: finalAnswer?.text?.trim() || ''
+    finalAnswer: finalAnswerText,
+    finalAnswerHtml: finalAnswerText ? renderMarkdown(finalAnswerText) : ''
   }];
 }));
 const selectedPreviewMessageId = ref('');
@@ -2980,7 +2982,7 @@ watch([settingsVisible, settingsSection], () => {
           </div>
           <n-button v-if="sidebarExpanded" quaternary circle class="collapse-button" @click="toggleSidebarPinned">
             <template #icon>
-              <span class="panel-glyph is-left" aria-hidden="true"></span>
+              <Icon icon="lucide:panel-left" />
             </template>
           </n-button>
         </div>
@@ -3049,14 +3051,16 @@ watch([settingsVisible, settingsSection], () => {
                   <span>分组</span>
                   <Icon :icon="groupsExpanded ? 'solar:alt-arrow-down-linear' : 'solar:alt-arrow-right-linear'" />
                 </button>
-                <n-tooltip trigger="hover" placement="top">
-                  <template #trigger>
-                    <button class="group-add-button" type="button" aria-label="新增分组" @click="openCreateGroup()">
-                      <Icon icon="solar:add-circle-linear" />
-                    </button>
-                  </template>
-                  新增分组
-                </n-tooltip>
+                <div class="group-actions">
+                  <n-tooltip trigger="hover" placement="top">
+                    <template #trigger>
+                      <button class="group-add-button" type="button" aria-label="新增分组" @click="openCreateGroup()">
+                        <Icon icon="solar:add-circle-linear" />
+                      </button>
+                    </template>
+                    新增分组
+                  </n-tooltip>
+                </div>
               </div>
               <template v-if="groupsExpanded">
               <div
@@ -3075,14 +3079,6 @@ watch([settingsVisible, settingsSection], () => {
                     <span>{{ group.name }}</span>
                   </button>
                   <div class="group-actions">
-                    <n-tooltip trigger="hover" placement="top">
-                      <template #trigger>
-                        <button type="button" aria-label="在分组中新增对话" @click="createConversationInGroup(group)">
-                          <Icon icon="solar:pen-new-square-outline" />
-                        </button>
-                      </template>
-                      新增对话
-                    </n-tooltip>
                     <n-dropdown
                       trigger="click"
                       placement="right-start"
@@ -3096,6 +3092,14 @@ watch([settingsVisible, settingsSection], () => {
                     >
                       <button type="button" aria-label="更多分组操作"><Icon icon="lucide:ellipsis" /></button>
                     </n-dropdown>
+                    <n-tooltip trigger="hover" placement="top">
+                      <template #trigger>
+                        <button type="button" aria-label="在分组中新增对话" @click="createConversationInGroup(group)">
+                          <Icon icon="solar:pen-new-square-outline" />
+                        </button>
+                      </template>
+                      新增对话
+                    </n-tooltip>
                   </div>
                 </div>
                 <template v-if="!group.collapsed">
@@ -3160,14 +3164,16 @@ watch([settingsVisible, settingsSection], () => {
                     <span>对话</span>
                     <Icon :icon="conversationsExpanded ? 'solar:alt-arrow-down-linear' : 'solar:alt-arrow-right-linear'" />
                   </button>
-                  <n-tooltip trigger="hover" placement="top">
-                    <template #trigger>
-                      <button class="group-add-button" type="button" aria-label="新对话" @click="createConversation">
-                        <Icon icon="solar:pen-new-square-outline" />
-                      </button>
-                    </template>
-                    新对话
-                  </n-tooltip>
+                  <div class="group-actions">
+                    <n-tooltip trigger="hover" placement="top">
+                      <template #trigger>
+                        <button class="group-add-button" type="button" aria-label="新对话" @click="createConversation">
+                          <Icon icon="solar:pen-new-square-outline" />
+                        </button>
+                      </template>
+                      新对话
+                    </n-tooltip>
+                  </div>
                 </div>
                 <template v-if="conversationsExpanded">
                   <div
@@ -3299,11 +3305,11 @@ watch([settingsVisible, settingsSection], () => {
       >
         <header class="topbar">
           <n-button quaternary circle class="mobile-menu-button" aria-label="打开左侧边栏" title="打开左侧边栏" @click="openMobileSidebar">
-            <template #icon><span class="panel-glyph is-left" aria-hidden="true"></span></template>
+            <template #icon><Icon icon="lucide:panel-left" /></template>
           </n-button>
           <div v-if="sidebarCollapsed" class="topbar-left-actions">
             <n-button quaternary class="topbar-sidebar-toggle" aria-label="打开左侧边栏" title="打开左侧边栏" @mouseenter="openSidebarHover" @click="expandSidebar">
-              <template #icon><span class="panel-glyph is-left" aria-hidden="true"></span></template>
+              <template #icon><Icon icon="lucide:panel-left" /></template>
             </n-button>
             <n-button quaternary circle class="topbar-new-chat" aria-label="新对话" title="新对话" @click="createConversation">
               <template #icon><Icon icon="solar:pen-new-square-outline" /></template>
@@ -3348,7 +3354,7 @@ watch([settingsVisible, settingsSection], () => {
             :title="rightPanelOpen ? '收起右侧面板' : '打开右侧面板'"
             @click="toggleRightPanel"
           >
-            <template #icon><span class="panel-glyph is-right" aria-hidden="true"></span></template>
+            <template #icon><Icon icon="lucide:panel-right" /></template>
           </n-button>
         </header>
 
@@ -3435,7 +3441,7 @@ watch([settingsVisible, settingsSection], () => {
             >
               <span class="preview-card" aria-hidden="true">
                 <strong>{{ item.title }}</strong>
-                <span v-if="item.finalAnswer">{{ item.finalAnswer }}</span>
+                <span v-if="item.finalAnswerHtml" class="preview-card-markdown markdown-body" v-html="item.finalAnswerHtml" />
               </span>
             </button>
           </nav>
@@ -3646,7 +3652,7 @@ watch([settingsVisible, settingsSection], () => {
                 title="收起右侧面板"
                 @click="toggleRightPanel"
               >
-                <template #icon><span class="panel-glyph is-right" aria-hidden="true"></span></template>
+                <template #icon><Icon icon="lucide:panel-right" /></template>
               </n-button>
             </div>
           </header>
@@ -3782,7 +3788,7 @@ watch([settingsVisible, settingsSection], () => {
               aria-label="打开设置菜单"
               @click="settingsNavExpanded = true"
             >
-              <span class="panel-glyph is-left" aria-hidden="true"></span>
+              <Icon icon="lucide:panel-left" />
             </button>
             <div>
               <h1>外观</h1>
@@ -3813,7 +3819,7 @@ watch([settingsVisible, settingsSection], () => {
               aria-label="打开设置菜单"
               @click="settingsNavExpanded = true"
             >
-              <span class="panel-glyph is-left" aria-hidden="true"></span>
+              <Icon icon="lucide:panel-left" />
             </button>
             <div>
               <h1>已归档的对话</h1>

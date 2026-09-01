@@ -65,7 +65,7 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <NForm ref="formRef" :model="model" :rules="rules" size="large" :show-label="false" @keyup.enter="handleSubmit">
+  <NForm ref="formRef" class="login-form" :model="model" :rules="rules" size="large" :show-label="false" @keyup.enter="handleSubmit">
     <NFormItem path="username">
       <NInput v-model:value="model.username" :placeholder="$t('page.login.common.usernamePlaceholder')" />
     </NFormItem>

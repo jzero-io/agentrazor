@@ -86,4 +86,32 @@ const bgColor = computed(() => {
   </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+:deep(.login-form .n-input) {
+  box-shadow: none !important;
+}
+
+:deep(.login-form .n-input-wrapper) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+:deep(.login-form .n-input__input-el) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+:deep(.login-form input:-webkit-autofill),
+:deep(.login-form input:-webkit-autofill:hover),
+:deep(.login-form input:-webkit-autofill:focus),
+:deep(.login-form input:-webkit-autofill:active) {
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: var(--n-text-color) !important;
+  caret-color: var(--n-text-color);
+  transition: background-color 999999s ease-out 0s;
+}
+</style>
