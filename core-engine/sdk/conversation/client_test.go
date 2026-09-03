@@ -22,7 +22,7 @@ func TestChat(t *testing.T) {
 		require.Equal(t, apiKey, r.Header.Get(apiKeyHeader))
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/conversations":
-			var request sendRequest
+			var request SendMessageRequest
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
 			require.Equal(t, "你好", request.Content)
 			writeJSON(t, w, envelope[any]{Code: 200, Msg: "success", Data: map[string]any{
@@ -66,7 +66,7 @@ func TestChatContinuesConversation(t *testing.T) {
 			http.Error(w, "stop after request validation", http.StatusBadRequest)
 			return
 		}
-		var request sendRequest
+		var request SendMessageRequest
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
 		require.Equal(t, "existing-conversation", request.ConversationID)
 		writeJSON(t, w, envelope[any]{Code: 500, Msg: "expected stop", Data: nil})
@@ -92,7 +92,7 @@ func TestNewClientValidation(t *testing.T) {
 }
 
 func TestConsumeRunFailure(t *testing.T) {
-	payload, err := json.Marshal(streamEvent{
+	payload, err := json.Marshal(Event{
 		Type:  "run.failed",
 		RunID: "run-1",
 		Data:  json.RawMessage(`{"error":"model unavailable"}`),
@@ -101,7 +101,16 @@ func TestConsumeRunFailure(t *testing.T) {
 	outer, err := json.Marshal(eventsResponse{Event: "run.failed", Data: string(payload)})
 	require.NoError(t, err)
 
-	finished, err := consumeEvent([]string{string(outer)}, "run-1")
+	finished, err := handleEventFrame([]string{string(outer)}, func(event Event) (bool, error) {
+		if event.RunID != "run-1" {
+			return false, nil
+		}
+		var failure struct {
+			Error string `json:"error"`
+		}
+		require.NoError(t, json.Unmarshal(event.Data, &failure))
+		return false, &RunError{Message: failure.Error}
+	})
 	require.False(t, finished)
 	var runErr *RunError
 	require.ErrorAs(t, err, &runErr)

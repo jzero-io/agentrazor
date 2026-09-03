@@ -3,14 +3,12 @@
 package conversation
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"mime"
 	"net/http"
 	"net/url"
 	"strings"
@@ -39,6 +37,7 @@ type Client struct {
 // new conversation, then reuse the returned ID for subsequent turns.
 type Request struct {
 	ConversationID string
+	GroupID        string
 	Content        string
 }
 
@@ -102,8 +101,9 @@ func (c *Client) Chat(ctx context.Context, request Request) (*Response, error) {
 		return nil, errors.New("conversation SDK: message content is required")
 	}
 
-	sent, err := c.send(ctx, sendRequest{
+	sent, err := c.SendMessage(ctx, SendMessageRequest{
 		ConversationID: strings.TrimSpace(request.ConversationID),
+		GroupID:        strings.TrimSpace(request.GroupID),
 		Content:        content,
 	})
 	if err != nil {
@@ -113,7 +113,7 @@ func (c *Client) Chat(ctx context.Context, request Request) (*Response, error) {
 		return nil, err
 	}
 
-	detail, err := c.detail(ctx, sent.ConversationID)
+	detail, err := c.GetConversation(ctx, sent.ConversationID)
 	if err != nil {
 		return nil, err
 	}
@@ -128,63 +128,6 @@ type envelope[T any] struct {
 	Code int    `json:"code"`
 	Data T      `json:"data"`
 	Msg  string `json:"msg"`
-}
-
-type sendRequest struct {
-	ConversationID string `json:"conversationId,omitempty"`
-	Content        string `json:"content"`
-}
-
-type sendResponse struct {
-	ConversationID string `json:"conversationId"`
-	Run            struct {
-		ID string `json:"id"`
-	} `json:"run"`
-}
-
-type detailResponse struct {
-	Turns []turn `json:"turns"`
-}
-
-type turn struct {
-	Items []item `json:"items"`
-}
-
-type item struct {
-	Type  string  `json:"type"`
-	Text  string  `json:"text"`
-	Phase *string `json:"phase"`
-}
-
-type eventsResponse struct {
-	Event string `json:"event"`
-	Data  string `json:"data"`
-}
-
-type streamEvent struct {
-	Type  string          `json:"type"`
-	RunID string          `json:"runId"`
-	Data  json.RawMessage `json:"data"`
-}
-
-func (c *Client) send(ctx context.Context, request sendRequest) (*sendResponse, error) {
-	var response sendResponse
-	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/conversations", request, &response); err != nil {
-		return nil, err
-	}
-	if response.ConversationID == "" || response.Run.ID == "" {
-		return nil, errors.New("conversation SDK: server returned an incomplete run")
-	}
-	return &response, nil
-}
-
-func (c *Client) detail(ctx context.Context, conversationID string) (*detailResponse, error) {
-	var response detailResponse
-	path := "/api/v1/conversations/" + url.PathEscape(conversationID)
-	if err := c.doJSON(ctx, http.MethodGet, path, nil, &response); err != nil {
-		return nil, err
-	}
-	return &response, nil
 }
 
 func (c *Client) doJSON(ctx context.Context, method, path string, body any, output any) error {
@@ -228,110 +171,32 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body any, outp
 	if wrapped.Code != http.StatusOK {
 		return &APIError{StatusCode: response.StatusCode, Code: wrapped.Code, Message: wrapped.Msg}
 	}
+	if output == nil {
+		return nil
+	}
 	if err := json.Unmarshal(wrapped.Data, output); err != nil {
 		return fmt.Errorf("conversation SDK: decode response data: %w", err)
 	}
 	return nil
 }
 
-func (c *Client) waitRun(ctx context.Context, conversationID, runID string) error {
-	path := "/api/v1/conversations/" + url.PathEscape(conversationID) + "/events"
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
-	if err != nil {
-		return fmt.Errorf("conversation SDK: create event request: %w", err)
-	}
-	request.Header.Set("Accept", "text/event-stream")
-	request.Header.Set(apiKeyHeader, c.apiKey)
-
-	response, err := c.httpClient.Do(request)
-	if err != nil {
-		return fmt.Errorf("conversation SDK: subscribe to events: %w", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		payload, _ := io.ReadAll(io.LimitReader(response.Body, 1<<20))
-		return &APIError{StatusCode: response.StatusCode, Message: responseMessage(payload, response.Status)}
-	}
-	contentType, _, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
-	if contentType != "text/event-stream" {
-		return fmt.Errorf("conversation SDK: expected text/event-stream, got %q", contentType)
-	}
-
-	scanner := bufio.NewScanner(response.Body)
-	scanner.Buffer(make([]byte, 64<<10), maxEventBytes)
-	var dataLines []string
-	for scanner.Scan() {
-		line := strings.TrimSuffix(scanner.Text(), "\r")
-		if line != "" {
-			if strings.HasPrefix(line, "data:") {
-				dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
-			}
-			continue
-		}
-		finished, err := consumeEvent(dataLines, runID)
-		dataLines = dataLines[:0]
-		if err != nil {
-			return err
-		}
-		if finished {
-			return nil
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("conversation SDK: read event stream: %w", err)
-	}
-	return io.ErrUnexpectedEOF
-}
-
-func consumeEvent(dataLines []string, runID string) (bool, error) {
-	if len(dataLines) == 0 {
-		return false, nil
-	}
-	var outer eventsResponse
-	if err := json.Unmarshal([]byte(strings.Join(dataLines, "\n")), &outer); err != nil {
-		return false, fmt.Errorf("conversation SDK: decode event: %w", err)
-	}
-	if outer.Event == "stream.heartbeat" {
-		return false, nil
-	}
-	var event streamEvent
-	if err := json.Unmarshal([]byte(outer.Data), &event); err != nil {
-		return false, fmt.Errorf("conversation SDK: decode event data: %w", err)
-	}
-	if event.RunID != runID {
-		return false, nil
-	}
-	switch event.Type {
-	case "run.completed":
-		return true, nil
-	case "run.failed":
-		var failure struct {
-			Error string `json:"error"`
-		}
-		_ = json.Unmarshal(event.Data, &failure)
-		if failure.Error == "" {
-			failure.Error = "unknown error"
-		}
-		return false, &RunError{Message: failure.Error}
-	default:
-		return false, nil
-	}
-}
-
-func finalAnswer(turns []turn) string {
+func finalAnswer(turns []Turn) string {
 	var fallback string
 	for turnIndex := len(turns) - 1; turnIndex >= 0; turnIndex-- {
 		items := turns[turnIndex].Items
 		for itemIndex := len(items) - 1; itemIndex >= 0; itemIndex-- {
 			current := items[itemIndex]
-			if current.Type != "agentMessage" || strings.TrimSpace(current.Text) == "" {
+			itemType, _ := current["type"].(string)
+			text, _ := current["text"].(string)
+			if itemType != "agentMessage" || strings.TrimSpace(text) == "" {
 				continue
 			}
 			if fallback == "" {
-				fallback = current.Text
+				fallback = text
 			}
-			if current.Phase != nil && *current.Phase == "final_answer" {
-				return current.Text
+			phase, _ := current["phase"].(string)
+			if phase == "final_answer" {
+				return text
 			}
 		}
 	}
