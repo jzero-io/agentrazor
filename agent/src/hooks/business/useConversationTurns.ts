@@ -39,7 +39,7 @@ interface UseConversationTurnsOptions {
   activeDetail: ComputedRef<ConversationDetail | null>;
   detailsByConversation: Map<string, ConversationDetail>;
   detail: Ref<ConversationDetail | null>;
-  locallyStoppedRunIds: Set<string>;
+  locallyStoppedTurnIds: Set<string>;
   locallyStoppedConversationIds: Set<string>;
   setConversationProcessing: (conversationId: string, processing: boolean) => void;
   touchConversationUpdatedAt: (conversationId: string, value?: string) => void;
@@ -114,7 +114,7 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
     activeDetail,
     detailsByConversation,
     detail,
-    locallyStoppedRunIds,
+    locallyStoppedTurnIds,
     locallyStoppedConversationIds,
     setConversationProcessing,
     isConversationProcessing,
@@ -486,7 +486,7 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
     upsertConversationListItem(snapshot.conversation);
     const turns = snapshot.turns || [];
     let activeIndex = -1;
-    if (enabled) {
+    if (enabled && snapshot.conversation.running) {
       for (let index = turns.length - 1; index >= 0; index -= 1) {
         if (isActiveTurn(turns[index])) {
           activeIndex = index;
@@ -551,15 +551,20 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
     const durationMs = stopTurnTimer(conversationId);
     const finishedTurn = conversationId ? activeTurnsByConversation.get(conversationId) || null : null;
     if (!finishedTurn) {
-      if (selected) resetActiveTurn();
+      if (conversationId) {
+        setConversationProcessing(conversationId, false);
+        activeTurnResultSeenByConversation.delete(conversationId);
+      }
+      if (selected) clearDisplayedActiveTurn();
       return null;
     }
 
     finishedTurn.status = status;
+    delete (finishedTurn as Turn & { restoredRunning?: boolean }).restoredRunning;
     if (error) finishedTurn.error = error;
     if (finishedTurn.durationMs === undefined && durationMs !== undefined) finishedTurn.durationMs = durationMs;
     if (status === 'stopped') {
-      if (finishedTurn.id) locallyStoppedRunIds.add(finishedTurn.id);
+      if (finishedTurn.id) locallyStoppedTurnIds.add(finishedTurn.id);
       if (conversationId) locallyStoppedConversationIds.add(conversationId);
     }
     if (conversationId) {
@@ -652,7 +657,7 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
   }
 
   function restoreProcessState(conversationId: string, turn: Turn, startedAt?: string) {
-    if (!conversationId || !hasVisibleProcessItems(turn)) return;
+    if (!conversationId || (!isRestoredRunningTurn(turn) && !hasVisibleProcessItems(turn))) return;
     startProcessTimer(conversationId, startedAt || turn.startedAt);
   }
 
@@ -666,18 +671,15 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
     processActiveConversationIds.delete(conversationId);
   }
 
-  function setTurnElapsedDuration(conversationId: string, durationMs: number) {
-    activeTurnStartedAtByConversation.set(conversationId, Date.now() - durationMs);
-    ensureTurnTicker();
-  }
-
   function stopTurnTimer(conversationId: string) {
     const startedAt = activeTurnStartedAtByConversation.get(conversationId);
+    const processStartedAt = processStartedAtByConversation.get(conversationId);
     activeTurnStartedAtByConversation.delete(conversationId);
     processStartedAtByConversation.delete(conversationId);
     processActiveConversationIds.delete(conversationId);
     stopTurnTickerIfIdle();
-    return startedAt ? Math.max(0, Date.now() - startedAt) : undefined;
+    const displayStartedAt = processStartedAt ?? startedAt;
+    return displayStartedAt ? Math.max(0, Date.now() - displayStartedAt) : undefined;
   }
 
   function stopAllTurnTimers() {
@@ -724,7 +726,6 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
     ensureStreamingItem,
     markProcessActive,
     resetProcessTimer,
-    setTurnElapsedDuration,
     isVisibleProcessStreamItem,
     upsertStreamingItem,
     finishActiveTurn,

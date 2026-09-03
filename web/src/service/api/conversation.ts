@@ -11,7 +11,7 @@ export interface ConversationStats {
 
 export function GetConversationStats() {
   return request<ConversationStats>({
-    url: '/api/v1/conversations/stats',
+    url: '/api/v1/conversation/stats',
     method: 'get'
   });
 }

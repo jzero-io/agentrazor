@@ -95,19 +95,19 @@ func toConversation(value agentdomain.StoredThread) types.Conversation {
 	return result
 }
 
-func setConversationActiveRun(conversation *types.Conversation, threads *agentdomain.ThreadService, conversationID string) {
-	run, running := threads.ActiveRun(conversationID)
+func setConversationActiveTurn(conversation *types.Conversation, threads *agentdomain.ThreadService, conversationID string) {
+	turn, running := threads.ActiveTurn(conversationID)
 	conversation.Running = running
-	if running && !run.CreatedAt.IsZero() {
-		value := formatTime(run.CreatedAt)
+	if running && !turn.CreatedAt.IsZero() {
+		value := formatTime(turn.CreatedAt)
 		conversation.RunningStartedAt = &value
 	}
 }
 
-func toRun(value agentdomain.ThreadRun) types.Run {
-	return types.Run{
+func toStartedTurn(value agentdomain.StartedTurn) types.StartedTurn {
+	return types.StartedTurn{
 		Id:        value.ID,
-		CreatedAt: formatTime(value.CreatedAt),
+		StartedAt: formatTime(value.StartedAt),
 	}
 }
 
@@ -128,7 +128,7 @@ func buildDetail(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 		return nil, err
 	}
 	conversation := toConversation(thread)
-	setConversationActiveRun(&conversation, svcCtx.AgentThreads, conversationID)
+	setConversationActiveTurn(&conversation, svcCtx.AgentThreads, conversationID)
 	detail := &types.DetailResponse{
 		Conversation: conversation,
 		EventCursor:  svcCtx.AgentThreads.EventCursor(conversationID),

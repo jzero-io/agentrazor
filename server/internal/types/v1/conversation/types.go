@@ -25,6 +25,10 @@ type Conversation struct {
 	UpdatedAt        string  `json:"updatedAt"`
 }
 
+type CreateRequest struct {
+	GroupId *string `json:"groupId,optional"`
+}
+
 type DeleteResponse struct {
 }
 
@@ -57,25 +61,24 @@ type ListResponse struct {
 	Conversations []Conversation `json:"conversations"`
 }
 
+type MetadataResponse struct {
+	Id        string `json:"id"`
+	Title     string `json:"title"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
 type PathRequest struct {
 	ConversationId string `path:"conversation_id" validate:"required"`
 }
 
-type Run struct {
-	Id        string `json:"id"`
-	CreatedAt string `json:"createdAt"`
-}
-
 type SendMessageRequest struct {
-	ConversationId string  `json:"conversationId,optional"`
-	GroupId        *string `json:"groupId,optional"`
-	Content        string  `json:"content" validate:"required"`
+	ConversationId string `path:"conversation_id" validate:"required"`
+	Content        string `json:"content" validate:"required"`
 }
 
-type SendMessageResponse struct {
-	ConversationId string       `json:"conversationId"`
-	Conversation   Conversation `json:"conversation"`
-	Run            Run          `json:"run"`
+type StartedTurn struct {
+	Id        string `json:"id"`
+	StartedAt string `json:"startedAt"`
 }
 
 type StatsResponse struct {

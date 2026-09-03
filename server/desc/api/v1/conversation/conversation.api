@@ -21,9 +21,14 @@ type (
 		CreatedAt        string  `json:"createdAt"`
 		UpdatedAt        string  `json:"updatedAt"`
 	}
-	Run {
+	MetadataResponse {
 		Id        string `json:"id"`
-		CreatedAt string `json:"createdAt"`
+		Title     string `json:"title"`
+		UpdatedAt string `json:"updatedAt"`
+	}
+	StartedTurn {
+		Id        string `json:"id"`
+		StartedAt string `json:"startedAt"`
 	}
 	GeneratedImage {
 		Id      string `json:"id"`
@@ -87,15 +92,12 @@ type (
 		Archived       *bool   `json:"archived,optional"`
 		GroupId        *string `json:"groupId,optional"`
 	}
-	SendMessageRequest {
-		ConversationId string  `json:"conversationId,optional"`
-		GroupId        *string `json:"groupId,optional"`
-		Content        string  `json:"content" validate:"required"`
+	CreateRequest {
+		GroupId *string `json:"groupId,optional"`
 	}
-	SendMessageResponse {
-		ConversationId string       `json:"conversationId"`
-		Conversation   Conversation `json:"conversation"`
-		Run            Run          `json:"run"`
+	SendMessageRequest {
+		ConversationId string `path:"conversation_id" validate:"required"`
+		Content        string `json:"content" validate:"required"`
 	}
 )
 
@@ -108,39 +110,43 @@ type (
 service server {
 	@doc "获取会话列表"
 	@handler List
-	get /conversations returns (ListResponse)
+	get /conversation returns (ListResponse)
 
 	@doc "获取会话统计"
 	@handler Stats
-	get /conversations/stats returns (StatsResponse)
+	get /conversation/stats returns (StatsResponse)
 
-	@doc "创建会话或发送消息"
+	@doc "创建会话"
+	@handler Create
+	post /conversation (CreateRequest) returns (Conversation)
+
+	@doc "发送消息"
 	@handler SendMessage
-	post /conversations (SendMessageRequest) returns (SendMessageResponse)
+	post /conversation/:conversation_id/messages (SendMessageRequest) returns (StartedTurn)
 
 	@doc "获取会话元信息"
 	@handler Metadata
-	get /conversations/:conversation_id/metadata (PathRequest) returns (Conversation)
+	get /conversation/:conversation_id/metadata (PathRequest) returns (MetadataResponse)
 
 	@doc "获取会话详情"
 	@handler Get
-	get /conversations/:conversation_id (PathRequest) returns (DetailResponse)
+	get /conversation/:conversation_id (PathRequest) returns (DetailResponse)
 
 	@doc "获取会话工作区文件"
 	@handler WorkspaceFiles
-	get /conversations/:conversation_id/workspace/files (PathRequest) returns (WorkspaceFilesResponse)
+	get /conversation/:conversation_id/workspace/files (PathRequest) returns (WorkspaceFilesResponse)
 
 	@doc "修改会话"
 	@handler Update
-	patch /conversations/:conversation_id (UpdateRequest) returns (Conversation)
+	patch /conversation/:conversation_id (UpdateRequest) returns (Conversation)
 
 	@doc "删除会话"
 	@handler Delete
-	delete /conversations/:conversation_id (PathRequest) returns (DeleteResponse)
+	delete /conversation/:conversation_id (PathRequest) returns (DeleteResponse)
 
 	@doc "停止当前 Turn"
 	@handler CancelTurn
-	post /conversations/:conversation_id/turn/cancel (PathRequest) returns (CancelTurnResponse)
+	post /conversation/:conversation_id/turn/cancel (PathRequest) returns (CancelTurnResponse)
 }
 
 @server (
@@ -153,6 +159,6 @@ service server {
 service server {
 	@doc "订阅会话与 Agent 流式事件"
 	@handler StreamEvents
-	get /conversations/:conversation_id/events (EventsRequest) returns (EventsResponse)
+	get /conversation/:conversation_id/events (EventsRequest) returns (EventsResponse)
 }
 

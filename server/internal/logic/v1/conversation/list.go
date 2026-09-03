@@ -72,7 +72,7 @@ func (l *List) List() (resp *types.ListResponse, err error) {
 	response := &types.ListResponse{Conversations: make([]types.Conversation, 0, len(threads))}
 	for _, thread := range threads {
 		mapped := toConversation(thread)
-		setConversationActiveRun(&mapped, l.svcCtx.AgentThreads, thread.ID)
+		setConversationActiveTurn(&mapped, l.svcCtx.AgentThreads, thread.ID)
 		if groupID := assignments[thread.ID]; groupID != "" {
 			mapped.GroupId = &groupID
 		}

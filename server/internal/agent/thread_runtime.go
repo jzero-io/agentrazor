@@ -21,8 +21,14 @@ type ThreadRuntime interface {
 	UnarchiveStoredThread(ctx context.Context, threadID string) (StoredThread, error)
 	DeleteThread(ctx context.Context, threadID string) error
 	DeleteConversationHome(threadID string) error
-	Resume(ctx context.Context, threadID, prompt string, emit EventHandler) error
+	StartTurn(ctx context.Context, threadID, prompt string, emit EventHandler) (StartedTurn, error)
 	Close() error
+}
+
+type StartedTurn struct {
+	ID        string
+	StartedAt time.Time
+	Done      <-chan error
 }
 
 func (r *CodexAppServerRuntime) CreateStoredThread(ctx context.Context) (StoredThread, error) {

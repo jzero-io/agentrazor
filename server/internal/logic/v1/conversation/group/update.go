@@ -42,11 +42,14 @@ func (l *Update) Update(req *types.UpdateRequest) (resp *types.ConversationGroup
 		if name == "" {
 			return nil, errors.New("group name is required")
 		}
+		if err := ensureGroupNameUnique(l.ctx, l.svcCtx, user.Uuid, name, req.GroupId); err != nil {
+			return nil, err
+		}
 		values[string(conversationgroupmodel.Name)] = name
 	}
 	if len(values) > 0 {
 		if err := l.svcCtx.Model.ConversationGroup.UpdateFieldsByCondition(l.ctx, nil, values, condition.NewChain().Equal(conversationgroupmodel.Uuid, req.GroupId).Equal(conversationgroupmodel.UserUuid, user.Uuid).Build()...); err != nil {
-			return nil, err
+			return nil, normalizeGroupWriteError(err)
 		}
 	}
 	row, err = l.svcCtx.Model.ConversationGroup.FindOne(l.ctx, nil, req.GroupId)

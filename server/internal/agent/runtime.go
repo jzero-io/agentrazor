@@ -218,20 +218,20 @@ func isolatedCodexEnvironment(environment []string, codexHome string) []string {
 	return append(result, "CODEX_HOME="+codexHome)
 }
 
-func (r *CodexAppServerRuntime) Resume(ctx context.Context, threadID, prompt string, emit EventHandler) error {
+func (r *CodexAppServerRuntime) StartTurn(ctx context.Context, threadID, prompt string, emit EventHandler) (StartedTurn, error) {
 	if threadID == "" {
-		return errors.New("thread id is required")
+		return StartedTurn{}, errors.New("thread id is required")
 	}
 	resumed, err := r.ensureThread(ctx, threadID)
 	if err != nil {
-		return err
+		return StartedTurn{}, err
 	}
 	if resumed {
 		emitRuntimeEvent(emit, "thread.resumed", map[string]any{
 			"threadId": threadID,
 		})
 	}
-	return r.runTurn(ctx, threadID, prompt, emit)
+	return r.startTurn(ctx, threadID, prompt, emit)
 }
 
 func (r *CodexAppServerRuntime) startThread(ctx context.Context) (string, error) {
@@ -308,10 +308,10 @@ func (r *CodexAppServerRuntime) ensureThread(ctx context.Context, threadID strin
 	return err == nil, err
 }
 
-func (r *CodexAppServerRuntime) runTurn(ctx context.Context, threadID, prompt string, emit EventHandler) error {
+func (r *CodexAppServerRuntime) startTurn(ctx context.Context, threadID, prompt string, emit EventHandler) (StartedTurn, error) {
 	conversationDir, err := r.conversationDir(threadID)
 	if err != nil {
-		return err
+		return StartedTurn{}, err
 	}
 	execution := &appServerTurn{
 		threadID: threadID,
@@ -319,9 +319,8 @@ func (r *CodexAppServerRuntime) runTurn(ctx context.Context, threadID, prompt st
 		done:     make(chan turnOutcome, 1),
 	}
 	if err := r.registerExecution(execution); err != nil {
-		return err
+		return StartedTurn{}, err
 	}
-	defer r.unregisterExecution(threadID, execution)
 
 	params := map[string]any{
 		"threadId": threadID,
@@ -342,7 +341,8 @@ func (r *CodexAppServerRuntime) runTurn(ctx context.Context, threadID, prompt st
 	}
 	result, err := r.request(ctx, "turn/start", params)
 	if err != nil {
-		return fmt.Errorf("start Codex turn: %w", err)
+		r.unregisterExecution(threadID, execution)
+		return StartedTurn{}, fmt.Errorf("start Codex turn: %w", err)
 	}
 	turnID := ""
 	if turn, ok := result["turn"].(map[string]any); ok {
@@ -352,15 +352,22 @@ func (r *CodexAppServerRuntime) runTurn(ctx context.Context, threadID, prompt st
 		turnID = stringValue(result["id"])
 	}
 	if turnID == "" {
-		return errors.New("Codex turn/start response did not contain a turn id")
+		r.unregisterExecution(threadID, execution)
+		return StartedTurn{}, errors.New("Codex turn/start response did not contain a turn id")
 	}
-	select {
-	case outcome := <-execution.done:
-		return outcome.err
-	case <-ctx.Done():
-		r.interruptTurn(threadID, turnID)
-		return ctx.Err()
-	}
+	done := make(chan error, 1)
+	go func() {
+		defer close(done)
+		defer r.unregisterExecution(threadID, execution)
+		select {
+		case outcome := <-execution.done:
+			done <- outcome.err
+		case <-ctx.Done():
+			r.interruptTurn(threadID, turnID)
+			done <- ctx.Err()
+		}
+	}()
+	return StartedTurn{ID: turnID, StartedAt: time.Now().UTC(), Done: done}, nil
 }
 
 func (r *CodexAppServerRuntime) interruptTurn(threadID, turnID string) {

@@ -56,6 +56,14 @@ func (l *StreamEvents) stream(req *types.EventsRequest, client chan<- *types.Eve
 	}
 	subscription := l.svcCtx.AgentThreads.Subscribe(req.ConversationId, afterID)
 	defer subscription.Close()
+	if !sendStreamResponse(l.ctx.Done(), client, &types.EventsResponse{
+		Id:        afterID,
+		Event:     "stream.ready",
+		Data:      "{}",
+		CreatedAt: time.Now().UTC().Format(time.RFC3339Nano),
+	}) {
+		return nil
+	}
 
 	heartbeat := time.NewTicker(streamHeartbeatInterval)
 	defer heartbeat.Stop()

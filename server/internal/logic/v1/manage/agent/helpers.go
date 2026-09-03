@@ -539,7 +539,7 @@ func runtimeStatus(status agentdomain.RuntimeStatus) managetypes.RuntimeStatus {
 	return managetypes.RuntimeStatus{
 		Running:         status.Running,
 		Restarting:      status.Restarting,
-		ActiveRunCount:  int64(status.ActiveRunCount),
+		ActiveTurnCount: int64(status.ActiveTurnCount),
 		LastRestartTime: lastRestartTime,
 	}
 }

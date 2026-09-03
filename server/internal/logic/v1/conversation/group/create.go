@@ -35,9 +35,12 @@ func (l *Create) Create(req *types.CreateRequest) (resp *types.ConversationGroup
 	if name == "" {
 		return nil, errors.New("group name is required")
 	}
+	if err := ensureGroupNameUnique(l.ctx, l.svcCtx, user.Uuid, name, ""); err != nil {
+		return nil, err
+	}
 	row := &conversationgroupmodel.ConversationGroup{Uuid: uuid.NewString(), UserUuid: user.Uuid, Name: name}
 	if err := l.svcCtx.Model.ConversationGroup.InsertV2(l.ctx, nil, row); err != nil {
-		return nil, err
+		return nil, normalizeGroupWriteError(err)
 	}
 	row, err = l.svcCtx.Model.ConversationGroup.FindOne(l.ctx, nil, row.Uuid)
 	if err != nil {

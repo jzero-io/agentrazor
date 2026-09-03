@@ -4,42 +4,44 @@ interface ConversationStreamsOptions {
   onEvent: (event: StreamEvent) => void | Promise<void>;
   onStreamError: (conversationId: string) => void | Promise<void>;
   onReconnect: (conversationId: string) => void | Promise<void>;
-  isProcessing: (conversationId: string) => boolean;
 }
 
 export function useConversationStreams(options: ConversationStreamsOptions) {
-  const closers = new Map<string, () => void>();
+  const streams = new Map<string, { close: () => void; ready: Promise<void> }>();
 
   function closeStream(id: string) {
-    const close = closers.get(id);
-    if (!close) return;
-    closers.delete(id);
-    close();
+    const stream = streams.get(id);
+    if (!stream) return;
+    streams.delete(id);
+    stream.close();
   }
 
   function closeAll() {
-    for (const close of closers.values()) close();
-    closers.clear();
+    for (const stream of streams.values()) stream.close();
+    streams.clear();
   }
 
-  function ensureStream(id: string, afterId = 0) {
-    if (!id || closers.has(id)) return;
-    const close = conversationApi.subscribe(
+  function ensureStream(id: string, afterId = 0): Promise<void> {
+    if (!id) return Promise.reject(new Error('conversation id is required'));
+    const existing = streams.get(id);
+    if (existing) return existing.ready;
+    const stream = conversationApi.subscribe(
       id,
       afterId,
-      event => void options.onEvent(event),
+      event => options.onEvent(event),
       () => {
         closeStream(id);
         void options.onStreamError(id);
       },
-      () => void options.onReconnect(id)
+      () => options.onReconnect(id)
     );
-    closers.set(id, close);
+    streams.set(id, stream);
+    return stream.ready;
   }
 
-  function closeIdle(activeId = '') {
-    for (const id of [...closers.keys()]) {
-      if (id !== activeId && !options.isProcessing(id)) closeStream(id);
+  function closeInactive(activeId = '') {
+    for (const id of [...streams.keys()]) {
+      if (id !== activeId) closeStream(id);
     }
   }
 
@@ -47,6 +49,6 @@ export function useConversationStreams(options: ConversationStreamsOptions) {
     closeStream,
     closeAll,
     ensureStream,
-    closeIdle
+    closeInactive
   };
 }

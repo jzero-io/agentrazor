@@ -15,7 +15,7 @@ import {
   dateZhCN
 } from 'naive-ui';
 import { conversationApi, conversationGroupApi } from '../../service/api';
-import type { Conversation, ConversationDetail, StreamEvent, ThreadItem, Turn } from '../../service/api';
+import type { Conversation, ConversationDetail, ConversationMetadata, StreamEvent, ThreadItem, Turn } from '../../service/api';
 import { activityIcon, activityTitle } from '../../utils/processDisplay';
 import { useAppearance } from '../../hooks/system/useAppearance';
 import { useConfirmDialog } from '../../hooks/system/useConfirmDialog';
@@ -108,7 +108,7 @@ const loadingDetail = ref(false);
 const loadingDetailId = ref('');
 const sendingRequest = ref(false);
 const creatingConversation = ref(false);
-const locallyStoppedRunIds = new Set<string>();
+const locallyStoppedTurnIds = new Set<string>();
 const locallyStoppedConversationIds = new Set<string>();
 const renameVisible = ref(false);
 const renameConversationId = ref('');
@@ -248,7 +248,7 @@ const conversationTurns = useConversationTurns({
   activeDetail,
   detailsByConversation,
   detail,
-  locallyStoppedRunIds,
+  locallyStoppedTurnIds,
   locallyStoppedConversationIds,
   setConversationProcessing,
   touchConversationUpdatedAt,
@@ -284,7 +284,6 @@ const {
   ensureStreamingItem,
   markProcessActive,
   resetProcessTimer,
-  setTurnElapsedDuration,
   isVisibleProcessStreamItem,
   upsertStreamingItem,
   finishActiveTurn,
@@ -465,13 +464,18 @@ function revealConversationSection(item: Conversation) {
   conversationsExpanded.value = true;
 }
 
-function syncConversationMetadata(item: Conversation) {
-  upsertConversationListItem(item);
-  const currentDetail = detailsByConversation.get(item.id);
+function syncConversationMetadata(metadata: ConversationMetadata) {
+  const item = conversations.value.find(conversation => conversation.id === metadata.id);
+  if (item) replaceConversation({ ...item, ...metadata });
+  const currentDetail = detailsByConversation.get(metadata.id);
   if (!currentDetail) return;
   setConversationDetail({
     ...currentDetail,
-    conversation: mergeConversationSnapshot(currentDetail.conversation, item)
+    conversation: {
+      ...currentDetail.conversation,
+      title: metadata.title,
+      updatedAt: metadata.updatedAt
+    }
   });
 }
 
@@ -483,11 +487,10 @@ const conversationStreamEvents = useConversationStreamEvents({
   selectedConversationId,
   conversations,
   detailsByConversation,
-  locallyStoppedRunIds,
+  locallyStoppedTurnIds,
   locallyStoppedConversationIds,
   activeTurnResultSeenByConversation,
   resetProcessTimer,
-  setTurnElapsedDuration,
   setConversationProcessing,
   beginActiveTurn,
   cachedActiveTurn,
@@ -502,15 +505,13 @@ const conversationStreamEvents = useConversationStreamEvents({
   mergeTurnForDisplay,
   setConversationDetail,
   scrollToBottom,
-  closeIdleConversationStreams,
-  scheduleConversationTitleRefresh
+  closeIdleConversationStreams
 });
 
 const conversationStreams = useConversationStreams({
   onEvent: conversationStreamEvents.handleStreamEvent,
   onStreamError: reconcileConversationStream,
-  onReconnect: reconcileConversationStream,
-  isProcessing: id => processingConversationIds.value.has(id)
+  onReconnect: reconcileConversationStream
 });
 
 function closeConversationStream(id: string) {
@@ -521,8 +522,8 @@ function closeAllConversationStreams() {
   conversationStreams.closeAll();
 }
 
-function ensureConversationStream(id: string, afterId = 0) {
-  conversationStreams.ensureStream(id, afterId);
+function ensureConversationStream(id: string, afterId = 0): Promise<void> {
+  return conversationStreams.ensureStream(id, afterId);
 }
 
 async function reconcileConversationStream(id: string) {
@@ -545,7 +546,7 @@ async function reconcileConversationStream(id: string) {
 }
 
 function closeIdleConversationStreams(activeId = selectedConversationId.value) {
-  conversationStreams.closeIdle(activeId);
+  conversationStreams.closeInactive(activeId);
 }
 
 function deleteGroup(group: ConversationGroup) {
@@ -598,8 +599,7 @@ const {
 async function loadConversations(selectInitial = false, preserveLocalProcessing = true) {
   loadingList.value = true;
   try {
-    const runningIds = applyConversationListState(await conversationApi.list(), preserveLocalProcessing, id => Boolean(cachedActiveTurn(id)));
-    runningIds.forEach(id => ensureConversationStream(id));
+    applyConversationListState(await conversationApi.list(), preserveLocalProcessing, id => Boolean(cachedActiveTurn(id)));
     closeIdleConversationStreams();
     if (selectInitial && !selectedConversationId.value) await selectInitialConversation();
   } catch (error) {
@@ -771,6 +771,7 @@ const conversationComposer = useConversationComposer({
   resetActiveTurn,
   finalizeStoppedTurn,
   setConversationDetail,
+  upsertConversationListItem,
   syncConversationMetadata,
   revealConversationSection,
   scheduleConversationTitleRefresh,

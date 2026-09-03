@@ -1,6 +1,5 @@
 import { computed, nextTick, type ComputedRef, type Ref } from 'vue';
 import { conversationApi, type ConversationDetail, type Turn } from '../../service/api';
-import { mergeConversationSnapshot } from '../../utils/conversation';
 
 interface UseConversationComposerOptions {
   selectedConversationId: Ref<string>;
@@ -29,10 +28,11 @@ interface UseConversationComposerOptions {
   resetActiveTurn: () => void;
   finalizeStoppedTurn: (conversationId: string) => void;
   setConversationDetail: (detail: ConversationDetail) => void;
+  upsertConversationListItem: (conversation: ConversationDetail['conversation']) => void;
   syncConversationMetadata: (conversation: ConversationDetail['conversation']) => void;
   revealConversationSection: (conversation: ConversationDetail['conversation']) => void;
   scheduleConversationTitleRefresh: (conversationId: string, conversation: ConversationDetail['conversation']) => void;
-  ensureConversationStream: (conversationId: string, afterId?: number) => void;
+  ensureConversationStream: (conversationId: string, afterId?: number) => Promise<void>;
   refreshDetail: () => Promise<ConversationDetail | null>;
   enableAutoScroll: () => void;
   scrollToBottom: (options?: { force?: boolean }) => Promise<void> | void;
@@ -73,6 +73,7 @@ export function useConversationComposer(options: UseConversationComposerOptions)
     options.sendingRequest.value = true;
     options.enableAutoScroll();
     let conversationId = options.selectedConversationId.value;
+    let createdConversation: ConversationDetail['conversation'] | null = null;
     options.showOptimisticTurn(conversationId, optimisticTurn);
     options.setConversationDraft(draftKey, '');
     await nextTick();
@@ -83,58 +84,45 @@ export function useConversationComposer(options: UseConversationComposerOptions)
       if (!conversationId) return;
 
       const creatingFromDraft = options.isDraftConversation(conversationId);
-      const targetGroupId = creatingFromDraft ? options.draftConversationGroupId.value : '';
       if (creatingFromDraft) {
         options.creatingConversation.value = true;
-        conversationId = '';
+        createdConversation = await conversationApi.create(options.draftConversationGroupId.value);
+        conversationId = createdConversation.id;
+        if (!conversationId) throw new Error('conversation id is required');
+
+        options.draftConversationGroupId.value = '';
+        options.moveOptimisticTurn(draftKey, conversationId, optimisticTurn.id);
+        options.selectedConversationId.value = conversationId;
+        options.syncConversationUrl(conversationId);
+        const draftDetail = options.detail.value?.conversation.id === draftKey ? options.detail.value : null;
+        options.setConversationDetail({
+          conversation: createdConversation,
+          eventCursor: draftDetail?.eventCursor ?? 0,
+          turns: draftDetail?.turns ?? []
+        });
+        options.upsertConversationListItem(createdConversation);
+        options.revealConversationSection(createdConversation);
       } else {
         if (options.isConversationRunning(conversationId)) return;
-        options.ensureConversationStream(conversationId, options.activeDetail.value?.conversation.id === conversationId ? options.activeDetail.value.eventCursor : 0);
       }
 
-      const sent = await conversationApi.send(conversationId, content, targetGroupId);
-      const nextConversationId = sent.conversationId || sent.conversation?.id || conversationId;
-      if (!nextConversationId) throw new Error('conversation id is required');
+      const eventCursor = options.activeDetail.value?.conversation.id === conversationId
+        ? options.activeDetail.value.eventCursor
+        : 0;
+      await options.ensureConversationStream(conversationId, eventCursor);
+      const sent = await conversationApi.send(conversationId, content);
 
-      if (creatingFromDraft) {
-        options.draftConversationGroupId.value = '';
-        if (sent.conversation) {
-          options.syncConversationMetadata(sent.conversation);
-          options.revealConversationSection(sent.conversation);
-        }
-        options.moveOptimisticTurn(draftKey, nextConversationId, optimisticTurn.id);
-        options.selectedConversationId.value = nextConversationId;
-        options.syncConversationUrl(nextConversationId);
-        if (sent.conversation) {
-          const draftDetail = options.detail.value?.conversation.id === draftKey ? options.detail.value : null;
-          options.setConversationDetail({
-            conversation: sent.conversation,
-            eventCursor: draftDetail?.eventCursor ?? 0,
-            turns: draftDetail?.turns ?? []
-          });
-          options.scheduleConversationTitleRefresh(nextConversationId, sent.conversation);
-        }
-      } else if (sent.conversation) {
-        options.syncConversationMetadata(sent.conversation);
-      }
+      if (createdConversation) options.scheduleConversationTitleRefresh(conversationId, createdConversation);
 
-      conversationId = nextConversationId;
       options.setConversationProcessing(conversationId, true);
       if (draftKey !== conversationId) options.setConversationDraft(conversationId, '');
       options.ensureConversationStream(conversationId, options.activeDetail.value?.conversation.id === conversationId ? options.activeDetail.value.eventCursor : 0);
 
       if (options.selectedConversationId.value === conversationId) {
-        const selectedDetail = options.activeDetail.value;
-        if (sent.conversation && selectedDetail?.conversation.id === conversationId) {
-          options.setConversationDetail({
-            ...selectedDetail,
-            conversation: mergeConversationSnapshot(selectedDetail.conversation, sent.conversation)
-          });
-        }
         const confirmedTurn: Turn = {
-          id: sent.run?.id || `run-${Date.now()}`,
+          id: sent.id || `turn-${Date.now()}`,
           status: 'inProgress',
-          startedAt: sent.run?.createdAt || new Date().toISOString(),
+          startedAt: sent.startedAt || new Date().toISOString(),
           items: optimisticTurn.items
         };
         options.confirmSentTurn(conversationId, confirmedTurn);

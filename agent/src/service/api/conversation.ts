@@ -1,37 +1,43 @@
 import { apiBase, expireSession, getToken, isEnvelope, refreshAccessToken, refreshAccessTokenOrExpire, request, withAuthHeaders } from './request';
-import type { Conversation, ConversationDetail, Envelope, EventsResponse, SendMessageResponse, StreamEvent, WorkspaceEntry, WorkspaceFileBlob, WorkspaceFileContent } from './types';
+import type { Conversation, ConversationDetail, ConversationMetadata, Envelope, EventsResponse, StartedTurn, StreamEvent, WorkspaceEntry, WorkspaceFileBlob, WorkspaceFileContent } from './types';
 
 export const conversationApi = {
   async list(): Promise<Conversation[]> {
-    const result = await request<{ conversations: Conversation[] }>('/api/v1/conversations');
+    const result = await request<{ conversations: Conversation[] }>('/api/v1/conversation');
     return result.conversations;
   },
   get(id: string) {
-    return request<ConversationDetail>(`/api/v1/conversations/${encodeURIComponent(id)}`);
+    return request<ConversationDetail>(`/api/v1/conversation/${encodeURIComponent(id)}`);
   },
   metadata(id: string) {
-    return request<Conversation>(`/api/v1/conversations/${encodeURIComponent(id)}/metadata`);
+    return request<ConversationMetadata>(`/api/v1/conversation/${encodeURIComponent(id)}/metadata`);
   },
   update(id: string, changes: { title?: string; pinned?: boolean; archived?: boolean; groupId?: string }) {
-    return request<Conversation>(`/api/v1/conversations/${encodeURIComponent(id)}`, {
+    return request<Conversation>(`/api/v1/conversation/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: JSON.stringify(changes)
     });
   },
   remove(id: string) {
-    return request<null>(`/api/v1/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return request<null>(`/api/v1/conversation/${encodeURIComponent(id)}`, { method: 'DELETE' });
   },
-  send(conversationId: string, content: string, groupId = '') {
-    return request<SendMessageResponse>('/api/v1/conversations', {
+  create(groupId = '') {
+    return request<Conversation>('/api/v1/conversation', {
       method: 'POST',
-      body: JSON.stringify({ conversationId: conversationId || undefined, groupId: groupId || undefined, content })
+      body: JSON.stringify({ groupId: groupId || undefined })
+    });
+  },
+  send(conversationId: string, content: string) {
+    return request<StartedTurn>(`/api/v1/conversation/${encodeURIComponent(conversationId)}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content })
     });
   },
   cancelTurn(id: string) {
-    return request<null>(`/api/v1/conversations/${encodeURIComponent(id)}/turn/cancel`, { method: 'POST' });
+    return request<null>(`/api/v1/conversation/${encodeURIComponent(id)}/turn/cancel`, { method: 'POST' });
   },
   async workspaceFiles(id: string): Promise<WorkspaceEntry[]> {
-    const result = await request<{ entries: WorkspaceEntry[] }>(`/api/v1/conversations/${encodeURIComponent(id)}/workspace/files`);
+    const result = await request<{ entries: WorkspaceEntry[] }>(`/api/v1/conversation/${encodeURIComponent(id)}/workspace/files`);
     return result.entries;
   },
   async fetchWorkspaceResponse(path: string, retried = false): Promise<{ response: Response; pathname: string; name: string }> {
@@ -60,18 +66,46 @@ export const conversationApi = {
     const blob = await response.blob();
     return { path: pathname, name, blob, contentType: response.headers.get('content-type') || blob.type || '' };
   },
-  subscribe(id: string, afterId: number, onEvent: (event: StreamEvent) => void, onError: () => void, onReconnect?: () => void) {
+  subscribe(
+    id: string,
+    afterId: number,
+    onEvent: (event: StreamEvent) => void | Promise<void>,
+    onError: () => void,
+    onReconnect?: () => void | Promise<void>
+  ) {
     const controller = new AbortController();
-    const url = `${apiBase}/api/v1/conversations/${encodeURIComponent(id)}/events`;
+    const url = `${apiBase}/api/v1/conversation/${encodeURIComponent(id)}/events`;
     let retried = false;
     let lastEventId = Math.max(0, Number(afterId) || 0);
+    let readySettled = false;
+    let resolveReady!: () => void;
+    let rejectReady!: (error: Error) => void;
+    const ready = new Promise<void>((resolve, reject) => {
+      resolveReady = resolve;
+      rejectReady = reject;
+    });
+    void ready.catch(() => undefined);
+
+    const markReady = () => {
+      if (readySettled) return;
+      readySettled = true;
+      resolveReady();
+    };
+
+    const fail = () => {
+      if (!readySettled) {
+        readySettled = true;
+        rejectReady(new Error('conversation stream connection failed'));
+      }
+      onError();
+    };
 
     const reconnect = async (refresh = false): Promise<boolean> => {
       if (controller.signal.aborted || retried) return false;
       retried = true;
       await new Promise(resolve => setTimeout(resolve, 1000));
       if (refresh && !(await refreshAccessTokenOrExpire())) return false;
-      onReconnect?.();
+      await onReconnect?.();
       await connect();
       return true;
     };
@@ -94,7 +128,7 @@ export const conversationApi = {
           const body = await response.clone().json().catch(() => null) as Envelope<unknown> | null;
           const authFailed = response.status === 401 || (body !== null && isEnvelope<unknown>(body) && body.code === 40101);
           if (await reconnect(authFailed)) return;
-          if (!controller.signal.aborted) onError();
+          if (!controller.signal.aborted) fail();
           return;
         }
         retried = false;
@@ -119,26 +153,39 @@ export const conversationApi = {
             if (!payload) continue;
             try {
               const eventResponse = JSON.parse(payload) as EventsResponse;
+              if (eventResponse.event === 'stream.ready') {
+                markReady();
+                continue;
+              }
               if (eventResponse.event === 'stream.heartbeat') continue;
               if (eventResponse.id <= lastEventId) continue;
               lastEventId = eventResponse.id;
-              onEvent(JSON.parse(eventResponse.data) as StreamEvent);
+              await onEvent(JSON.parse(eventResponse.data) as StreamEvent);
             } catch {
-              onError();
+              fail();
             }
           }
         }
         if (await reconnect(false)) return;
-        if (!controller.signal.aborted) onError();
+        if (!controller.signal.aborted) fail();
       } catch (error) {
         if ((error as Error)?.name !== 'AbortError') {
           if (await reconnect(false)) return;
-          if (!controller.signal.aborted) onError();
+          if (!controller.signal.aborted) fail();
         }
       }
     };
 
     void connect();
-    return () => controller.abort();
+    return {
+      ready,
+      close: () => {
+        controller.abort();
+        if (!readySettled) {
+          readySettled = true;
+          rejectReady(new Error('conversation stream connection closed'));
+        }
+      }
+    };
   }
 };

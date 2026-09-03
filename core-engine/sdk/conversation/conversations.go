@@ -13,7 +13,7 @@ func (c *Client) ListConversations(ctx context.Context) ([]Conversation, error) 
 	var response struct {
 		Conversations []Conversation `json:"conversations"`
 	}
-	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/conversations", nil, &response); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/conversation", nil, &response); err != nil {
 		return nil, err
 	}
 	return response.Conversations, nil
@@ -22,26 +22,41 @@ func (c *Client) ListConversations(ctx context.Context) ([]Conversation, error) 
 // ConversationStats returns aggregate conversation and token statistics.
 func (c *Client) ConversationStats(ctx context.Context) (*Stats, error) {
 	var response Stats
-	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/conversations/stats", nil, &response); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/conversation/stats", nil, &response); err != nil {
 		return nil, err
 	}
 	return &response, nil
 }
 
-// SendMessage starts an asynchronous AI run and returns without waiting for it.
-func (c *Client) SendMessage(ctx context.Context, request SendMessageRequest) (*SendMessageResponse, error) {
-	request.Content = strings.TrimSpace(request.Content)
-	request.ConversationID = strings.TrimSpace(request.ConversationID)
+// CreateConversation creates an empty conversation without starting a turn.
+func (c *Client) CreateConversation(ctx context.Context, request CreateConversationRequest) (*Conversation, error) {
 	request.GroupID = strings.TrimSpace(request.GroupID)
+	var response Conversation
+	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/conversation", request, &response); err != nil {
+		return nil, err
+	}
+	if response.ID == "" {
+		return nil, errors.New("conversation SDK: server returned an incomplete conversation")
+	}
+	return &response, nil
+}
+
+// SendMessage starts a Codex turn in an existing conversation.
+func (c *Client) SendMessage(ctx context.Context, conversationID string, request SendMessageRequest) (*StartedTurn, error) {
+	request.Content = strings.TrimSpace(request.Content)
 	if request.Content == "" {
 		return nil, errors.New("conversation SDK: message content is required")
 	}
-	var response SendMessageResponse
-	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/conversations", request, &response); err != nil {
+	path, err := conversationPath(conversationID, "/messages")
+	if err != nil {
 		return nil, err
 	}
-	if response.ConversationID == "" || response.Run.ID == "" {
-		return nil, errors.New("conversation SDK: server returned an incomplete run")
+	var response StartedTurn
+	if err := c.doJSON(ctx, http.MethodPost, path, request, &response); err != nil {
+		return nil, err
+	}
+	if response.ID == "" {
+		return nil, errors.New("conversation SDK: server returned an incomplete turn")
 	}
 	return &response, nil
 }
@@ -123,5 +138,5 @@ func conversationPath(conversationID, suffix string) (string, error) {
 	if conversationID == "" {
 		return "", errors.New("conversation SDK: conversation ID is required")
 	}
-	return "/api/v1/conversations/" + url.PathEscape(conversationID) + suffix, nil
+	return "/api/v1/conversation/" + url.PathEscape(conversationID) + suffix, nil
 }

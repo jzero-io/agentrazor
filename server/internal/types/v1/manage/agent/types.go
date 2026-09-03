@@ -49,7 +49,7 @@ type RestartRuntimeRequest struct {
 type RuntimeStatus struct {
 	Running         bool   `json:"running"`
 	Restarting      bool   `json:"restarting"`
-	ActiveRunCount  int64  `json:"activeRunCount"`
+	ActiveTurnCount int64  `json:"activeTurnCount"`
 	LastRestartTime string `json:"lastRestartTime,optional"`
 }
 

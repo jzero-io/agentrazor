@@ -66,7 +66,7 @@ func (l *Stats) Stats() (resp *types.StatsResponse, err error) {
 	resp = &types.StatsResponse{}
 	for _, thread := range threads {
 		conversation := toConversation(thread)
-		setConversationActiveRun(&conversation, l.svcCtx.AgentThreads, thread.ID)
+		setConversationActiveTurn(&conversation, l.svcCtx.AgentThreads, thread.ID)
 
 		resp.TotalConversations++
 		if conversation.Status == "archived" {

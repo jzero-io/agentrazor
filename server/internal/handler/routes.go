@@ -122,55 +122,61 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					{
 
 						Method:  http.MethodGet,
-						Path:    "/conversations",
+						Path:    "/conversation",
 						Handler: v1conversation.List(serverCtx),
 					},
 					{
 
 						Method:  http.MethodPost,
-						Path:    "/conversations",
-						Handler: v1conversation.SendMessage(serverCtx),
+						Path:    "/conversation",
+						Handler: v1conversation.Create(serverCtx),
 					},
 					{
 
 						Method:  http.MethodGet,
-						Path:    "/conversations/:conversation_id",
+						Path:    "/conversation/:conversation_id",
 						Handler: v1conversation.Get(serverCtx),
 					},
 					{
 
 						Method:  http.MethodPatch,
-						Path:    "/conversations/:conversation_id",
+						Path:    "/conversation/:conversation_id",
 						Handler: v1conversation.Update(serverCtx),
 					},
 					{
 
 						Method:  http.MethodDelete,
-						Path:    "/conversations/:conversation_id",
+						Path:    "/conversation/:conversation_id",
 						Handler: v1conversation.Delete(serverCtx),
 					},
 					{
 
+						Method:  http.MethodPost,
+						Path:    "/conversation/:conversation_id/messages",
+						Handler: v1conversation.SendMessage(serverCtx),
+					},
+					{
+
 						Method:  http.MethodGet,
-						Path:    "/conversations/:conversation_id/metadata",
+						Path:    "/conversation/:conversation_id/metadata",
 						Handler: v1conversation.Metadata(serverCtx),
 					},
 					{
 
 						Method:  http.MethodPost,
-						Path:    "/conversations/:conversation_id/turn/cancel",
+						Path:    "/conversation/:conversation_id/turn/cancel",
 						Handler: v1conversation.CancelTurn(serverCtx),
 					},
 					{
 
 						Method:  http.MethodGet,
-						Path:    "/conversations/:conversation_id/workspace/files",
+						Path:    "/conversation/:conversation_id/workspace/files",
 						Handler: v1conversation.WorkspaceFiles(serverCtx),
 					},
 					{
 
 						Method:  http.MethodGet,
-						Path:    "/conversations/stats",
+						Path:    "/conversation/stats",
 						Handler: v1conversation.Stats(serverCtx),
 					},
 				}...,
@@ -185,7 +191,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					{
 
 						Method:  http.MethodGet,
-						Path:    "/conversations/:conversation_id/events",
+						Path:    "/conversation/:conversation_id/events",
 						Handler: v1conversation.StreamEvents(serverCtx),
 					},
 				}...,

@@ -47,6 +47,7 @@ type (
 		Insert(ctx context.Context, session sqlx.Session, data *ConversationGroup) (sql.Result, error)
 		InsertV2(ctx context.Context, session sqlx.Session, data *ConversationGroup) error
 		FindOne(ctx context.Context, session sqlx.Session, uuid string) (*ConversationGroup, error)
+		FindOneByUserUuidName(ctx context.Context, session sqlx.Session, userUuid string, name string) (*ConversationGroup, error)
 		Update(ctx context.Context, session sqlx.Session, data *ConversationGroup) error
 		Delete(ctx context.Context, session sqlx.Session, uuid string) error
 
@@ -143,6 +144,32 @@ func (m *defaultConversationGroupModel) FindOne(ctx context.Context, session sql
 	} else {
 		err = m.conn.QueryRowCtx(ctx, &resp, sql, args...)
 	}
+	switch err {
+	case nil:
+		return &resp, nil
+	case sqlx.ErrNotFound:
+		return nil, ErrNotFound
+	default:
+		return nil, err
+	}
+}
+
+func (m *defaultConversationGroupModel) FindOneByUserUuidName(ctx context.Context, session sqlx.Session, userUuid string, name string) (*ConversationGroup, error) {
+	var resp ConversationGroup
+	var err error
+
+	sb := sqlbuilder.Select(conversationGroupRows).From(m.table)
+	condition.SelectByWhereRawSql(sb, "user_uuid = $1 and name = $2", userUuid, name)
+	sb.Limit(1)
+
+	sql, args := sb.BuildWithFlavor(m.flavor)
+
+	if session != nil {
+		err = session.QueryRowCtx(ctx, &resp, sql, args...)
+	} else {
+		err = m.conn.QueryRowCtx(ctx, &resp, sql, args...)
+	}
+
 	switch err {
 	case nil:
 		return &resp, nil

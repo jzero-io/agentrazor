@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -23,10 +22,6 @@ var (
 )
 
 const turnIdleTimeout = 10 * time.Minute
-
-func newRunID() string {
-	return "run_" + uuid.NewString()
-}
 
 type StoredThread struct {
 	ID        string
@@ -49,14 +44,7 @@ type StoredTurn struct {
 	Error       string
 }
 
-type ThreadRun struct {
-	ID        string
-	ThreadID  string
-	Prompt    string
-	CreatedAt time.Time
-}
-
-type ActiveRun struct {
+type ActiveTurn struct {
 	ID        string
 	ThreadID  string
 	CreatedAt time.Time
@@ -86,11 +74,11 @@ type RuntimeFactory func() (ThreadRuntime, error)
 type RuntimeStatus struct {
 	Running         bool
 	Restarting      bool
-	ActiveRunCount  int
+	ActiveTurnCount int
 	LastRestartTime time.Time
 }
 
-type activeRun struct {
+type activeTurn struct {
 	id        string
 	createdAt time.Time
 	cancel    context.CancelFunc
@@ -103,23 +91,26 @@ type ThreadService struct {
 	events         *EventHub
 
 	mu              sync.Mutex
-	runs            map[string]activeRun
+	turns           map[string]*activeTurn
 	closed          bool
 	restarting      bool
 	lastRestartTime time.Time
 
 	tokenUsageRecorder TokenUsageRecorder
+	tokenUsageWriter   *tokenUsageWriter
 }
 
 func NewThreadService(runtime ThreadRuntime, factory RuntimeFactory) *ThreadService {
-	return &ThreadService{
+	service := &ThreadService{
 		runtime:         runtime,
 		runtimeFactory:  factory,
 		idleTimeout:     turnIdleTimeout,
-		events:          NewEventHub(32, 256),
-		runs:            make(map[string]activeRun),
+		events:          NewEventHub(32),
+		turns:           make(map[string]*activeTurn),
 		lastRestartTime: time.Now().UTC(),
 	}
+	service.tokenUsageWriter = newTokenUsageWriter(service.persistTokenUsage)
+	return service
 }
 
 func (s *ThreadService) currentRuntime() (ThreadRuntime, error) {
@@ -189,14 +180,14 @@ func (s *ThreadService) Get(ctx context.Context, threadID string) (StoredThread,
 	return runtime.ReadStoredThread(ctx, threadID, true)
 }
 
-func (s *ThreadService) ActiveRun(threadID string) (ActiveRun, bool) {
+func (s *ThreadService) ActiveTurn(threadID string) (ActiveTurn, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	run, ok := s.runs[threadID]
+	turn, ok := s.turns[threadID]
 	if !ok {
-		return ActiveRun{}, false
+		return ActiveTurn{}, false
 	}
-	return ActiveRun{ID: run.id, ThreadID: threadID, CreatedAt: run.createdAt}, true
+	return ActiveTurn{ID: turn.id, ThreadID: threadID, CreatedAt: turn.createdAt}, true
 }
 
 func (s *ThreadService) EventCursor(threadID string) int64 {
@@ -248,7 +239,7 @@ func (s *ThreadService) SetArchived(ctx context.Context, threadID string, archiv
 	}
 	if archived {
 		s.mu.Lock()
-		_, running := s.runs[threadID]
+		_, running := s.turns[threadID]
 		s.mu.Unlock()
 		if running {
 			return ErrThreadTurnRunning
@@ -267,56 +258,39 @@ func (s *ThreadService) SetArchived(ctx context.Context, threadID string, archiv
 	return err
 }
 
-func (s *ThreadService) Send(threadID, prompt string) (ThreadRun, error) {
+func (s *ThreadService) Send(threadID, prompt string) (StartedTurn, error) {
 	if err := validateThreadID(threadID); err != nil {
-		return ThreadRun{}, err
+		return StartedTurn{}, err
 	}
 	prompt = strings.TrimSpace(prompt)
 	if prompt == "" {
-		return ThreadRun{}, errors.New("message content is required")
+		return StartedTurn{}, errors.New("message content is required")
 	}
+
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
-		return ThreadRun{}, ErrServiceStopped
+		return StartedTurn{}, ErrServiceStopped
 	}
 	if s.restarting {
 		s.mu.Unlock()
-		return ThreadRun{}, ErrRuntimeRestarting
+		return StartedTurn{}, ErrRuntimeRestarting
 	}
-	if _, ok := s.runs[threadID]; ok {
+	if s.runtime == nil {
 		s.mu.Unlock()
-		return ThreadRun{}, ErrThreadTurnRunning
+		return StartedTurn{}, ErrRuntimeClosed
 	}
-	run := ThreadRun{
-		ID:        newRunID(),
-		ThreadID:  threadID,
-		Prompt:    prompt,
-		CreatedAt: time.Now().UTC(),
+	if _, ok := s.turns[threadID]; ok {
+		s.mu.Unlock()
+		return StartedTurn{}, ErrThreadTurnRunning
 	}
+	runtime := s.runtime
 	ctx, cancel := context.WithCancel(context.Background())
-	s.runs[threadID] = activeRun{id: run.ID, createdAt: run.CreatedAt, cancel: cancel}
+	active := &activeTurn{createdAt: time.Now().UTC(), cancel: cancel}
+	s.turns[threadID] = active
 	s.mu.Unlock()
 
-	go s.execute(ctx, cancel, run)
-	return run, nil
-}
-
-func (s *ThreadService) execute(ctx context.Context, cancel context.CancelFunc, run ThreadRun) {
-	defer cancel()
 	idleTimer := time.AfterFunc(s.idleTimeout, cancel)
-	defer idleTimer.Stop()
-	defer func() {
-		s.mu.Lock()
-		if current, ok := s.runs[run.ThreadID]; ok && current.id == run.ID {
-			delete(s.runs, run.ThreadID)
-		}
-		s.mu.Unlock()
-	}()
-
-	s.events.Publish(run.ThreadID, run.ID, "run.started", map[string]any{
-		"startedAt": run.CreatedAt,
-	})
 	emit := func(event map[string]any) {
 		idleTimer.Reset(s.idleTimeout)
 		eventType, _ := event["type"].(string)
@@ -326,21 +300,65 @@ func (s *ThreadService) execute(ctx context.Context, cancel context.CancelFunc, 
 		if eventType == "thread.tokenUsage.updated" {
 			s.recordTokenUsage(event)
 		}
-		// Runtime process events are UI progress only. Keep them live-only so the
-		// server does not retain intermediate display state between subscribers.
-		s.events.Broadcast(run.ThreadID, run.ID, eventType, event)
+		turnID := s.resolveActiveTurnID(threadID, active, codexEventTurnID(event))
+		if eventType == "turn.started" || eventType == "turn.completed" {
+			s.events.Publish(threadID, turnID, eventType, event)
+			return
+		}
+		s.events.Broadcast(threadID, turnID, eventType, event)
 	}
-	runtime, runtimeErr := s.currentRuntime()
-	if runtimeErr != nil {
-		s.events.Publish(run.ThreadID, run.ID, "run.failed", map[string]any{"error": runtimeErr.Error()})
-		return
-	}
-	err := runtime.Resume(ctx, run.ThreadID, run.Prompt, emit)
+
+	started, err := runtime.StartTurn(ctx, threadID, prompt, emit)
 	if err != nil {
-		s.events.Publish(run.ThreadID, run.ID, "run.failed", map[string]any{"error": err.Error()})
-		return
+		idleTimer.Stop()
+		cancel()
+		s.removeActiveTurn(threadID, active)
+		return StartedTurn{}, err
 	}
-	s.events.Publish(run.ThreadID, run.ID, "run.completed", nil)
+	s.mu.Lock()
+	active.id = started.ID
+	active.createdAt = started.StartedAt
+	s.mu.Unlock()
+
+	go func() {
+		defer cancel()
+		defer idleTimer.Stop()
+		defer s.removeActiveTurn(threadID, active)
+		<-started.Done
+	}()
+	return started, nil
+}
+
+func (s *ThreadService) removeActiveTurn(threadID string, active *activeTurn) {
+	s.mu.Lock()
+	if s.turns[threadID] == active {
+		delete(s.turns, threadID)
+	}
+	s.mu.Unlock()
+}
+
+func (s *ThreadService) resolveActiveTurnID(threadID string, active *activeTurn, eventTurnID string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.turns[threadID] != active {
+		return eventTurnID
+	}
+	if eventTurnID != "" {
+		active.id = eventTurnID
+	}
+	return active.id
+}
+
+func codexEventTurnID(event map[string]any) string {
+	params, _ := event["params"].(map[string]any)
+	if params == nil {
+		return ""
+	}
+	if turnID := stringValue(params["turnId"]); turnID != "" {
+		return turnID
+	}
+	turn, _ := params["turn"].(map[string]any)
+	return stringValue(turn["id"])
 }
 
 func (s *ThreadService) Subscribe(threadID string, afterID int64) *Subscription {
@@ -353,7 +371,7 @@ func (s *ThreadService) RuntimeStatus() RuntimeStatus {
 	return RuntimeStatus{
 		Running:         !s.closed && s.runtime != nil,
 		Restarting:      s.restarting,
-		ActiveRunCount:  len(s.runs),
+		ActiveTurnCount: len(s.turns),
 		LastRestartTime: s.lastRestartTime,
 	}
 }
@@ -368,7 +386,7 @@ func (s *ThreadService) RestartRuntime() error {
 		s.mu.Unlock()
 		return ErrRuntimeRestarting
 	}
-	if len(s.runs) > 0 {
+	if len(s.turns) > 0 {
 		s.mu.Unlock()
 		return ErrThreadTurnRunning
 	}
@@ -407,13 +425,13 @@ func (s *ThreadService) Cancel(threadID string) error {
 		s.mu.Unlock()
 		return ErrServiceStopped
 	}
-	run, ok := s.runs[threadID]
+	turn, ok := s.turns[threadID]
 	if ok {
-		delete(s.runs, threadID)
+		delete(s.turns, threadID)
 	}
 	s.mu.Unlock()
 	if ok {
-		run.cancel()
+		turn.cancel()
 	}
 	return nil
 }
@@ -425,11 +443,11 @@ func (s *ThreadService) Close() error {
 		return nil
 	}
 	s.closed = true
-	cancels := make([]context.CancelFunc, 0, len(s.runs))
-	for _, run := range s.runs {
+	cancels := make([]context.CancelFunc, 0, len(s.turns))
+	for _, run := range s.turns {
 		cancels = append(cancels, run.cancel)
 	}
-	s.runs = make(map[string]activeRun)
+	s.turns = make(map[string]*activeTurn)
 	runtime := s.runtime
 	s.runtime = nil
 	s.mu.Unlock()
@@ -441,6 +459,7 @@ func (s *ThreadService) Close() error {
 	if runtime != nil {
 		err = runtime.Close()
 	}
+	s.tokenUsageWriter.Close()
 	s.events.Close()
 	return err
 }
@@ -450,7 +469,7 @@ func (s *ThreadService) Delete(ctx context.Context, threadID string) error {
 		return err
 	}
 	s.mu.Lock()
-	_, running := s.runs[threadID]
+	_, running := s.turns[threadID]
 	s.mu.Unlock()
 	if running {
 		return ErrThreadTurnRunning
@@ -485,6 +504,10 @@ func (s *ThreadService) recordTokenUsage(event map[string]any) {
 	if !ok {
 		return
 	}
+	s.tokenUsageWriter.Enqueue(usage)
+}
+
+func (s *ThreadService) persistTokenUsage(usage TokenUsageEvent) {
 	s.mu.Lock()
 	recorder := s.tokenUsageRecorder
 	s.mu.Unlock()

@@ -316,7 +316,7 @@ declare namespace Api {
     type AgentRuntimeStatus = {
       running: boolean;
       restarting: boolean;
-      activeRunCount: number;
+      activeTurnCount: number;
       lastRestartTime?: string;
     };
 

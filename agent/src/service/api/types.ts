@@ -11,6 +11,12 @@ export interface Conversation {
   updatedAt: string;
 }
 
+export interface ConversationMetadata {
+  id: string;
+  title: string;
+  updatedAt: string;
+}
+
 export interface ThreadItem {
   id: string;
   type: string;
@@ -69,7 +75,7 @@ export interface StreamEvent {
   id: number;
   type: string;
   conversationId: string;
-  runId?: string;
+  turnId?: string;
   data?: unknown;
   createdAt: string;
 }
@@ -87,13 +93,9 @@ export interface EventsResponse {
   createdAt: string;
 }
 
-export interface SendMessageResponse {
-  conversationId: string;
-  conversation: Conversation;
-  run: {
-    id: string;
-    createdAt: string;
-  };
+export interface StartedTurn {
+  id: string;
+  startedAt: string;
 }
 
 export interface WorkspaceEntry {

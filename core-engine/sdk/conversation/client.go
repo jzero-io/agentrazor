@@ -61,13 +61,13 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("conversation API error: %s (HTTP %d)", e.Message, e.StatusCode)
 }
 
-// RunError reports a failed AI run.
-type RunError struct {
+// TurnError reports a failed Codex turn.
+type TurnError struct {
 	Message string
 }
 
-func (e *RunError) Error() string {
-	return "conversation run failed: " + e.Message
+func (e *TurnError) Error() string {
+	return "conversation turn failed: " + e.Message
 }
 
 // NewClient creates a conversation client.
@@ -93,7 +93,7 @@ func NewClient(config Config) (*Client, error) {
 	return &Client{baseURL: baseURL, apiKey: apiKey, httpClient: httpClient}, nil
 }
 
-// Chat sends one message, waits for its run to finish, and returns the final
+// Chat sends one message, waits for its turn to finish, and returns the final
 // answer. The supplied context controls the entire request and wait lifecycle.
 func (c *Client) Chat(ctx context.Context, request Request) (*Response, error) {
 	content := strings.TrimSpace(request.Content)
@@ -101,27 +101,92 @@ func (c *Client) Chat(ctx context.Context, request Request) (*Response, error) {
 		return nil, errors.New("conversation SDK: message content is required")
 	}
 
-	sent, err := c.SendMessage(ctx, SendMessageRequest{
-		ConversationID: strings.TrimSpace(request.ConversationID),
-		GroupID:        strings.TrimSpace(request.GroupID),
-		Content:        content,
-	})
+	conversationID := strings.TrimSpace(request.ConversationID)
+	if conversationID == "" {
+		conversation, err := c.CreateConversation(ctx, CreateConversationRequest{GroupID: request.GroupID})
+		if err != nil {
+			return nil, err
+		}
+		conversationID = conversation.ID
+	}
+
+	streamCtx, stopStream := context.WithCancel(ctx)
+	defer stopStream()
+	ready := make(chan struct{})
+	events := make(chan Event, 256)
+	streamErrors := make(chan error, 1)
+	go func() {
+		streamErrors <- c.streamEvents(streamCtx, conversationID, 0, func() { close(ready) }, func(event Event) (bool, error) {
+			select {
+			case events <- event:
+				return false, nil
+			case <-streamCtx.Done():
+				return true, streamCtx.Err()
+			}
+		})
+	}()
+	select {
+	case <-ready:
+	case err := <-streamErrors:
+		return nil, err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
+	sent, err := c.SendMessage(ctx, conversationID, SendMessageRequest{Content: content})
 	if err != nil {
 		return nil, err
 	}
-	if err := c.waitRun(ctx, sent.ConversationID, sent.Run.ID); err != nil {
+	if err := waitForTurn(ctx, sent.ID, events, streamErrors); err != nil {
 		return nil, err
 	}
 
-	detail, err := c.GetConversation(ctx, sent.ConversationID)
+	detail, err := c.GetConversation(ctx, conversationID)
 	if err != nil {
 		return nil, err
 	}
 	answer := finalAnswer(detail.Turns)
 	if answer == "" {
-		return nil, errors.New("conversation SDK: run completed without a final answer")
+		return nil, errors.New("conversation SDK: turn completed without a final answer")
 	}
-	return &Response{ConversationID: sent.ConversationID, Answer: answer}, nil
+	return &Response{ConversationID: conversationID, Answer: answer}, nil
+}
+
+func waitForTurn(ctx context.Context, turnID string, events <-chan Event, streamErrors <-chan error) error {
+	for {
+		select {
+		case event := <-events:
+			if event.TurnID != turnID {
+				continue
+			}
+			switch event.Type {
+			case "turn.completed":
+				var completion struct {
+					Params struct {
+						Turn struct {
+							Status string `json:"status"`
+							Error  *struct {
+								Message string `json:"message"`
+							} `json:"error"`
+						} `json:"turn"`
+					} `json:"params"`
+				}
+				_ = json.Unmarshal(event.Data, &completion)
+				if completion.Params.Turn.Status == "failed" || completion.Params.Turn.Status == "interrupted" {
+					message := "Codex turn " + completion.Params.Turn.Status
+					if completion.Params.Turn.Error != nil && completion.Params.Turn.Error.Message != "" {
+						message = completion.Params.Turn.Error.Message
+					}
+					return &TurnError{Message: message}
+				}
+				return nil
+			}
+		case err := <-streamErrors:
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }
 
 type envelope[T any] struct {

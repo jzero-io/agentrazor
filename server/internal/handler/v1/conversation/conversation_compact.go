@@ -27,17 +27,17 @@ func List(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
-// 创建会话或发送消息
-func SendMessage(svcCtx *svc.ServiceContext) http.HandlerFunc {
+// 创建会话
+func Create(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.SendMessageRequest
+		var req types.CreateRequest
 		if err := httpx.Parse(r, &req); err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 			return
 		}
 
-		l := conversation.NewSendMessage(r.Context(), svcCtx, r)
-		resp, err := l.SendMessage(&req)
+		l := conversation.NewCreate(r.Context(), svcCtx, r)
+		resp, err := l.Create(&req)
 		if err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 		} else {
@@ -95,6 +95,25 @@ func Delete(svcCtx *svc.ServiceContext) http.HandlerFunc {
 
 		l := conversation.NewDelete(r.Context(), svcCtx, r)
 		resp, err := l.Delete(&req)
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.OkJsonCtx(r.Context(), w, resp)
+		}
+	}
+}
+
+// 发送消息
+func SendMessage(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req types.SendMessageRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+			return
+		}
+
+		l := conversation.NewSendMessage(r.Context(), svcCtx, r)
+		resp, err := l.SendMessage(&req)
 		if err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 		} else {

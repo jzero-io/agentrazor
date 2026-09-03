@@ -28,35 +28,12 @@ func (c *Client) StreamEvents(ctx context.Context, conversationID string, afterI
 	if afterID < 0 {
 		return errors.New("conversation SDK: after event ID must not be negative")
 	}
-	return c.streamEvents(ctx, conversationID, afterID, func(event Event) (bool, error) {
+	return c.streamEvents(ctx, conversationID, afterID, nil, func(event Event) (bool, error) {
 		return false, handler(event)
 	})
 }
 
-func (c *Client) waitRun(ctx context.Context, conversationID, runID string) error {
-	return c.streamEvents(ctx, conversationID, 0, func(event Event) (bool, error) {
-		if event.RunID != runID {
-			return false, nil
-		}
-		switch event.Type {
-		case "run.completed":
-			return true, nil
-		case "run.failed":
-			var failure struct {
-				Error string `json:"error"`
-			}
-			_ = json.Unmarshal(event.Data, &failure)
-			if failure.Error == "" {
-				failure.Error = "unknown error"
-			}
-			return false, &RunError{Message: failure.Error}
-		default:
-			return false, nil
-		}
-	})
-}
-
-func (c *Client) streamEvents(ctx context.Context, conversationID string, afterID int64, handler func(Event) (bool, error)) error {
+func (c *Client) streamEvents(ctx context.Context, conversationID string, afterID int64, onReady func(), handler func(Event) (bool, error)) error {
 	path, err := conversationPath(conversationID, "/events")
 	if err != nil {
 		return err
@@ -96,7 +73,7 @@ func (c *Client) streamEvents(ctx context.Context, conversationID string, afterI
 			}
 			continue
 		}
-		finished, err := handleEventFrame(dataLines, handler)
+		finished, err := handleEventFrame(dataLines, onReady, handler)
 		dataLines = dataLines[:0]
 		if err != nil {
 			return err
@@ -111,13 +88,19 @@ func (c *Client) streamEvents(ctx context.Context, conversationID string, afterI
 	return io.ErrUnexpectedEOF
 }
 
-func handleEventFrame(dataLines []string, handler func(Event) (bool, error)) (bool, error) {
+func handleEventFrame(dataLines []string, onReady func(), handler func(Event) (bool, error)) (bool, error) {
 	if len(dataLines) == 0 {
 		return false, nil
 	}
 	var outer eventsResponse
 	if err := json.Unmarshal([]byte(strings.Join(dataLines, "\n")), &outer); err != nil {
 		return false, fmt.Errorf("conversation SDK: decode event: %w", err)
+	}
+	if outer.Event == "stream.ready" {
+		if onReady != nil {
+			onReady()
+		}
+		return false, nil
 	}
 	if outer.Event == "stream.heartbeat" {
 		return false, nil

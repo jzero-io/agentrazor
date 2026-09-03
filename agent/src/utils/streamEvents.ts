@@ -7,6 +7,7 @@ export interface CodexTurnPayload {
   completedAt?: unknown;
   durationMs?: unknown;
   items?: unknown;
+  error?: unknown;
 }
 
 export interface TextDeltaParams {
@@ -22,18 +23,18 @@ export interface AgentMessageDeltaParams {
   item?: ThreadItem;
 }
 
-export function streamErrorMessage(data: unknown) {
-  const value = data as { error?: unknown; message?: unknown } | undefined;
-  const message = value?.error ?? value?.message;
-  return typeof message === 'string' ? message : '';
-}
-
 export function eventParams<T extends object>(data: unknown) {
   return (data as { params?: T } | undefined)?.params;
 }
 
 export function codexTurnPayload(data: unknown) {
   return eventParams<{ turn?: CodexTurnPayload }>(data)?.turn;
+}
+
+export function codexTurnError(turn: CodexTurnPayload | undefined) {
+  if (!turn?.error || typeof turn.error !== 'object') return '';
+  const message = (turn.error as { message?: unknown }).message;
+  return typeof message === 'string' ? message : '';
 }
 
 export function taskPayload(data: unknown) {

@@ -48,13 +48,17 @@ export function useConversationGroups(options: UseConversationGroupsOptions) {
   async function saveGroup() {
     const name = groupEditorName.value.trim();
     if (!name) return;
-    if (editingGroupId.value) {
-      await conversationGroupApi.update(editingGroupId.value, { name });
-    } else {
-      await conversationGroupApi.create(name);
+    try {
+      if (editingGroupId.value) {
+        await conversationGroupApi.update(editingGroupId.value, { name });
+      } else {
+        await conversationGroupApi.create(name);
+      }
+      await loadConversationGroups();
+      groupEditorVisible.value = false;
+    } catch (error) {
+      options.showError(error);
     }
-    await loadConversationGroups();
-    groupEditorVisible.value = false;
   }
 
   function toggleGroup(group: ConversationGroup) {

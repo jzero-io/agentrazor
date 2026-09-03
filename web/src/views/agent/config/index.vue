@@ -94,7 +94,7 @@ onMounted(async () => {
       <div class="mb-16px flex flex-wrap items-center justify-between gap-12px">
         <div class="flex items-center gap-10px">
           <NTag :type="runtimeType" round>{{ runtimeText }}</NTag>
-          <span class="text-13px text-gray-500 dark:text-gray-400">活跃任务 {{ runtime?.activeRunCount ?? 0 }}</span>
+          <span class="text-13px text-gray-500 dark:text-gray-400">活跃任务 {{ runtime?.activeTurnCount ?? 0 }}</span>
           <span v-if="runtime?.lastRestartTime" class="text-13px text-gray-500 dark:text-gray-400">最近重启 {{ runtime.lastRestartTime }}</span>
         </div>
         <div class="flex items-center gap-8px">
@@ -149,8 +149,8 @@ onMounted(async () => {
             </div>
           </div>
 
-          <NAlert v-if="runtime?.activeRunCount" type="warning" :bordered="false" class="mx-16px mt-16px">
-            当前有 {{ runtime.activeRunCount }} 个任务正在运行，重启会被后端拒绝。
+          <NAlert v-if="runtime?.activeTurnCount" type="warning" :bordered="false" class="mx-16px mt-16px">
+            当前有 {{ runtime.activeTurnCount }} 个任务正在运行，重启会被后端拒绝。
           </NAlert>
 
           <div class="min-h-0 flex-1 p-16px">

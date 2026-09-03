@@ -16,10 +16,10 @@ type Conversation struct {
 	UpdatedAt        string  `json:"updatedAt"`
 }
 
-// Run identifies an asynchronously executing conversation turn.
-type Run struct {
+// StartedTurn identifies the Codex turn accepted by turn/start.
+type StartedTurn struct {
 	ID        string `json:"id"`
-	CreatedAt string `json:"createdAt"`
+	StartedAt string `json:"startedAt"`
 }
 
 // Item is an item emitted during a turn. Its fields vary by item type.
@@ -53,19 +53,14 @@ type Stats struct {
 	TokenUsageAvailable   bool  `json:"tokenUsageAvailable"`
 }
 
-// SendMessageRequest starts a new conversation when ConversationID is empty,
-// or appends a turn to an existing conversation otherwise.
-type SendMessageRequest struct {
-	ConversationID string `json:"conversationId,omitempty"`
-	GroupID        string `json:"groupId,omitempty"`
-	Content        string `json:"content"`
+// CreateConversationRequest contains optional metadata for a new conversation.
+type CreateConversationRequest struct {
+	GroupID string `json:"groupId,omitempty"`
 }
 
-// SendMessageResponse identifies the conversation and asynchronous run.
-type SendMessageResponse struct {
-	ConversationID string       `json:"conversationId"`
-	Conversation   Conversation `json:"conversation"`
-	Run            Run          `json:"run"`
+// SendMessageRequest starts a turn in an existing conversation.
+type SendMessageRequest struct {
+	Content string `json:"content"`
 }
 
 // UpdateConversationRequest contains the conversation fields to change.
@@ -90,7 +85,7 @@ type Event struct {
 	ID             int64           `json:"id"`
 	Type           string          `json:"type"`
 	ConversationID string          `json:"conversationId"`
-	RunID          string          `json:"runId,omitempty"`
+	TurnID         string          `json:"turnId,omitempty"`
 	Data           json.RawMessage `json:"data,omitempty"`
 	CreatedAt      string          `json:"createdAt"`
 }
