@@ -67,7 +67,7 @@ export function useWorkspaceActions(options: UseWorkspaceActionsOptions) {
 
   function openWorkspace(workspace: WorkspaceDescriptor) {
     options.pinnedSummaryOpen.value = false;
-    options.workspacePanel.openWorkspace(workspace, true);
+    options.workspacePanel.replaceWithWorkspace(workspace);
   }
 
   async function openWorkspaceFile(path: string) {

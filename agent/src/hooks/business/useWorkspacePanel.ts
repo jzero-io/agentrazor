@@ -11,6 +11,7 @@ export interface WorkspaceDescriptor {
 
 export interface WorkspaceTab extends WorkspaceDescriptor {
   tabId: string;
+  order: number;
 }
 
 export interface FilePreview extends WorkspaceFileContent {
@@ -24,11 +25,13 @@ export interface FilePreview extends WorkspaceFileContent {
 
 export interface FilePreviewTab extends FilePreview {
   tabId: string;
+  order: number;
 }
 
 interface FileTab {
   tabId: string;
   path: string;
+  order: number;
 }
 
 interface RightPanelConversationState {
@@ -62,11 +65,12 @@ function sanitizeRightPanelState(value: RightPanelConversationState | undefined 
   const workspaceTabs = Array.isArray(value.workspaceTabs)
     ? value.workspaceTabs
       .filter(workspace => workspace?.type === 'workspace' && workspace.title && workspace.url)
-      .map(workspace => ({
+      .map((workspace, index) => ({
         type: 'workspace' as const,
         title: workspace.title,
         url: workspace.url,
-        tabId: typeof workspace.tabId === 'string' && workspace.tabId ? workspace.tabId : createTabId()
+        tabId: typeof workspace.tabId === 'string' && workspace.tabId ? workspace.tabId : createTabId(),
+        order: typeof workspace.order === 'number' ? workspace.order : index
       }))
     : [];
   const activeWorkspaceTabId = typeof value.activeWorkspaceTabId === 'string'
@@ -79,9 +83,10 @@ function sanitizeRightPanelState(value: RightPanelConversationState | undefined 
   const fileTabs = Array.isArray(value.fileTabs)
     ? value.fileTabs
       .filter(tab => typeof tab?.path === 'string' && tab.path.trim())
-      .map(tab => ({
+      .map((tab, index) => ({
         tabId: typeof tab.tabId === 'string' && tab.tabId ? tab.tabId : createTabId(),
-        path: tab.path
+        path: tab.path,
+        order: typeof tab.order === 'number' ? tab.order : workspaceTabs.length + index
       }))
     : [];
   const activeFileTabId = typeof value.activeFileTabId === 'string' ? value.activeFileTabId : fileTabs[0]?.tabId;
@@ -324,6 +329,14 @@ export function useWorkspacePanel(options: {
     return previews;
   }
 
+  function nextTabOrder(state: RightPanelConversationState | undefined) {
+    const orders = [
+      ...(state?.workspaceTabs || []).map(tab => tab.order),
+      ...(state?.fileTabs || []).map(tab => tab.order)
+    ];
+    return orders.length ? Math.max(...orders) + 1 : 0;
+  }
+
   function fileNameFromPath(path: string) {
     return decodeURIComponent(path.split('?')[0] || '').split('/').filter(Boolean).pop() || '文件';
   }
@@ -351,20 +364,36 @@ export function useWorkspacePanel(options: {
     if (!previews.size) filePreviewsByConversation.delete(conversationId);
   }
 
-  function openWorkspace(workspace: WorkspaceDescriptor, replaceTabs = false, forceNewTab = false) {
+  function openWorkspace(workspace: WorkspaceDescriptor, forceNewTab = false) {
     const conversationId = options.selectedConversationId.value;
     if (!conversationId) return;
     expanded.value = false;
     fileError.value = '';
-    const currentTabs = statesByConversation.get(conversationId)?.workspaceTabs || [];
-    const existing = !replaceTabs && !forceNewTab ? currentTabs.find(tab => tab.url === workspace.url) : null;
-    const tab = existing || { ...workspace, tabId: createTabId() };
-    const workspaceTabs = replaceTabs ? [tab] : existing ? currentTabs : [...currentTabs, tab];
+    const state = statesByConversation.get(conversationId);
+    const currentTabs = state?.workspaceTabs || [];
+    const existing = !forceNewTab ? currentTabs.find(tab => tab.url === workspace.url) : null;
+    const tab = existing || { ...workspace, tabId: createTabId(), order: nextTabOrder(state) };
+    const workspaceTabs = existing ? currentTabs : [...currentTabs, tab];
     setState(conversationId, {
       visible: true,
       kind: 'workspace',
       expanded: false,
       workspaceTabs,
+      activeWorkspaceTabId: tab.tabId
+    });
+  }
+
+  function replaceWithWorkspace(workspace: WorkspaceDescriptor) {
+    const conversationId = options.selectedConversationId.value;
+    if (!conversationId) return;
+    expanded.value = false;
+    fileError.value = '';
+    const tab = { ...workspace, tabId: createTabId(), order: 0 };
+    setState(conversationId, {
+      visible: true,
+      kind: 'workspace',
+      expanded: false,
+      workspaceTabs: [tab],
       activeWorkspaceTabId: tab.tabId
     });
   }
@@ -385,7 +414,7 @@ export function useWorkspacePanel(options: {
     const state = statesByConversation.get(conversationId);
     const currentTabs = state?.fileTabs || [];
     const existing = !forceNewTab ? currentTabs.find(tab => tab.path === path) : null;
-    const tab = existing || { tabId: createTabId(), path };
+    const tab = existing || { tabId: createTabId(), path, order: nextTabOrder(state) };
     const fileTabs = existing ? currentTabs : [...currentTabs, tab];
     const previews = previewsForConversation(conversationId);
     if (!previews.has(path)) {
@@ -547,12 +576,11 @@ export function useWorkspacePanel(options: {
   function reorderFile(fromTabId: string, toTabId: string) {
     const state = activeState.value;
     if (state?.kind !== 'file' || fromTabId === toTabId) return;
-    const fileTabs = [...(state.fileTabs || [])];
-    const fromIndex = fileTabs.findIndex(tab => tab.tabId === fromTabId);
-    const toIndex = fileTabs.findIndex(tab => tab.tabId === toTabId);
-    if (fromIndex < 0 || toIndex < 0) return;
-    const [moved] = fileTabs.splice(fromIndex, 1);
-    fileTabs.splice(toIndex, 0, moved);
+    const fileTabs = (state.fileTabs || []).map(tab => ({ ...tab }));
+    const from = fileTabs.find(tab => tab.tabId === fromTabId);
+    const to = fileTabs.find(tab => tab.tabId === toTabId);
+    if (!from || !to) return;
+    [from.order, to.order] = [to.order, from.order];
     setState(options.selectedConversationId.value, { fileTabs });
   }
 
@@ -697,6 +725,7 @@ export function useWorkspacePanel(options: {
     displayWorkspaceFilePath,
     displayWorkspaceProcessPath: (path: string) => displayWorkspaceProcessPath(path, options.selectedConversationId.value),
     openWorkspace,
+    replaceWithWorkspace,
     showLauncher,
     openFile,
     switchToWorkspace,

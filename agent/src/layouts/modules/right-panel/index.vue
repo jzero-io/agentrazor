@@ -242,6 +242,7 @@ function dropTab(event: DragEvent, tabId: string) {
           type="button"
           class="file-preview-tab workspace-preview-tab"
           :class="{ 'is-active': activeKind === 'workspace' && tab.tabId === activeWorkspaceTabId }"
+          :style="{ order: tab.order }"
           @click="emit('selectWorkspace', tab.tabId)"
         >
           <Icon class="workspace-preview-tab-icon" icon="solar:widget-5-linear" />
@@ -267,6 +268,7 @@ function dropTab(event: DragEvent, tabId: string) {
             'is-active': activeKind === 'file' && tab.tabId === activeFileTabId,
             'is-dragging': draggingFileTabId === tab.tabId
           }"
+          :style="{ order: tab.order }"
           draggable="true"
           @click="emit('selectFile', tab.tabId)"
           @dragstart="startTabDrag($event, tab.tabId)"
