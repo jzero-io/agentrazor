@@ -1,6 +1,6 @@
 import { computed, ref, type Ref } from 'vue';
 import type { Conversation, ConversationDetail } from '../../service/api';
-import { displayConversationTitle, mergeConversationSnapshot, sortConversationsByCreatedAt } from '../../utils/conversation';
+import { displayConversationTitle, mergeConversationSnapshot, sortConversationsByUpdatedAt } from '../../utils/conversation';
 import type { ConversationGroup } from './useConversationGroups';
 
 export function useConversationList(options: {
@@ -13,10 +13,10 @@ export function useConversationList(options: {
   const processingConversationIds = ref(new Set<string>());
 
   const visibleConversations = computed(() =>
-    sortConversationsByCreatedAt(conversations.value.filter(item => item.status !== 'archived'))
+    sortConversationsByUpdatedAt(conversations.value.filter(item => item.status !== 'archived'))
   );
   const archivedConversations = computed(() =>
-    sortConversationsByCreatedAt(conversations.value.filter(item => item.status === 'archived'))
+    sortConversationsByUpdatedAt(conversations.value.filter(item => item.status === 'archived'))
   );
   const pinnedConversations = computed(() =>
     visibleConversations.value.filter(item => Boolean(item.pinnedAt))
@@ -67,6 +67,7 @@ export function useConversationList(options: {
 
   function setConversationProcessing(id: string, processing: boolean) {
     if (!id) return;
+    if (processing) touchConversationUpdatedAt(id);
     const current = processingConversationIds.value.has(id);
     if (current !== processing) {
       const next = new Set(processingConversationIds.value);
@@ -86,6 +87,15 @@ export function useConversationList(options: {
     const removed = new Set(ids);
     const next = new Set([...processingConversationIds.value].filter(id => !removed.has(id)));
     processingConversationIds.value = next;
+  }
+
+  function touchConversationUpdatedAt(id: string, value = new Date().toISOString()) {
+    const index = conversations.value.findIndex(item => item.id === id);
+    if (index < 0) return;
+    conversations.value[index] = mergeConversationSnapshot(conversations.value[index], {
+      ...conversations.value[index],
+      updatedAt: value
+    });
   }
 
   function isConversationRunning(id: string) {
@@ -169,6 +179,7 @@ export function useConversationList(options: {
     isDraftConversation,
     setConversationProcessing,
     clearConversationProcessing,
+    touchConversationUpdatedAt,
     isConversationRunning,
     isConversationProcessing,
     replaceConversation,

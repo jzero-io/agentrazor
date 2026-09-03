@@ -6,10 +6,35 @@
     <meta name="theme-color" content="#f7f7f5" />
     <link rel="icon" type="image/png" href="/agentrazor-icon.png" />
     <title>AgentRazor</title>
+    <script>
+      (() => {
+        const root = document.documentElement;
+        try {
+          const appearance = localStorage.getItem('agentrazor_appearance') || 'system';
+          const systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          root.dataset.theme = appearance === 'dark' || (appearance === 'system' && systemDark) ? 'dark' : 'light';
+        } catch {
+          root.dataset.theme = 'light';
+        }
+      })();
+    </script>
     <style>
       :root {
+        --boot-app-bg: #ffffff;
+        --boot-text: #424548;
+        --boot-primary: 46 130 195;
         color: #202124;
-        background: #f4f8fb;
+        background: var(--boot-app-bg);
+      }
+      :root[data-theme="dark"] {
+        --boot-app-bg: #181818;
+        --boot-text: #d5d9dd;
+        --boot-primary: 131 192 235;
+        color: #e8edf2;
+        background: var(--boot-app-bg);
+      }
+      * {
+        box-sizing: border-box;
       }
       html, body, #app {
         width: 100%;
@@ -19,16 +44,117 @@
       body {
         overflow: hidden;
       }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          color: #e8edf2;
-          background: #101419;
-        }
+      .app-boot-shell {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: grid;
+        width: 100%;
+        height: 100%;
+        place-items: center;
+        color: var(--boot-text);
+        background: var(--boot-app-bg);
+        font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", Inter, sans-serif;
+        opacity: 1;
+        transition: opacity 180ms ease, visibility 180ms ease;
+      }
+      body.app-ready .app-boot-shell {
+        visibility: hidden;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .app-boot-content {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        padding-bottom: 32px;
+        text-align: center;
+      }
+      .app-boot-indicator {
+        display: grid;
+        width: 82px;
+        height: 82px;
+        place-items: center;
+        border-radius: 18px;
+        box-shadow: 0 12px 30px rgb(0 0 0 / 12%);
+      }
+      :root[data-theme="dark"] .app-boot-indicator {
+        box-shadow: 0 14px 34px rgb(0 0 0 / 28%);
+      }
+      .app-boot-indicator img {
+        display: block;
+        width: 82px;
+        height: 82px;
+        border-radius: 18px;
+      }
+      .app-boot-spinner {
+        position: relative;
+        width: 42px;
+        height: 42px;
+        margin: 34px 0 18px;
+        animation: app-boot-spin 1.15s linear infinite;
+      }
+      .app-boot-dot {
+        position: absolute;
+        width: 11px;
+        height: 11px;
+        border-radius: 4px;
+        background: rgb(var(--boot-primary));
+        animation: app-boot-pulse 1.15s ease-in-out infinite;
+      }
+      .app-boot-dot:nth-child(1) {
+        top: 0;
+        left: 0;
+      }
+      .app-boot-dot:nth-child(2) {
+        top: 0;
+        right: 0;
+        animation-delay: 150ms;
+      }
+      .app-boot-dot:nth-child(3) {
+        right: 0;
+        bottom: 0;
+        animation-delay: 300ms;
+      }
+      .app-boot-dot:nth-child(4) {
+        bottom: 0;
+        left: 0;
+        animation-delay: 450ms;
+      }
+      .app-boot-title {
+        margin: 0;
+        color: var(--boot-text);
+        font-size: 21px;
+        font-weight: 650;
+        line-height: 1.35;
+        letter-spacing: 0;
+      }
+      @keyframes app-boot-spin {
+        to { transform: rotate(360deg); }
+      }
+      @keyframes app-boot-pulse {
+        0%, 100% { opacity: 0.36; transform: scale(0.86); }
+        50% { opacity: 1; transform: scale(1); }
       }
     </style>
   </head>
   <body>
     <div id="app"></div>
+    <div class="app-boot-shell" aria-label="AgentRazor">
+      <section class="app-boot-content">
+        <div class="app-boot-indicator" aria-hidden="true">
+          <img src="/agentrazor-icon.png" alt="" />
+        </div>
+        <div class="app-boot-spinner" aria-hidden="true">
+          <span class="app-boot-dot"></span>
+          <span class="app-boot-dot"></span>
+          <span class="app-boot-dot"></span>
+          <span class="app-boot-dot"></span>
+        </div>
+        <div class="app-boot-title">AgentRazor</div>
+      </section>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

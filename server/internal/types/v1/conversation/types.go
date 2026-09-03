@@ -104,3 +104,14 @@ type UpdateRequest struct {
 	Archived       *bool   `json:"archived,optional"`
 	GroupId        *string `json:"groupId,optional"`
 }
+
+type WorkspaceEntry struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+	Type string `json:"type"`
+	Size int64  `json:"size"`
+}
+
+type WorkspaceFilesResponse struct {
+	Entries []WorkspaceEntry `json:"entries"`
+}

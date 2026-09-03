@@ -326,9 +326,9 @@ func (s *ThreadService) execute(ctx context.Context, cancel context.CancelFunc, 
 		if eventType == "thread.tokenUsage.updated" {
 			s.recordTokenUsage(event)
 		}
-		// Codex process events are UI progress only. Keep them live-only so the
+		// Runtime process events are UI progress only. Keep them live-only so the
 		// server does not retain intermediate display state between subscribers.
-		s.events.Broadcast(run.ThreadID, run.ID, "codex."+eventType, event)
+		s.events.Broadcast(run.ThreadID, run.ID, eventType, event)
 	}
 	runtime, runtimeErr := s.currentRuntime()
 	if runtimeErr != nil {

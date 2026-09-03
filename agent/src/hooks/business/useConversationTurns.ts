@@ -42,6 +42,7 @@ interface UseConversationTurnsOptions {
   locallyStoppedRunIds: Set<string>;
   locallyStoppedConversationIds: Set<string>;
   setConversationProcessing: (conversationId: string, processing: boolean) => void;
+  touchConversationUpdatedAt: (conversationId: string, value?: string) => void;
   isConversationProcessing: (conversation: Conversation) => boolean;
   upsertConversationListItem: (conversation: Conversation) => void;
 }
@@ -562,6 +563,7 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
       if (conversationId) locallyStoppedConversationIds.add(conversationId);
     }
     if (conversationId) {
+      options.touchConversationUpdatedAt(conversationId);
       setConversationProcessing(conversationId, false);
       activeTurnsByConversation.delete(conversationId);
       activeTurnResultSeenByConversation.delete(conversationId);

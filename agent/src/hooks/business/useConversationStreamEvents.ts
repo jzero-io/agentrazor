@@ -60,14 +60,10 @@ export function useConversationStreamEvents(options: ConversationStreamEventsOpt
     const locallyStopped = Boolean(event.runId && options.locallyStoppedRunIds.has(event.runId))
       || options.locallyStoppedConversationIds.has(event.conversationId);
 
-    if (event.type === 'run.started') {
-      options.resetProcessTimer(event.conversationId);
-      options.setConversationProcessing(event.conversationId, true);
-    }
-
     if (locallyStopped && event.type !== 'run.completed' && event.type !== 'run.failed') return;
 
     if (event.type === 'run.started') {
+      options.resetProcessTimer(event.conversationId);
       options.setConversationProcessing(event.conversationId, true);
       const data = event.data as { startedAt?: string } | undefined;
       options.beginActiveTurn({
@@ -81,7 +77,7 @@ export function useConversationStreamEvents(options: ConversationStreamEventsOpt
       return;
     }
 
-    if (event.type === 'codex.turn.started') {
+    if (event.type === 'turn.started') {
       const turn = codexTurnPayload(event.data);
       if (turn) {
         const startedAtIso = unixSecondsToIso(turn.startedAt);
@@ -96,7 +92,7 @@ export function useConversationStreamEvents(options: ConversationStreamEventsOpt
       return;
     }
 
-    if (event.type === 'codex.turn.completed') {
+    if (event.type === 'turn.completed') {
       const turn = codexTurnPayload(event.data);
       if (turn) {
         const activeTurn = options.beginActiveTurn({
@@ -129,7 +125,7 @@ export function useConversationStreamEvents(options: ConversationStreamEventsOpt
       if (durationMs !== undefined) options.setTurnElapsedDuration(event.conversationId, durationMs);
     }
 
-    if (event.type === 'codex.item.reasoning.textDelta') {
+    if (event.type === 'item.reasoning.textDelta') {
       const params = textDeltaParams(event.data);
       const delta = params?.delta ?? '';
       if (!delta) return;
@@ -145,7 +141,7 @@ export function useConversationStreamEvents(options: ConversationStreamEventsOpt
       return;
     }
 
-    if (event.type === 'codex.item.agentMessage.delta') {
+    if (event.type === 'item.agentMessage.delta') {
       const params = agentMessageDeltaParams(event.data);
       const delta = params?.delta ?? '';
       if (!delta) return;
@@ -162,7 +158,7 @@ export function useConversationStreamEvents(options: ConversationStreamEventsOpt
       return;
     }
 
-    if (event.type === 'codex.item.started') {
+    if (event.type === 'item.started') {
       const params = itemParams(event.data);
       const streamedItem = params?.item;
       if (streamedItem) {
@@ -176,7 +172,7 @@ export function useConversationStreamEvents(options: ConversationStreamEventsOpt
       return;
     }
 
-    if (event.type === 'codex.item.completed') {
+    if (event.type === 'item.completed') {
       const params = itemParams(event.data);
       if (params?.item) {
         const completedItem = { ...params.item, streamStatus: 'completed' };

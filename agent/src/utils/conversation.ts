@@ -1,25 +1,41 @@
 import type { Conversation } from '../service/api';
 
-export function conversationCreatedAtMs(item: Conversation) {
-  const time = Date.parse(item.createdAt || '');
+export function conversationUpdatedAtMs(item: Conversation) {
+  const time = Date.parse(item.updatedAt || item.createdAt || '');
   return Number.isFinite(time) ? time : 0;
 }
 
-export function sortConversationsByCreatedAt(items: Conversation[]) {
-  return [...items].sort((left, right) => conversationCreatedAtMs(right) - conversationCreatedAtMs(left));
+export function sortConversationsByUpdatedAt(items: Conversation[]) {
+  return [...items].sort((left, right) => {
+    const diff = conversationUpdatedAtMs(right) - conversationUpdatedAtMs(left);
+    return diff !== 0 ? diff : right.id.localeCompare(left.id);
+  });
 }
 
 export function displayConversationTitle(item?: Pick<Conversation, 'title'> | null) {
   return item?.title?.trim() || '新对话';
 }
 
+function latestTimeValue(left?: string, right?: string) {
+  const leftMs = Date.parse(left || '');
+  const rightMs = Date.parse(right || '');
+  if (!Number.isFinite(leftMs)) return right || left || '';
+  if (!Number.isFinite(rightMs)) return left || right || '';
+  return rightMs >= leftMs ? right! : left!;
+}
+
 export function mergeConversationSnapshot(current: Conversation | undefined, incoming: Conversation): Conversation {
   const title = incoming.title.trim() || current?.title?.trim() || '';
-  return { ...current, ...incoming, title };
+  return {
+    ...current,
+    ...incoming,
+    title,
+    updatedAt: latestTimeValue(current?.updatedAt, incoming.updatedAt)
+  };
 }
 
 export function conversationIdFromPath(pathname: string): string {
-  const match = pathname.match(/^\/c\/([^/]+)/);
+  const match = pathname.match(/^\/conversation\/([^/]+)/);
   return match ? decodeURIComponent(match[1]) : '';
 }
 

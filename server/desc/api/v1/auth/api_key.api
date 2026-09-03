@@ -1,0 +1,49 @@
+syntax = "v1"
+
+info (
+	title:      "Agent API Key"
+	desc:       "Agent 账户密钥管理"
+	author:     "agentrazor"
+	version:    "v1"
+	go_package: "v1/auth/apikey"
+)
+
+type (
+	ApiKey {
+		Id        string `json:"id"`
+		KeyHint   string `json:"keyHint"`
+		CreatedAt string `json:"createdAt"`
+	}
+	ListResponse {
+		Keys []ApiKey `json:"keys"`
+	}
+	CreateResponse {
+		ApiKey
+		Key string `json:"key"`
+	}
+	DeleteRequest {
+		Id string `path:"id" validate:"required"`
+	}
+	DeleteResponse  {}
+)
+
+@server (
+	prefix:          /api/v1
+	group:           v1/auth/apikey
+	compact_handler: true
+	jwt:             Jwt
+)
+service server {
+	@doc "列出当前账户的 Agent API 密钥"
+	@handler List
+	get /auth/api-keys returns (ListResponse)
+
+	@doc "生成 Agent API 密钥，每个账户最多三个"
+	@handler Create
+	post /auth/api-keys returns (CreateResponse)
+
+	@doc "删除 Agent API 密钥"
+	@handler Delete
+	delete /auth/api-keys/:id (DeleteRequest) returns (DeleteResponse)
+}
+

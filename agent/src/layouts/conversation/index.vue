@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, onBeforeUnmount, onMounted, reactive, ref, watch, type ComponentPublicInstance } from 'vue';
+import { computed, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type ComponentPublicInstance } from 'vue';
 import { RouterView, useRoute } from 'vue-router';
 import { Icon } from '@iconify/vue';
 import 'highlight.js/styles/github.css';
@@ -10,7 +10,6 @@ import {
   NDropdown,
   NInput,
   NModal,
-  NPopover,
   createDiscreteApi,
   zhCN,
   dateZhCN
@@ -57,6 +56,7 @@ const DRAFT_CONVERSATION_ID = '__draft_conversation__';
 const savedSidebarView = loadSidebarViewState();
 const route = useRoute();
 const requestedConversationId = computed(() => conversationIdFromPath(route.path));
+const isSettingsRoute = computed(() => route.path.startsWith('/settings'));
 
 const selectedConversationId = ref('');
 const mainPanel = ref<HTMLElement | null>(null);
@@ -65,6 +65,8 @@ const workspacePanel = useWorkspacePanel({
   selectedConversationId,
   draftConversationId: DRAFT_CONVERSATION_ID,
   fetchFile: path => conversationApi.fetchWorkspaceFile(path),
+  fetchBlob: path => conversationApi.fetchWorkspaceBlob(path),
+  fetchEntries: conversationId => conversationApi.workspaceFiles(conversationId),
   containerRef: mainPanel
 });
 const workspaceExpanded = workspacePanel.expanded;
@@ -73,14 +75,31 @@ const workspacePanelStyle = workspacePanel.panelStyle;
 const startWorkspaceResize = workspacePanel.startResize;
 const workspaceVisible = workspacePanel.visible;
 const activeWorkspace = workspacePanel.activeWorkspace;
+const activeWorkspaceTabs = workspacePanel.activeWorkspaceTabs;
+const activeWorkspaceTabId = workspacePanel.activeWorkspaceTabId;
+const activeWorkspaceUrl = workspacePanel.activeWorkspaceUrl;
+const activeRightPanelKind = workspacePanel.activeKind;
+const hasRightPanelWorkspace = workspacePanel.hasWorkspace;
+const hasRightPanelFiles = workspacePanel.hasFiles;
+const activeFilePath = workspacePanel.activeFilePath;
+const activeFileTabId = workspacePanel.activeFileTabId;
+const activeFileTabs = workspacePanel.activeFileTabs;
 const activeFilePreview = workspacePanel.activeFilePreview;
 const filePreviewLoading = workspacePanel.fileLoading;
 const filePreviewError = workspacePanel.fileError;
 const sidePanelTitle = workspacePanel.title;
+const workspaceFileTree = workspacePanel.fileTree;
+const workspaceFileTreeExpandedPaths = workspacePanel.fileTreeExpandedPaths;
+const workspaceFileTreeLoading = workspacePanel.fileTreeLoading;
+const workspaceFileTreeLoaded = workspacePanel.fileTreeLoaded;
+const workspaceFileTreeError = workspacePanel.fileTreeError;
+const toggleWorkspaceFileTreeDirectory = workspacePanel.toggleFileTreeDirectory;
 const activeFilePreviewPath = workspacePanel.filePath;
 const activeFilePreviewBreadcrumbs = workspacePanel.fileBreadcrumbs;
 const activeFilePreviewBadge = workspacePanel.fileBadge;
 const activeFilePreviewLines = workspacePanel.fileLines;
+const selectWorkspaceFile = workspacePanel.selectFile;
+const reorderWorkspaceFile = workspacePanel.reorderFile;
 const detail = ref<ConversationDetail | null>(null);
 const detailsByConversation = reactive(new Map<string, ConversationDetail>());
 const draftsByConversation = reactive(new Map<string, string>());
@@ -92,7 +111,14 @@ const creatingConversation = ref(false);
 const locallyStoppedRunIds = new Set<string>();
 const locallyStoppedConversationIds = new Set<string>();
 const renameVisible = ref(false);
+const renameConversationId = ref('');
 const renameValue = ref('');
+const renameInput = ref<HTMLInputElement | null>(null);
+const renameSaving = ref(false);
+const headingRenameVisible = ref(false);
+const headingRenameValue = ref('');
+const headingRenameInput = ref<HTMLInputElement | null>(null);
+const headingRenameSaving = ref(false);
 
 const confirmDialog = useConfirmDialog();
 const confirmVisible = confirmDialog.visible;
@@ -196,12 +222,11 @@ const {
   conversationList,
   archivedConversationSections,
   activeConversation,
-  activeConversationGroup,
-  activeConversationGroupCount,
   isArchivedActive,
   isDraftConversation,
   setConversationProcessing,
   clearConversationProcessing,
+  touchConversationUpdatedAt,
   isConversationRunning,
   isConversationProcessing,
   replaceConversation,
@@ -226,6 +251,7 @@ const conversationTurns = useConversationTurns({
   locallyStoppedRunIds,
   locallyStoppedConversationIds,
   setConversationProcessing,
+  touchConversationUpdatedAt,
   isConversationProcessing,
   upsertConversationListItem
 });
@@ -329,7 +355,7 @@ const {
 } = workspaceActions;
 const loadingCurrentDetail = computed(() =>
   Boolean(selectedConversationId.value)
-  && Boolean(activeDetail.value)
+  && !isDraftConversation()
   && loadingDetail.value
   && loadingDetailId.value === selectedConversationId.value
 );
@@ -338,13 +364,6 @@ const conversationOpening = computed(() =>
   && !activeDetail.value
   && !currentStreamingTurn.value
 );
-const showConversationLoading = computed(() => {
-  if (settingsVisible.value) return false;
-  if (authChecking.value && hasAuthToken.value) return true;
-  if (!currentUser.value) return false;
-  if (loadingCurrentDetail.value || conversationOpening.value) return true;
-  return Boolean(requestedConversationId.value && !selectedConversationId.value && loadingList.value);
-});
 const currentConversationRunning = computed(() =>
   Boolean(selectedConversationId.value && !isDraftConversation() && (cachedActiveTurn(selectedConversationId.value) || isConversationRunning(selectedConversationId.value)))
 );
@@ -419,8 +438,8 @@ function conversationsInGroup(groupId: string) {
     .filter(item => item.groupId === groupId && !item.pinnedAt)
     .sort((left, right) => {
       if (Boolean(left.pinnedAt) !== Boolean(right.pinnedAt)) return left.pinnedAt ? -1 : 1;
-      const createDiff = new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
-      if (createDiff !== 0) return createDiff;
+      const updateDiff = new Date(right.updatedAt || right.createdAt).getTime() - new Date(left.updatedAt || left.createdAt).getTime();
+      if (updateDiff !== 0) return updateDiff;
       return right.id.localeCompare(left.id);
     });
 }
@@ -566,6 +585,7 @@ const conversationDrag = useConversationDrag({
   conversationsExpanded,
   displayConversationTitle,
   hideConversationPreview,
+  selectConversation: item => selectConversation(item.id),
   updateConversationGroup
 });
 const {
@@ -575,32 +595,13 @@ const {
   onRowTouchStart
 } = conversationDrag;
 
-async function loadConversations(selectFirst = false, preserveLocalProcessing = true) {
+async function loadConversations(selectInitial = false, preserveLocalProcessing = true) {
   loadingList.value = true;
   try {
     const runningIds = applyConversationListState(await conversationApi.list(), preserveLocalProcessing, id => Boolean(cachedActiveTurn(id)));
     runningIds.forEach(id => ensureConversationStream(id));
     closeIdleConversationStreams();
-    if (selectFirst && !selectedConversationId.value) {
-      const requestedId = requestedConversationId.value;
-      let preferred = visibleConversations.value.find(item => item.id === requestedId);
-      if (!preferred && requestedId) {
-        // 列表里还没有这个对话（例如刚创建、还没有消息），单独读取后恢复，
-        // 避免刷新后直接跳到第一行对话。
-        try {
-          const detail = await conversationApi.get(requestedId);
-          if (detail?.conversation) {
-            preferred = detail.conversation;
-            upsertConversationListItem(preferred);
-          }
-        } catch {
-          preferred = undefined;
-        }
-      }
-      const fallback = preferred || visibleConversations.value[0];
-      if (fallback) await selectConversation(fallback.id);
-      else syncConversationUrl('');
-    }
+    if (selectInitial && !selectedConversationId.value) await selectInitialConversation();
   } catch (error) {
     showError(error);
   } finally {
@@ -608,35 +609,60 @@ async function loadConversations(selectFirst = false, preserveLocalProcessing = 
   }
 }
 
-function createConversation() {
-  if (sendingRequest.value) return;
-  if (!currentUser.value) {
-    loginVisible.value = true;
+async function selectInitialConversation() {
+  const requestedId = requestedConversationId.value;
+  if (!requestedId) {
+    showDraftConversation();
     return;
   }
-  closeMobileSidebar();
-  draftConversationGroupId.value = '';
+
+  const target = await resolveRequestedConversation(requestedId);
+  const fallback = target || visibleConversations.value[0];
+  if (fallback) await selectConversation(fallback.id);
+  else syncConversationUrl('');
+}
+
+async function resolveRequestedConversation(id: string) {
+  const listed = visibleConversations.value.find(item => item.id === id);
+  if (listed) return listed;
+
+  try {
+    const snapshot = await conversationApi.get(id);
+    if (!snapshot?.conversation) return undefined;
+    upsertConversationListItem(snapshot.conversation);
+    return snapshot.conversation;
+  } catch {
+    return undefined;
+  }
+}
+
+function showDraftConversation(groupId = '') {
+  draftConversationGroupId.value = groupId;
   selectedConversationId.value = DRAFT_CONVERSATION_ID;
-  detail.value = conversationDetailForDraft(draftConversationGroupId.value);
+  detail.value = conversationDetailForDraft(groupId);
   clearDisplayedActiveTurn();
   syncConversationUrl('');
   enableAutoScroll();
+}
+
+function beginDraftConversation(groupId = '') {
+  if (sendingRequest.value) return false;
+  if (!currentUser.value) {
+    loginVisible.value = true;
+    return false;
+  }
+  closeMobileSidebar();
+  showDraftConversation(groupId);
+  return true;
+}
+
+function createConversation() {
+  if (!beginDraftConversation()) return;
   conversationsExpanded.value = true;
 }
 
 function createConversationInGroup(group: ConversationGroup) {
-  if (sendingRequest.value) return;
-  if (!currentUser.value) {
-    loginVisible.value = true;
-    return;
-  }
-  closeMobileSidebar();
-  draftConversationGroupId.value = group.id;
-  selectedConversationId.value = DRAFT_CONVERSATION_ID;
-  detail.value = conversationDetailForDraft(draftConversationGroupId.value);
-  clearDisplayedActiveTurn();
-  syncConversationUrl('');
-  enableAutoScroll();
+  if (!beginDraftConversation(group.id)) return;
   groupsExpanded.value = true;
   group.collapsed = false;
 }
@@ -767,25 +793,88 @@ const {
 } = conversationComposer;
 
 
-function openRename() {
-  if (!activeConversation.value) return;
-  renameValue.value = activeConversation.value.title || "";
+function openRename(item: Conversation | null | undefined = activeConversation.value) {
+  if (!item || isDraftConversation(item.id)) return;
+  renameConversationId.value = item.id;
+  renameValue.value = item.title || '';
   renameVisible.value = true;
+  void nextTick(() => {
+    renameInput.value?.focus();
+    renameInput.value?.select();
+  });
+}
+
+function cancelRename() {
+  renameVisible.value = false;
+  renameConversationId.value = '';
+  renameValue.value = '';
 }
 
 async function saveRename() {
   const title = renameValue.value.trim();
-  if (!activeConversation.value || !title) return;
+  if (renameSaving.value) return;
+  const conversation = conversations.value.find(item => item.id === renameConversationId.value);
+  if (!conversation) {
+    cancelRename();
+    return;
+  }
+  if (!title) return;
+  if (title === conversation.title) {
+    cancelRename();
+    return;
+  }
+  renameSaving.value = true;
   try {
-    const conversationId = activeConversation.value.id;
+    const conversationId = conversation.id;
     const updated = await conversationApi.update(conversationId, { title });
     replaceConversation(updated);
     if (detail.value?.conversation.id === conversationId) {
       detail.value.conversation = { ...detail.value.conversation, ...updated };
     }
-    renameVisible.value = false;
+    cancelRename();
   } catch (error) {
     showError(error);
+  } finally {
+    renameSaving.value = false;
+  }
+}
+
+function openHeadingRename() {
+  if (!activeConversation.value || isDraftConversation(activeConversation.value.id)) return;
+  headingRenameValue.value = activeConversation.value.title || '';
+  headingRenameVisible.value = true;
+  void nextTick(() => {
+    headingRenameInput.value?.focus();
+    headingRenameInput.value?.select();
+  });
+}
+
+function cancelHeadingRename() {
+  headingRenameVisible.value = false;
+  headingRenameValue.value = '';
+}
+
+async function saveHeadingRename() {
+  const conversation = activeConversation.value;
+  const title = headingRenameValue.value.trim();
+  if (headingRenameSaving.value || !conversation) return;
+  if (!title || title === conversation.title) {
+    cancelHeadingRename();
+    return;
+  }
+
+  headingRenameSaving.value = true;
+  try {
+    const updated = await conversationApi.update(conversation.id, { title });
+    replaceConversation(updated);
+    if (detail.value?.conversation.id === conversation.id) {
+      detail.value.conversation = { ...detail.value.conversation, ...updated };
+    }
+    cancelHeadingRename();
+  } catch (error) {
+    showError(error);
+  } finally {
+    headingRenameSaving.value = false;
   }
 }
 
@@ -889,19 +978,29 @@ function resetApplicationState() {
   closeAllConversationStreams();
 }
 
+function finishBootScreen() {
+  void nextTick(() => {
+    requestAnimationFrame(() => document.body.classList.add('app-ready'));
+  });
+}
+
 async function bootstrap() {
-  restoreSettingsFromPath();
+  const restoredSettings = restoreSettingsFromPath();
   installAuthErrorHandler();
   const user = await restoreSession();
-  if (!user) return;
-  void Promise.all([loadConversationGroups(), loadConversations(true)]);
+  if (!user) {
+    finishBootScreen();
+    return;
+  }
+  await Promise.all([loadConversationGroups(), loadConversations(!restoredSettings)]);
+  finishBootScreen();
 }
 
 async function submitLogin() {
   const user = await submitLoginSession();
   if (!user) return;
   await loadConversationGroups();
-  await loadConversations(true);
+  await loadConversations(!settingsVisible.value);
 }
 
 function logout() {
@@ -1004,7 +1103,10 @@ onMounted(() => {
   void bootstrap();
   // 防止登录恢复流程异常卡死导致一直白屏：超时后强制结束启动态
   window.setTimeout(() => {
-    if (authChecking.value) finishAuthChecking();
+    if (authChecking.value) {
+      finishAuthChecking();
+      finishBootScreen();
+    }
   }, 10000);
 });
 onBeforeUnmount(() => {
@@ -1014,11 +1116,31 @@ onBeforeUnmount(() => {
   stopAllConversationTitleRefresh();
   clearCopiedMessageTimer();
 });
+watch(
+  () => route.path,
+  path => {
+    if (settingsVisible.value || authChecking.value || !currentUser.value) return;
+    const conversationId = conversationIdFromPath(path);
+    if (conversationId) {
+      if (conversationId !== selectedConversationId.value) void selectConversation(conversationId);
+      return;
+    }
+    if (selectedConversationId.value !== DRAFT_CONVERSATION_ID) showDraftConversation();
+  }
+);
+let initialConversationSelection = true;
 watch(selectedConversationId, id => {
   clearMessagePreviewSelection();
   pinnedSummaryOpen.value = false;
-  if (id) workspacePanel.restore(id);
-  else workspaceExpanded.value = false;
+  const restorePanel = initialConversationSelection
+    && performance.getEntriesByType('navigation').some(entry => (entry as PerformanceNavigationTiming).type === 'reload');
+  initialConversationSelection = false;
+  if (id) {
+    if (restorePanel) workspacePanel.restore(id);
+    else workspacePanel.collapse();
+  } else {
+    workspaceExpanded.value = false;
+  }
 });
 watch(isDarkAppearance, value => {
   document.documentElement.dataset.theme = value ? 'dark' : 'light';
@@ -1028,28 +1150,28 @@ watch(isDarkAppearance, value => {
 
 <template>
   <n-config-provider :locale="zhCN" :date-locale="dateZhCN" :theme="activeTheme" :theme-overrides="themeOverrides">
-    <div class="app-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed, 'sidebar-hover-open': sidebarHoverOpen }" :style="appShellStyle">
+    <div class="app-shell" :class="{ 'sidebar-collapsed': Boolean(currentUser) && sidebarCollapsed, 'sidebar-hover-open': Boolean(currentUser) && sidebarHoverOpen }" :style="appShellStyle">
       <ConversationSidebar
         v-model:user-menu-visible="userMenuVisible"
         v-model:pinned-expanded="pinnedExpanded"
         v-model:groups-expanded="groupsExpanded"
         v-model:conversations-expanded="conversationsExpanded"
         :mobile-sidebar-open="mobileSidebarOpen"
-        :sidebar-expanded="sidebarExpanded"
-        :sidebar-collapsed="sidebarCollapsed"
+        :sidebar-expanded="currentUser ? sidebarExpanded : true"
+        :sidebar-collapsed="currentUser ? sidebarCollapsed : false"
         :current-user="currentUser"
         :user-initial="userInitial"
-        :loading-list="loadingList"
-        :pinned-conversations="pinnedConversations"
-        :conversation-groups="conversationGroups"
-        :conversation-list="conversationList"
+        :loading-list="Boolean(currentUser) && loadingList"
+        :pinned-conversations="currentUser ? pinnedConversations : []"
+        :conversation-groups="currentUser ? conversationGroups : []"
+        :conversation-list="currentUser ? conversationList : []"
         :selected-conversation-id="selectedConversationId"
         :dragged-conversation-id="draggedConversationId"
         :conversation-drop-target="conversationDropTarget"
         :conversation-list-drop-target="CONVERSATION_LIST_DROP_TARGET"
         :display-conversation-title="displayConversationTitle"
         :is-conversation-processing="isConversationProcessing"
-        :conversations-in-group="conversationsInGroup"
+        :conversations-in-group="currentUser ? conversationsInGroup : (() => [])"
         :set-user-menu-wrap="setUserMenuWrap"
         :close-sidebar-hover="closeSidebarHover"
         :toggle-sidebar-pinned="toggleSidebarPinned"
@@ -1061,6 +1183,7 @@ watch(isDarkAppearance, value => {
         :hide-conversation-preview="hideConversationPreview"
         :show-conversation-preview="showConversationPreview"
         :select-conversation="selectConversation"
+        :rename-conversation="openRename"
         :on-conversation-pointer-down="onConversationPointerDown"
         :on-row-touch-start="onRowTouchStart"
         :toggle-conversation-pinned="toggleConversationPinned"
@@ -1078,7 +1201,7 @@ watch(isDarkAppearance, value => {
       />
 
       <div
-        v-if="conversationPreview && sidebarExpanded"
+        v-if="currentUser && conversationPreview && sidebarExpanded"
         class="conversation-hover-card"
         :style="{ top: `${conversationPreviewTop}px` }"
       >
@@ -1096,14 +1219,18 @@ watch(isDarkAppearance, value => {
       <main
         ref="mainPanel"
         class="main-panel"
-        :class="{ 'workspace-open': workspaceVisible && (activeWorkspace || activeFilePreview), 'workspace-expanded': workspaceExpanded }"
+        :class="{
+          'workspace-open':
+            !isSettingsRoute && Boolean(selectedConversationId) && selectedConversationId !== DRAFT_CONVERSATION_ID && workspaceVisible && rightPanelContentReady,
+          'workspace-expanded': !isSettingsRoute && selectedConversationId !== DRAFT_CONVERSATION_ID && workspaceExpanded
+        }"
         :style="workspacePanelStyle"
       >
         <header class="topbar">
           <n-button quaternary circle class="mobile-menu-button" aria-label="打开左侧边栏" title="打开左侧边栏" @click="openMobileSidebar">
             <template #icon><Icon icon="lucide:panel-left" /></template>
           </n-button>
-          <div v-if="sidebarCollapsed" class="topbar-left-actions">
+          <div v-if="currentUser && sidebarCollapsed" class="topbar-left-actions">
             <n-button quaternary class="topbar-sidebar-toggle" aria-label="打开左侧边栏" title="打开左侧边栏" @mouseenter="openSidebarHover" @click="expandSidebar">
               <template #icon><Icon icon="lucide:panel-left" /></template>
             </n-button>
@@ -1113,37 +1240,41 @@ watch(isDarkAppearance, value => {
           </div>
           <div class="topbar-inner">
             <div v-if="activeConversation && !isDraftConversation(activeConversation.id)" class="conversation-heading">
-              <n-popover v-if="activeConversationGroup" trigger="click" placement="bottom-start" :show-arrow="false" :width="240">
-                <template #trigger>
-                  <button
-                    type="button"
-                    class="conversation-heading-group-button"
-                    :title="`查看分组：${activeConversationGroup.name}`"
-                    :aria-label="`查看分组：${activeConversationGroup.name}`"
-                  >
-                    <Icon icon="lucide:folder" />
-                  </button>
-                </template>
-                <div class="conversation-group-popover">
-                  <span>所属分组</span>
-                  <strong>{{ activeConversationGroup.name }}</strong>
-                  <p>{{ activeConversationGroupCount }} 个对话</p>
-                </div>
-              </n-popover>
-              <strong>{{ displayConversationTitle(activeConversation) }}</strong>
+              <form v-if="headingRenameVisible" class="conversation-heading-editor" @submit.prevent="saveHeadingRename">
+                <span class="conversation-heading-editor-sizer" aria-hidden="true">{{ headingRenameValue || ' ' }}</span>
+                <input
+                  ref="headingRenameInput"
+                  v-model="headingRenameValue"
+                  size="1"
+                  maxlength="80"
+                  aria-label="修改对话标题"
+                  @blur="saveHeadingRename"
+                  @keydown.esc.prevent="cancelHeadingRename"
+                />
+              </form>
+              <button
+                v-else
+                type="button"
+                class="conversation-heading-title"
+                :title="`修改标题：${displayConversationTitle(activeConversation)}`"
+                :aria-label="`修改标题：${displayConversationTitle(activeConversation)}`"
+                @click="openHeadingRename"
+              >
+                <span>{{ displayConversationTitle(activeConversation) }}</span>
+              </button>
               <n-dropdown
                 v-if="activeConversation"
                 trigger="click"
                 placement="bottom-start"
                 :options="menuOptions"
-                @select="key => key === 'rename' ? openRename() : key === 'delete' ? confirmDelete() : key === 'pin' ? togglePinned() : toggleArchived()"
+                @select="key => key === 'rename' ? openHeadingRename() : key === 'delete' ? confirmDelete() : key === 'pin' ? togglePinned() : toggleArchived()"
               >
                 <n-button quaternary circle class="conversation-heading-more"><template #icon><Icon icon="lucide:ellipsis" /></template></n-button>
               </n-dropdown>
             </div>
           </div>
           <n-button
-            v-if="(pinnedSummaryWorkspaces.length || activeWorkspace || activeFilePreview) && !workspaceVisible"
+            v-if="!isSettingsRoute && currentUser && selectedConversationId && selectedConversationId !== DRAFT_CONVERSATION_ID && !workspaceVisible"
             quaternary
             class="right-panel-toggle topbar-right-panel-toggle"
             :aria-label="rightPanelOpen ? '收起右侧面板' : '打开右侧面板'"
@@ -1180,7 +1311,6 @@ watch(isDarkAppearance, value => {
             v-model:nav-expanded="settingsNavExpanded"
             v-model:section="settingsSection"
             v-model:archive-query="archiveQuery"
-            :show-conversation-loading="showConversationLoading"
             :selected-conversation-id="selectedConversationId"
             :is-new-chat="isNewChat"
             :current-user="currentUser"
@@ -1211,7 +1341,6 @@ watch(isDarkAppearance, value => {
             :open-workspace-file="openWorkspaceFile"
             :activity-icon="activityIcon"
             :activity-title="activityTitle"
-            :create-conversation="createConversation"
             :open-login="openLogin"
             :appearance="appearance"
             :appearance-options="appearanceOptions"
@@ -1228,41 +1357,85 @@ watch(isDarkAppearance, value => {
             @delete-group-archived="confirmDeleteGroupArchived"
             @delete-archived="confirmDeleteArchived"
             @restore-archived="restoreArchived"
+            @resize-start="startSidebarResize"
           />
         </RouterView>
 
         <RightPanel
-          :visible="workspaceVisible"
+          :visible="!isSettingsRoute && Boolean(currentUser) && Boolean(selectedConversationId) && selectedConversationId !== DRAFT_CONVERSATION_ID && workspaceVisible"
           :content-ready="rightPanelContentReady"
           :expanded="workspaceExpanded"
           :conversation-id="selectedConversationId"
           :workspace="activeWorkspace"
+          :workspace-tabs="activeWorkspaceTabs"
+          :active-workspace-tab-id="activeWorkspaceTabId"
+          :active-workspace-url="activeWorkspaceUrl"
+          :available-workspaces="pinnedSummaryWorkspaces"
+          :active-kind="activeRightPanelKind"
+          :has-workspace="hasRightPanelWorkspace || pinnedSummaryWorkspaces.length > 0"
+          :has-files="hasRightPanelFiles"
           :file-preview="activeFilePreview"
+          :file-tabs="activeFileTabs"
+          :active-file-tab-id="activeFileTabId"
+          :active-file-path="activeFilePath"
           :file-loading="filePreviewLoading"
           :file-error="filePreviewError"
           :title="sidePanelTitle"
           :reload-version="workspaceReloadVersion"
           :file-badge="activeFilePreviewBadge"
           :file-breadcrumbs="activeFilePreviewBreadcrumbs"
+          :file-tree="workspaceFileTree"
+          :file-tree-expanded-paths="workspaceFileTreeExpandedPaths"
+          :file-tree-loading="workspaceFileTreeLoading"
+          :file-tree-loaded="workspaceFileTreeLoaded"
+          :file-tree-error="workspaceFileTreeError"
           :file-lines="activeFilePreviewLines"
           @resize-start="startWorkspaceResize"
           @reload="reloadWorkspace"
+          @open-workspace="workspacePanel.openWorkspace"
+          @select-workspace="workspacePanel.selectWorkspace"
+          @close-workspace="workspacePanel.closeWorkspace"
+          @switch-files="workspacePanel.switchToFiles"
           @toggle-expanded="toggleWorkspaceExpanded"
           @collapse="toggleRightPanel"
+          @select-file="selectWorkspaceFile"
+          @reorder-file="reorderWorkspaceFile"
           @close-file="closeFilePreview"
+          @toggle-file-tree-directory="toggleWorkspaceFileTreeDirectory"
+          @open-tree-file="workspacePanel.openTreeFile"
         />
       </main>
     </div>
 
-    <n-modal v-model:show="renameVisible" preset="card" title="重命名对话" class="rename-modal">
-      <n-input v-model:value="renameValue" maxlength="80" autofocus @keyup.enter="saveRename" />
+    <n-modal
+      v-model:show="renameVisible"
+      preset="card"
+      :bordered="false"
+      :mask-closable="!renameSaving"
+      :close-on-esc="!renameSaving"
+      class="conversation-rename-modal"
+      @after-leave="cancelRename"
+    >
+      <div class="conversation-rename-header">
+        <h2>重命名聊天</h2>
+        <p>保持简短且易于识别</p>
+      </div>
+      <input
+        ref="renameInput"
+        v-model="renameValue"
+        class="conversation-rename-input"
+        maxlength="80"
+        aria-label="对话标题"
+        @keydown.enter.prevent="saveRename"
+      />
       <template #footer>
         <div class="modal-actions">
-          <n-button @click="renameVisible = false">取消</n-button>
-          <n-button type="primary" :disabled="!renameValue.trim()" @click="saveRename">保存</n-button>
+          <n-button :disabled="renameSaving" @click="cancelRename">取消</n-button>
+          <n-button type="primary" :loading="renameSaving" :disabled="!renameValue.trim()" @click="saveRename">保存</n-button>
         </div>
       </template>
     </n-modal>
+
 
     <n-modal
       v-model:show="groupEditorVisible"

@@ -96,10 +96,24 @@ export interface SendMessageResponse {
   };
 }
 
+export interface WorkspaceEntry {
+  name: string;
+  path: string;
+  type: 'directory' | 'file';
+  size: number;
+}
+
 export interface WorkspaceFileContent {
   path: string;
   name: string;
   content: string;
+  contentType: string;
+}
+
+export interface WorkspaceFileBlob {
+  path: string;
+  name: string;
+  blob: Blob;
   contentType: string;
 }
 
@@ -110,6 +124,16 @@ export interface ConversationGroup {
   updatedAt: string;
 }
 
+
+export interface AgentApiKey {
+  id: string;
+  keyHint: string;
+  createdAt: string;
+}
+
+export interface CreatedAgentApiKey extends AgentApiKey {
+  key: string;
+}
 
 export interface LoginResponse {
   token: string;

@@ -15,8 +15,8 @@ func Register(server *rest.Server) {
 	server.Use(global.ServiceContext.I18n)
 }
 
-func NewMiddleware() svc.Middleware {
+func NewMiddleware(svcCtx *svc.ServiceContext) svc.Middleware {
 	return svc.Middleware{
-		Agent: NewAgentMiddleware().Handle,
+		Agent: NewAgentMiddleware(svcCtx).Handle,
 	}
 }

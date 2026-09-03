@@ -8,6 +8,7 @@ interface UseConversationDragOptions {
   conversationsExpanded: Ref<boolean>;
   displayConversationTitle: (conversation: Conversation) => string;
   hideConversationPreview: () => void;
+  selectConversation: (conversation: Conversation) => void | Promise<void>;
   updateConversationGroup: (conversation: Conversation, groupId: string) => void | Promise<void>;
 }
 
@@ -99,6 +100,8 @@ export function useConversationDrag(options: UseConversationDragOptions) {
 
   function onRowTouchStart(item: Conversation, event: TouchEvent) {
     if (event.touches.length !== 1) return;
+    const target = event.target;
+    if (target instanceof Element && target.closest('button:not(.conversation-item)')) return;
     const touch = event.touches[0];
     touchDrag = { item, x: touch.clientX, y: touch.clientY, activated: false };
     touchLongPressTimer = window.setTimeout(() => {
@@ -126,12 +129,26 @@ export function useConversationDrag(options: UseConversationDragOptions) {
     updateDropTarget(touch.clientX, touch.clientY);
   }
 
-  function onWindowTouchEnd() {
+  function onWindowTouchEnd(event: TouchEvent) {
     if (!touchDrag) return;
     window.clearTimeout(touchLongPressTimer);
     const item = touchDrag.item;
+    const activated = touchDrag.activated;
     touchDrag = null;
-    finishDrag(item);
+    if (activated) {
+      finishDrag(item);
+      return;
+    }
+
+    event.preventDefault();
+    options.hideConversationPreview();
+    void options.selectConversation(item);
+  }
+
+  function onWindowTouchCancel() {
+    window.clearTimeout(touchLongPressTimer);
+    touchDrag = null;
+    clearDragVisuals();
   }
 
   function cleanupDrag() {
@@ -145,8 +162,8 @@ export function useConversationDrag(options: UseConversationDragOptions) {
     window.addEventListener('pointermove', onDragPointerMove);
     window.addEventListener('pointerup', onDragPointerUp);
     window.addEventListener('touchmove', onWindowTouchMove, { passive: false });
-    window.addEventListener('touchend', onWindowTouchEnd);
-    window.addEventListener('touchcancel', onWindowTouchEnd);
+    window.addEventListener('touchend', onWindowTouchEnd, { passive: false });
+    window.addEventListener('touchcancel', onWindowTouchCancel);
   });
 
   onBeforeUnmount(() => {
@@ -154,7 +171,7 @@ export function useConversationDrag(options: UseConversationDragOptions) {
     window.removeEventListener('pointerup', onDragPointerUp);
     window.removeEventListener('touchmove', onWindowTouchMove);
     window.removeEventListener('touchend', onWindowTouchEnd);
-    window.removeEventListener('touchcancel', onWindowTouchEnd);
+    window.removeEventListener('touchcancel', onWindowTouchCancel);
     cleanupDrag();
   });
 

@@ -1,6 +1,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, type Ref } from 'vue';
 import hljs from 'highlight.js/lib/common';
-import type { WorkspaceFileContent } from '../../service/api';
+import type { WorkspaceEntry, WorkspaceFileBlob, WorkspaceFileContent } from '../../service/api';
+import { useWorkspaceFileTree } from './useWorkspaceFileTree';
 
 export interface WorkspaceDescriptor {
   type: 'workspace';
@@ -8,17 +9,36 @@ export interface WorkspaceDescriptor {
   url: string;
 }
 
+export interface WorkspaceTab extends WorkspaceDescriptor {
+  tabId: string;
+}
+
 export interface FilePreview extends WorkspaceFileContent {
+  kind: 'text' | 'image' | 'unsupported' | 'loading';
   language: string;
   markdown: boolean;
+  objectUrl?: string;
+  placeholder?: boolean;
+  size?: number;
+}
+
+export interface FilePreviewTab extends FilePreview {
+  tabId: string;
+}
+
+interface FileTab {
+  tabId: string;
+  path: string;
 }
 
 interface RightPanelConversationState {
   visible?: boolean;
   kind?: 'workspace' | 'file';
   expanded?: boolean;
-  workspace?: WorkspaceDescriptor;
-  filePath?: string;
+  workspaceTabs?: WorkspaceTab[];
+  activeWorkspaceTabId?: string;
+  fileTabs?: FileTab[];
+  activeFileTabId?: string;
 }
 
 interface RightPanelViewState {
@@ -28,21 +48,55 @@ interface RightPanelViewState {
 
 const RIGHT_PANEL_VIEW_KEY = 'agentrazor_right_panel_view';
 
+function createTabId() {
+  return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 function sanitizeRightPanelState(value: RightPanelConversationState | undefined | null): RightPanelConversationState | null {
-  if (!value || value.kind !== 'workspace' && value.kind !== 'file') return null;
+  if (!value || (value.kind && value.kind !== 'workspace' && value.kind !== 'file')) return null;
   const state: RightPanelConversationState = {
     visible: Boolean(value.visible),
     kind: value.kind,
     expanded: Boolean(value.expanded)
   };
-  if (value.kind === 'workspace') {
-    const workspace = value.workspace;
-    if (!workspace || workspace.type !== 'workspace' || !workspace.title || !workspace.url) return null;
-    state.workspace = { type: 'workspace', title: workspace.title, url: workspace.url };
-  } else {
-    if (!value.filePath) return null;
-    state.filePath = value.filePath;
+  const workspaceTabs = Array.isArray(value.workspaceTabs)
+    ? value.workspaceTabs
+      .filter(workspace => workspace?.type === 'workspace' && workspace.title && workspace.url)
+      .map(workspace => ({
+        type: 'workspace' as const,
+        title: workspace.title,
+        url: workspace.url,
+        tabId: typeof workspace.tabId === 'string' && workspace.tabId ? workspace.tabId : createTabId()
+      }))
+    : [];
+  const activeWorkspaceTabId = typeof value.activeWorkspaceTabId === 'string'
+    ? value.activeWorkspaceTabId
+    : workspaceTabs[0]?.tabId;
+  if (workspaceTabs.length && activeWorkspaceTabId && workspaceTabs.some(workspace => workspace.tabId === activeWorkspaceTabId)) {
+    state.workspaceTabs = workspaceTabs;
+    state.activeWorkspaceTabId = activeWorkspaceTabId;
   }
+  const fileTabs = Array.isArray(value.fileTabs)
+    ? value.fileTabs
+      .filter(tab => typeof tab?.path === 'string' && tab.path.trim())
+      .map(tab => ({
+        tabId: typeof tab.tabId === 'string' && tab.tabId ? tab.tabId : createTabId(),
+        path: tab.path
+      }))
+    : [];
+  const activeFileTabId = typeof value.activeFileTabId === 'string' ? value.activeFileTabId : fileTabs[0]?.tabId;
+  if (fileTabs.length && activeFileTabId && fileTabs.some(tab => tab.tabId === activeFileTabId)) {
+    state.fileTabs = fileTabs;
+    state.activeFileTabId = activeFileTabId;
+  }
+  if (state.kind === 'workspace' && !state.workspaceTabs?.length) {
+    if (state.fileTabs?.length) state.kind = 'file';
+    else return null;
+  }
+  if (!state.kind && (state.workspaceTabs?.length || state.fileTabs?.length)) {
+    state.kind = state.workspaceTabs?.length ? 'workspace' : 'file';
+  }
+  if (!state.kind && !state.visible) return null;
   return state;
 }
 
@@ -61,6 +115,28 @@ function loadRightPanelViewState(): RightPanelViewState {
   } catch {
     return { workspaceWidth: null, conversations: {} };
   }
+}
+
+const IMAGE_EXTENSIONS = new Set(['apng', 'avif', 'bmp', 'gif', 'ico', 'jpeg', 'jpg', 'png', 'svg', 'webp']);
+const TEXT_EXTENSIONS = new Set([
+  'api', 'c', 'cc', 'conf', 'cpp', 'css', 'csv', 'dockerfile', 'env', 'go', 'h', 'html', 'java', 'js', 'json',
+  'jsx', 'log', 'md', 'markdown', 'mod', 'proto', 'py', 'rs', 'sh', 'sql', 'sum', 'toml', 'ts', 'tsx', 'txt',
+  'vue', 'xml', 'yaml', 'yml'
+]);
+
+function extensionFromName(name: string) {
+  const lower = name.toLowerCase();
+  return lower.includes('.') ? lower.slice(lower.lastIndexOf('.') + 1) : '';
+}
+
+function isImageFile(name: string, contentType = '') {
+  return contentType.startsWith('image/') || IMAGE_EXTENSIONS.has(extensionFromName(name));
+}
+
+function isTextFile(name: string, contentType = '') {
+  if (contentType.startsWith('text/')) return true;
+  if (/json|xml|yaml|toml|javascript|typescript/.test(contentType)) return true;
+  return TEXT_EXTENSIONS.has(extensionFromName(name));
 }
 
 export function languageFromFilename(name: string, contentType: string) {
@@ -104,18 +180,26 @@ export function useWorkspacePanel(options: {
   selectedConversationId: Ref<string>;
   draftConversationId: string;
   fetchFile: (path: string) => Promise<WorkspaceFileContent>;
+  fetchBlob: (path: string) => Promise<WorkspaceFileBlob>;
+  fetchEntries: (conversationId: string) => Promise<WorkspaceEntry[]>;
   containerRef?: Ref<HTMLElement | null>;
   onError?: (error: unknown) => void;
 }) {
   const saved = loadRightPanelViewState();
   const statesByConversation = reactive(new Map<string, RightPanelConversationState>(Object.entries(saved.conversations || {})));
-  const filePreviewsByConversation = reactive(new Map<string, FilePreview>());
+  const filePreviewsByConversation = reactive(new Map<string, Map<string, FilePreview>>());
   const width = ref<number | null>(saved.workspaceWidth ?? null);
   const expanded = ref(false);
   const reloadVersion = ref(0);
-  const fileLoading = ref(false);
+  const loadingFilePaths = reactive(new Set<string>());
   const fileError = ref('');
   let resizeStart: { x: number; width: number } | null = null;
+  const fileTree = useWorkspaceFileTree({
+    selectedConversationId: options.selectedConversationId,
+    draftConversationId: options.draftConversationId,
+    fetchEntries: options.fetchEntries,
+    onError: options.onError
+  });
 
   const activeState = computed(() => statesByConversation.get(options.selectedConversationId.value) || null);
   const visible = computed({
@@ -124,14 +208,38 @@ export function useWorkspacePanel(options: {
       setState(options.selectedConversationId.value, { visible: value });
     }
   });
+  const activeKind = computed(() => activeState.value?.kind || '');
+  const activeWorkspaceTabs = computed(() => activeState.value?.workspaceTabs || []);
+  const activeWorkspaceTabId = computed(() => activeState.value?.activeWorkspaceTabId || '');
+  const hasWorkspace = computed(() => Boolean(activeWorkspaceTabs.value.length));
+  const hasFiles = computed(() => Boolean(options.selectedConversationId.value && options.selectedConversationId.value !== options.draftConversationId));
   const activeWorkspace = computed(() => {
     const state = activeState.value;
-    return state?.kind === 'workspace' ? state.workspace || null : null;
+    return state?.kind === 'workspace'
+      ? state.workspaceTabs?.find(workspace => workspace.tabId === state.activeWorkspaceTabId) || null
+      : null;
+  });
+  const activeWorkspaceUrl = computed(() => activeWorkspace.value?.url || '');
+  const activeFileTabId = computed(() => activeState.value?.activeFileTabId || '');
+  const activeFilePath = computed(() => {
+    const state = activeState.value;
+    if (state?.kind !== 'file') return '';
+    return state.fileTabs?.find(tab => tab.tabId === state.activeFileTabId)?.path || '';
+  });
+  const activeFileTabs = computed(() => {
+    const state = activeState.value;
+    if (!state) return [] as FilePreviewTab[];
+    const previews = filePreviewsByConversation.get(options.selectedConversationId.value);
+    return (state.fileTabs || [])
+      .map(tab => {
+        const preview = previews?.get(tab.path);
+        return preview ? { ...preview, tabId: tab.tabId } : null;
+      })
+      .filter(Boolean) as FilePreviewTab[];
   });
   const activeFilePreview = computed(() => {
-    const state = activeState.value;
-    if (state?.kind !== 'file') return null;
-    return filePreviewsByConversation.get(options.selectedConversationId.value) || null;
+    if (!activeFilePath.value) return null;
+    return filePreviewsByConversation.get(options.selectedConversationId.value)?.get(activeFilePath.value) || null;
   });
   const title = computed(() => activeFilePreview.value?.name || activeWorkspace.value?.title || '');
   const filePath = computed(() => activeFilePreview.value ? displayWorkspaceFilePath(activeFilePreview.value) : '');
@@ -147,7 +255,7 @@ export function useWorkspacePanel(options: {
   });
   const fileLines = computed(() => {
     const file = activeFilePreview.value;
-    if (!file) return [] as Array<{ number: number; html: string }>;
+    if (!file || file.kind !== 'text') return [] as Array<{ number: number; html: string }>;
     const rawLines = file.content.replace(/\r\n/g, '\n').split('\n');
     if (rawLines.length > 1 && rawLines[rawLines.length - 1] === '') rawLines.pop();
     const language = hljs.getLanguage(file.language) ? file.language : 'plaintext';
@@ -158,6 +266,7 @@ export function useWorkspacePanel(options: {
         : '&nbsp;'
     }));
   });
+  const fileLoading = computed(() => Boolean(activeFilePath.value && loadingFilePaths.has(activeFilePath.value)));
   const panelStyle = computed(() => width.value
     ? { '--workspace-width': `${width.value}px` }
     : {});
@@ -206,44 +315,145 @@ export function useWorkspacePanel(options: {
     return safeWorkspaceFileURL(conversationId, pathname);
   }
 
-  function openWorkspace(workspace: WorkspaceDescriptor) {
+  function previewsForConversation(conversationId: string) {
+    let previews = filePreviewsByConversation.get(conversationId);
+    if (!previews) {
+      previews = reactive(new Map<string, FilePreview>()) as Map<string, FilePreview>;
+      filePreviewsByConversation.set(conversationId, previews);
+    }
+    return previews;
+  }
+
+  function fileNameFromPath(path: string) {
+    return decodeURIComponent(path.split('?')[0] || '').split('/').filter(Boolean).pop() || '文件';
+  }
+
+  function previewBadge(file: FilePreview) {
+    const language = file.language || 'text';
+    if (file.kind === 'image') return 'IMG';
+    if (language === 'typescript') return 'TS';
+    if (language === 'javascript') return 'JS';
+    if (language === 'markdown') return 'MD';
+    if (language === 'yaml') return 'YML';
+    if (language === 'text') return 'TXT';
+    return language.slice(0, 3).toUpperCase();
+  }
+
+  function revokeFilePreview(conversationId: string, path?: string) {
+    const previews = filePreviewsByConversation.get(conversationId);
+    if (!previews) return;
+    const paths = path ? [path] : [...previews.keys()];
+    for (const itemPath of paths) {
+      const preview = previews.get(itemPath);
+      if (preview?.objectUrl) URL.revokeObjectURL(preview.objectUrl);
+      previews.delete(itemPath);
+    }
+    if (!previews.size) filePreviewsByConversation.delete(conversationId);
+  }
+
+  function openWorkspace(workspace: WorkspaceDescriptor, replaceTabs = false, forceNewTab = false) {
     const conversationId = options.selectedConversationId.value;
     if (!conversationId) return;
     expanded.value = false;
     fileError.value = '';
-    filePreviewsByConversation.delete(conversationId);
-    setState(conversationId, { visible: true, kind: 'workspace', expanded: false, workspace });
+    const currentTabs = statesByConversation.get(conversationId)?.workspaceTabs || [];
+    const existing = !replaceTabs && !forceNewTab ? currentTabs.find(tab => tab.url === workspace.url) : null;
+    const tab = existing || { ...workspace, tabId: createTabId() };
+    const workspaceTabs = replaceTabs ? [tab] : existing ? currentTabs : [...currentTabs, tab];
+    setState(conversationId, {
+      visible: true,
+      kind: 'workspace',
+      expanded: false,
+      workspaceTabs,
+      activeWorkspaceTabId: tab.tabId
+    });
   }
 
-  async function openFile(path: string, restoreExpanded = false) {
+  function showLauncher() {
+    const conversationId = options.selectedConversationId.value;
+    if (!conversationId || conversationId === options.draftConversationId) return;
+    expanded.value = false;
+    fileError.value = '';
+    setState(conversationId, { visible: true, kind: undefined, expanded: false });
+  }
+
+  async function openFile(path: string, restoreExpanded = false, forceNewTab = false) {
     const conversationId = options.selectedConversationId.value;
     if (!conversationId) return;
     expanded.value = restoreExpanded ? expanded.value : false;
     fileError.value = '';
-    fileLoading.value = true;
-    setState(conversationId, { visible: true, kind: 'file', expanded: expanded.value, filePath: path });
+    const state = statesByConversation.get(conversationId);
+    const currentTabs = state?.fileTabs || [];
+    const existing = !forceNewTab ? currentTabs.find(tab => tab.path === path) : null;
+    const tab = existing || { tabId: createTabId(), path };
+    const fileTabs = existing ? currentTabs : [...currentTabs, tab];
+    const previews = previewsForConversation(conversationId);
+    if (!previews.has(path)) {
+      const name = fileNameFromPath(path);
+      previews.set(path, {
+        path,
+        name,
+        content: '',
+        contentType: '',
+        kind: 'loading',
+        language: languageFromFilename(name, ''),
+        markdown: /\.md(?:own)?$/i.test(name),
+        placeholder: true
+      });
+    }
+    loadingFilePaths.add(path);
+    setState(conversationId, {
+      visible: true,
+      kind: 'file',
+      expanded: expanded.value,
+      fileTabs,
+      activeFileTabId: tab.tabId
+    });
     try {
+      const name = fileNameFromPath(path);
+      if (isImageFile(name)) {
+        const file = await options.fetchBlob(path);
+        if (options.selectedConversationId.value !== conversationId) return;
+        revokeFilePreview(conversationId, path);
+        previewsForConversation(conversationId).set(path, {
+          path: file.path,
+          name: file.name,
+          content: '',
+          contentType: file.contentType,
+          kind: 'image',
+          language: languageFromFilename(file.name, file.contentType),
+          markdown: false,
+          objectUrl: URL.createObjectURL(file.blob),
+          size: file.blob.size
+        });
+        return;
+      }
+
       const file = await options.fetchFile(path);
       if (options.selectedConversationId.value !== conversationId) return;
-      filePreviewsByConversation.set(conversationId, {
+      revokeFilePreview(conversationId, path);
+      const textFile = isTextFile(file.name, file.contentType);
+      previewsForConversation(conversationId).set(path, {
         ...file,
+        kind: textFile ? 'text' : 'unsupported',
         language: languageFromFilename(file.name, file.contentType),
         markdown: /\.md(?:own)?$/i.test(file.name)
       });
     } catch (error) {
       if (options.selectedConversationId.value === conversationId) {
+        revokeFilePreview(conversationId, path);
         fileError.value = error instanceof Error ? error.message : '文件读取失败';
         options.onError?.(error);
       }
     } finally {
-      if (options.selectedConversationId.value === conversationId) fileLoading.value = false;
+      loadingFilePaths.delete(path);
     }
   }
 
   function collapse() {
     const conversationId = options.selectedConversationId.value;
     expanded.value = false;
-    fileLoading.value = false;
+    loadingFilePaths.clear();
     if (conversationId) setState(conversationId, { visible: false, expanded: false });
   }
 
@@ -252,36 +462,160 @@ export function useWorkspacePanel(options: {
     setState(options.selectedConversationId.value, { expanded: expanded.value });
   }
 
+  function switchToWorkspace() {
+    const state = activeState.value;
+    if (!state?.workspaceTabs?.length) return;
+    fileError.value = '';
+    setState(options.selectedConversationId.value, {
+      visible: true,
+      kind: 'workspace',
+      activeWorkspaceTabId: state.activeWorkspaceTabId || state.workspaceTabs[0].tabId
+    });
+  }
+
+  function selectWorkspace(tabId: string) {
+    const state = activeState.value;
+    if (!state?.workspaceTabs?.some(workspace => workspace.tabId === tabId)) return;
+    fileError.value = '';
+    setState(options.selectedConversationId.value, { visible: true, kind: 'workspace', activeWorkspaceTabId: tabId });
+  }
+
+  function closeWorkspace(tabId?: string) {
+    const conversationId = options.selectedConversationId.value;
+    const state = activeState.value;
+    if (!conversationId || !state?.workspaceTabs?.length) return;
+    if (!tabId) {
+      setState(conversationId, { visible: true, kind: undefined, workspaceTabs: [], activeWorkspaceTabId: '' });
+      return;
+    }
+    const closedIndex = state.workspaceTabs.findIndex(workspace => workspace.tabId === tabId);
+    if (closedIndex < 0) return;
+    const workspaceTabs = state.workspaceTabs.filter(workspace => workspace.tabId !== tabId);
+    if (!workspaceTabs.length) {
+      const hasFileTabs = Boolean(state.fileTabs?.length);
+      setState(conversationId, {
+        visible: hasFileTabs,
+        kind: hasFileTabs ? 'file' : undefined,
+        workspaceTabs: [],
+        activeWorkspaceTabId: ''
+      });
+      return;
+    }
+    const activeWorkspaceTabId = state.activeWorkspaceTabId === tabId
+      ? workspaceTabs[Math.min(closedIndex, workspaceTabs.length - 1)].tabId
+      : state.activeWorkspaceTabId;
+    setState(conversationId, { workspaceTabs, activeWorkspaceTabId, visible: true, kind: 'workspace' });
+  }
+
+  function switchToFiles() {
+    const state = activeState.value;
+    const activeTabId = state?.activeFileTabId || state?.fileTabs?.[0]?.tabId || '';
+    const activePath = state?.fileTabs?.find(tab => tab.tabId === activeTabId)?.path || '';
+    fileError.value = '';
+    setState(options.selectedConversationId.value, { visible: true, kind: 'file', activeFileTabId: activeTabId });
+    void fileTree.load();
+    if (!activePath) return;
+    const preview = filePreviewsByConversation.get(options.selectedConversationId.value)?.get(activePath);
+    if (!preview || preview.placeholder) void openFile(activePath, true);
+  }
+
   function reload() {
     const state = activeState.value;
-    if (state?.kind === 'file' && state.filePath) {
-      void openFile(state.filePath, true);
+    if (state?.kind === 'file') {
+      void fileTree.load(true);
+      if (activeFilePath.value) void openFile(activeFilePath.value, true);
       return;
     }
     reloadVersion.value += 1;
   }
 
-  function closeFile() {
-    const conversationId = options.selectedConversationId.value;
-    if (!conversationId) return;
-    filePreviewsByConversation.delete(conversationId);
+  function selectFile(tabId: string) {
+    const state = activeState.value;
+    const tab = state?.kind === 'file' ? state.fileTabs?.find(item => item.tabId === tabId) : null;
+    if (!tab) return;
     fileError.value = '';
-    setState(conversationId, { visible: false });
+    setState(options.selectedConversationId.value, { visible: true, kind: 'file', activeFileTabId: tabId });
+    const preview = filePreviewsByConversation.get(options.selectedConversationId.value)?.get(tab.path);
+    if (!preview || preview.placeholder) void openFile(tab.path, true);
+  }
+  function openTreeFile(relativePath: string, forceNewTab = false) {
+    const path = safeWorkspaceFileURL(options.selectedConversationId.value, relativePath);
+    if (path) void openFile(path, false, forceNewTab);
+  }
+
+
+  function reorderFile(fromTabId: string, toTabId: string) {
+    const state = activeState.value;
+    if (state?.kind !== 'file' || fromTabId === toTabId) return;
+    const fileTabs = [...(state.fileTabs || [])];
+    const fromIndex = fileTabs.findIndex(tab => tab.tabId === fromTabId);
+    const toIndex = fileTabs.findIndex(tab => tab.tabId === toTabId);
+    if (fromIndex < 0 || toIndex < 0) return;
+    const [moved] = fileTabs.splice(fromIndex, 1);
+    fileTabs.splice(toIndex, 0, moved);
+    setState(options.selectedConversationId.value, { fileTabs });
+  }
+
+  function closeFile(tabId = activeFileTabId.value) {
+    const conversationId = options.selectedConversationId.value;
+    const state = activeState.value;
+    if (!conversationId || !state?.fileTabs?.length || !tabId) return;
+    const closedIndex = (state.fileTabs || []).findIndex(tab => tab.tabId === tabId);
+    if (closedIndex < 0) return;
+    const closedTab = state.fileTabs![closedIndex];
+    const fileTabs = state.fileTabs!.filter(tab => tab.tabId !== tabId);
+    if (!fileTabs.some(tab => tab.path === closedTab.path)) revokeFilePreview(conversationId, closedTab.path);
+    fileError.value = '';
+    if (!fileTabs.length) {
+      const hasWorkspaceTabs = Boolean(state.workspaceTabs?.length);
+      setState(conversationId, {
+        visible: hasWorkspaceTabs,
+        kind: hasWorkspaceTabs ? 'workspace' : undefined,
+        fileTabs: [],
+        activeFileTabId: ''
+      });
+      return;
+    }
+    const activeFileTabId = state.activeFileTabId === tabId
+      ? fileTabs[Math.min(closedIndex, fileTabs.length - 1)].tabId
+      : state.activeFileTabId;
+    setState(conversationId, { fileTabs, activeFileTabId, visible: true, kind: 'file' });
   }
 
   function restore(conversationId: string) {
     const state = statesByConversation.get(conversationId);
     expanded.value = Boolean(state?.expanded);
-    fileLoading.value = false;
+    loadingFilePaths.clear();
     fileError.value = '';
-    if (state?.visible && state.kind === 'file' && state.filePath && !filePreviewsByConversation.has(conversationId)) {
-      void openFile(state.filePath, true);
+    if (state?.visible && state.kind === 'file') void fileTree.load();
+    if (state?.visible && state.fileTabs?.length) {
+      const previews = previewsForConversation(conversationId);
+      for (const { path } of state.fileTabs || []) {
+        if (!previews.has(path)) {
+          const name = fileNameFromPath(path);
+          previews.set(path, {
+            path,
+            name,
+            content: '',
+            contentType: '',
+            kind: 'loading',
+            language: languageFromFilename(name, ''),
+            markdown: /\.md(?:own)?$/i.test(name),
+            placeholder: true
+          });
+        }
+      }
+      if (state.kind === 'file' && state.activeFileTabId) {
+        const activePath = state.fileTabs.find(tab => tab.tabId === state.activeFileTabId)?.path;
+        if (activePath && previews.get(activePath)?.kind === 'loading') void openFile(activePath, true);
+      }
     }
   }
 
   function removeConversation(conversationId: string) {
     statesByConversation.delete(conversationId);
-    filePreviewsByConversation.delete(conversationId);
+    revokeFilePreview(conversationId);
+    fileTree.removeConversation(conversationId);
     persist();
   }
 
@@ -325,6 +659,7 @@ export function useWorkspacePanel(options: {
     window.removeEventListener('pointermove', resize);
     window.removeEventListener('pointerup', stopResize);
     stopResize();
+    for (const id of filePreviewsByConversation.keys()) revokeFilePreview(id);
   });
 
   return {
@@ -332,23 +667,47 @@ export function useWorkspacePanel(options: {
     expanded,
     reloadVersion,
     visible,
+    activeKind,
+    hasWorkspace,
+    hasFiles,
+    activeWorkspaceTabs,
+    activeWorkspaceTabId,
+    activeWorkspaceUrl,
     activeWorkspace,
+    activeFilePath,
+    activeFileTabId,
+    activeFileTabs,
     activeFilePreview,
     fileLoading,
     fileError,
+    fileTree: fileTree.tree,
+    fileTreeExpandedPaths: fileTree.expandedPaths,
+    fileTreeLoading: fileTree.loading,
+    fileTreeLoaded: fileTree.loaded,
+    fileTreeError: fileTree.error,
+    toggleFileTreeDirectory: fileTree.toggleDirectory,
     title,
     filePath,
     fileBreadcrumbs,
     fileBadge,
     fileLines,
+    previewBadge,
     panelStyle,
     normalizeFilePath,
     displayWorkspaceFilePath,
     displayWorkspaceProcessPath: (path: string) => displayWorkspaceProcessPath(path, options.selectedConversationId.value),
     openWorkspace,
+    showLauncher,
     openFile,
+    switchToWorkspace,
+    selectWorkspace,
+    closeWorkspace,
+    switchToFiles,
+    selectFile,
+    reorderFile,
     closeFile,
     collapse,
+    openTreeFile,
     toggleExpanded,
     reload,
     restore,

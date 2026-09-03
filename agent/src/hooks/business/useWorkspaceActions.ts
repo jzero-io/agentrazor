@@ -41,7 +41,8 @@ function agentMessageWorkspaces(item: ThreadItem) {
 export function useWorkspaceActions(options: UseWorkspaceActionsOptions) {
   const rightPanelOpen = computed(() => options.workspaceVisible.value || options.pinnedSummaryOpen.value);
   const rightPanelContentReady = computed(() => Boolean(
-    options.activeWorkspace.value
+    options.workspaceVisible.value
+    || options.activeWorkspace.value
     || options.activeFilePreview.value
     || options.workspacePanel.fileLoading.value
     || options.workspacePanel.fileError.value
@@ -66,7 +67,7 @@ export function useWorkspaceActions(options: UseWorkspaceActionsOptions) {
 
   function openWorkspace(workspace: WorkspaceDescriptor) {
     options.pinnedSummaryOpen.value = false;
-    options.workspacePanel.openWorkspace(workspace);
+    options.workspacePanel.openWorkspace(workspace, true);
   }
 
   async function openWorkspaceFile(path: string) {
@@ -74,8 +75,8 @@ export function useWorkspaceActions(options: UseWorkspaceActionsOptions) {
     await options.workspacePanel.openFile(path);
   }
 
-  function closeFilePreview() {
-    options.workspacePanel.closeFile();
+  function closeFilePreview(path?: string) {
+    options.workspacePanel.closeFile(path);
   }
 
   function displayWorkspaceFilePath(file: FilePreview) {
@@ -96,12 +97,12 @@ export function useWorkspaceActions(options: UseWorkspaceActionsOptions) {
       collapseWorkspace();
       return;
     }
-    if (options.activeWorkspace.value || options.activeFilePreview.value) {
-      options.pinnedSummaryOpen.value = false;
-      options.workspaceVisible.value = true;
+    options.pinnedSummaryOpen.value = false;
+    if (!options.workspacePanel.activeKind.value) {
+      options.workspacePanel.showLauncher();
       return;
     }
-    if (pinnedSummaryWorkspaces.value.length) options.pinnedSummaryOpen.value = true;
+    options.workspaceVisible.value = true;
   }
 
   function toggleWorkspaceExpanded() {

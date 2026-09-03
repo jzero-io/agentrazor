@@ -59,8 +59,11 @@ func (l *List) List() (resp *types.ListResponse, err error) {
 		if threads[i].IsPinned != threads[j].IsPinned {
 			return threads[i].IsPinned
 		}
+		if !threads[i].UpdatedAt.Equal(threads[j].UpdatedAt) {
+			return threads[i].UpdatedAt.After(threads[j].UpdatedAt)
+		}
 		left, right := order[threads[i].ID], order[threads[j].ID]
-		if !left.CreateTime.Equal(right.CreateTime) {
+		if left != nil && right != nil && !left.CreateTime.Equal(right.CreateTime) {
 			return left.CreateTime.After(right.CreateTime)
 		}
 		return threads[i].ID > threads[j].ID

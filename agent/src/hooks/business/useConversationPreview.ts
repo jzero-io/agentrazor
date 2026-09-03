@@ -4,6 +4,24 @@ import { displayConversationTitle, formatConversationDate, messagePreview } from
 import { renderMarkdown } from '../../utils/markdown';
 import { userItemText } from './useConversationTurns';
 
+
+function markdownPreview(content: string, maxLines = 6, maxChars = 220) {
+  const normalized = content
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map(line => line.trimEnd())
+    .filter((line, index, lines) => line.trim() || (index > 0 && index < lines.length - 1));
+
+  let text = normalized.slice(0, maxLines).join('\n').trim();
+  const lineLimited = normalized.length > maxLines;
+  let charLimited = false;
+  if (text.length > maxChars) {
+    text = text.slice(0, maxChars).replace(/\s+\S*$/, '').trim();
+    charLimited = true;
+  }
+  return lineLimited || charLimited ? `${text}...` : text;
+}
+
 export interface MessagePreview {
   id: string;
   title: string;
@@ -26,11 +44,12 @@ export function useConversationPreview(options: {
       .reverse()
       .find(item => item.type === 'agentMessage' && item.phase === 'final_answer' && item.text?.trim());
     const finalAnswerText = finalAnswer?.text?.trim() || '';
+    const finalAnswerPreview = finalAnswerText ? markdownPreview(finalAnswerText) : '';
     return [{
       id: userItem.id,
       title: messagePreview(userItemText(userItem)),
       finalAnswer: finalAnswerText,
-      finalAnswerHtml: finalAnswerText ? renderMarkdown(finalAnswerText) : ''
+      finalAnswerHtml: finalAnswerPreview ? renderMarkdown(finalAnswerPreview) : ''
     }];
   }));
 

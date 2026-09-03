@@ -47,6 +47,7 @@ const props = defineProps<{
   hideConversationPreview: () => void;
   showConversationPreview: (item: Conversation, event: MouseEvent) => void;
   selectConversation: (id: string) => void;
+  renameConversation: (item: Conversation) => void;
   onConversationPointerDown: (item: Conversation, event: PointerEvent) => void;
   onRowTouchStart: (item: Conversation, event: TouchEvent) => void;
   toggleConversationPinned: (item: Conversation) => void;
@@ -96,7 +97,7 @@ function selectGroupAction(group: SidebarGroup, key: string | number) {
           <div v-if="sidebarExpanded" class="brand-copy">
             <strong>AgentRazor</strong>
           </div>
-          <n-button v-if="sidebarExpanded" quaternary circle class="collapse-button" @click="toggleSidebarPinned">
+          <n-button v-if="currentUser && sidebarExpanded" quaternary circle class="collapse-button" @click="toggleSidebarPinned">
             <template #icon>
               <Icon icon="lucide:panel-left" />
             </template>
@@ -127,7 +128,7 @@ function selectGroupAction(group: SidebarGroup, key: string | number) {
                     @mouseenter="showConversationPreview(item, $event)"
                     @mouseleave="hideConversationPreview"
                   >
-                    <button class="conversation-item" @click="hideConversationPreview(); selectConversation(item.id)">
+                    <button class="conversation-item" @click="hideConversationPreview(); selectConversation(item.id)" @dblclick.stop="renameConversation(item)">
                       <Icon icon="solar:pin-bold" class="pin-icon" />
                       <ScrollingTitle :key="`${item.id}:${displayConversationTitle(item)}`" :text="displayConversationTitle(item)" />
                     </button>
@@ -229,7 +230,7 @@ function selectGroupAction(group: SidebarGroup, key: string | number) {
                     @mouseenter="showConversationPreview(item, $event)"
                     @mouseleave="hideConversationPreview"
                   >
-                    <button class="conversation-item" @click="hideConversationPreview(); selectConversation(item.id)">
+                    <button class="conversation-item" @click="hideConversationPreview(); selectConversation(item.id)" @dblclick.stop="renameConversation(item)">
                       <ScrollingTitle :key="`${item.id}:${displayConversationTitle(item)}`" :text="displayConversationTitle(item)" />
                     </button>
                     <button
@@ -302,7 +303,7 @@ function selectGroupAction(group: SidebarGroup, key: string | number) {
                     @mouseenter="showConversationPreview(item, $event)"
                     @mouseleave="hideConversationPreview"
                   >
-                    <button class="conversation-item" @click="hideConversationPreview(); selectConversation(item.id)">
+                    <button class="conversation-item" @click="hideConversationPreview(); selectConversation(item.id)" @dblclick.stop="renameConversation(item)">
                       <ScrollingTitle :key="`${item.id}:${displayConversationTitle(item)}`" :text="displayConversationTitle(item)" />
                     </button>
                     <button
@@ -344,11 +345,7 @@ function selectGroupAction(group: SidebarGroup, key: string | number) {
           </n-spin>
         </div>
 
-        <div
-          v-if="sidebarExpanded"
-          class="sidebar-footer"
-          :class="{ 'login-footer': !currentUser }"
-        >
+        <div v-if="sidebarExpanded" class="sidebar-footer" :class="{ 'login-footer': !currentUser }">
           <template v-if="currentUser">
             <div :ref="setUserMenuWrap" class="user-menu-wrap" @keydown.esc="userMenuVisible = false">
               <div v-if="userMenuVisible" class="user-popover" role="menu">
@@ -380,15 +377,17 @@ function selectGroupAction(group: SidebarGroup, key: string | number) {
               </button>
             </div>
           </template>
-          <button v-else type="button" class="login-entry" @click.stop="openLogin">
-            <span class="login-entry-icon"><Icon icon="solar:login-3-linear" /></span>
+          <button v-else type="button" class="login-entry" @click="openLogin">
+            <span class="login-entry-icon">
+              <Icon icon="solar:login-3-linear" />
+            </span>
             <span class="login-entry-copy">
               <strong>登录 AgentRazor</strong>
               <span>同步你的对话</span>
             </span>
           </button>
         </div>
-        <div v-if="!sidebarCollapsed" class="sidebar-resize-handle" role="separator" aria-orientation="vertical" title="拖动调整侧边栏宽度" @pointerdown="startSidebarResize" />
+        <div v-if="currentUser && !sidebarCollapsed" class="sidebar-resize-handle" role="separator" aria-orientation="vertical" title="拖动调整侧边栏宽度" @pointerdown="startSidebarResize" />
   </aside>
 
 

@@ -44,16 +44,16 @@ var serverCmd = &cobra.Command{
 		logx.Infof("Starting rest server at %s:%d...", cc.MustGetConfig().Rest.Host, cc.MustGetConfig().Rest.Port)
 		restServer := rest.MustNewServer(cc.MustGetConfig().Rest.RestConf, rest.WithUnauthorizedCallback(func(w http.ResponseWriter, r *http.Request, err error) {
 			httpx.ErrorCtx(r.Context(), w, err)
-		}), rest.WithCorsHeaders("Content-Type", "Last-Event-ID", "Authorization"), rest.WithCustomCors(func(header http.Header) {
+		}), rest.WithCorsHeaders("Content-Type", "Last-Event-ID", "Authorization", "X-API-Key"), rest.WithCustomCors(func(header http.Header) {
 			header.Set("Access-Control-Allow-Origin", "*")
-			header.Add("Access-Control-Allow-Headers", "X-Request-Id, Content-Type, Last-Event-ID, Authorization")
+			header.Add("Access-Control-Allow-Headers", "X-Request-Id, Content-Type, Last-Event-ID, Authorization, X-API-Key")
 			header.Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, PATCH, DELETE")
 		}, nil, "*"))
 
 		logx.Must(runMigrations(cc.MustGetConfig().Sqlx.SqlConf))
 
 		svcCtx := svc.NewServiceContext(cc, handler.Route2Code)
-		svcCtx.Middleware = middleware.NewMiddleware()
+		svcCtx.Middleware = middleware.NewMiddleware(svcCtx)
 		global.ServiceContext = *svcCtx
 		middleware.Register(restServer)
 		custom.RegisterWorkspaceFileServer(restServer, svcCtx)

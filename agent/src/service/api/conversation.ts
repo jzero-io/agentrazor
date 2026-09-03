@@ -1,5 +1,5 @@
 import { apiBase, expireSession, getToken, isEnvelope, refreshAccessToken, refreshAccessTokenOrExpire, request, withAuthHeaders } from './request';
-import type { Conversation, ConversationDetail, Envelope, EventsResponse, SendMessageResponse, StreamEvent, WorkspaceFileContent } from './types';
+import type { Conversation, ConversationDetail, Envelope, EventsResponse, SendMessageResponse, StreamEvent, WorkspaceEntry, WorkspaceFileBlob, WorkspaceFileContent } from './types';
 
 export const conversationApi = {
   async list(): Promise<Conversation[]> {
@@ -30,7 +30,11 @@ export const conversationApi = {
   cancelTurn(id: string) {
     return request<null>(`/api/v1/conversations/${encodeURIComponent(id)}/turn/cancel`, { method: 'POST' });
   },
-  async fetchWorkspaceFile(path: string, retried = false): Promise<WorkspaceFileContent> {
+  async workspaceFiles(id: string): Promise<WorkspaceEntry[]> {
+    const result = await request<{ entries: WorkspaceEntry[] }>(`/api/v1/conversations/${encodeURIComponent(id)}/workspace/files`);
+    return result.entries;
+  },
+  async fetchWorkspaceResponse(path: string, retried = false): Promise<{ response: Response; pathname: string; name: string }> {
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
     const response = await fetch(`${apiBase}${normalizedPath}`, {
       headers: withAuthHeaders(),
@@ -38,14 +42,23 @@ export const conversationApi = {
     });
     if (response.status === 401 && !retried) {
       const refreshResult = await refreshAccessToken();
-      if (refreshResult === 'refreshed') return this.fetchWorkspaceFile(path, true);
+      if (refreshResult === 'refreshed') return this.fetchWorkspaceResponse(path, true);
       if (refreshResult === 'expired') expireSession();
     }
     if (!response.ok) throw new Error(response.status === 404 ? '文件不存在或无权访问' : `读取文件失败（${response.status}）`);
-    const content = await response.text();
     const pathname = decodeURIComponent(normalizedPath.split('?')[0] || '');
     const name = pathname.split('/').filter(Boolean).pop() || '文件';
+    return { response, pathname, name };
+  },
+  async fetchWorkspaceFile(path: string): Promise<WorkspaceFileContent> {
+    const { response, pathname, name } = await this.fetchWorkspaceResponse(path);
+    const content = await response.text();
     return { path: pathname, name, content, contentType: response.headers.get('content-type') || '' };
+  },
+  async fetchWorkspaceBlob(path: string): Promise<WorkspaceFileBlob> {
+    const { response, pathname, name } = await this.fetchWorkspaceResponse(path);
+    const blob = await response.blob();
+    return { path: pathname, name, blob, contentType: response.headers.get('content-type') || blob.type || '' };
   },
   subscribe(id: string, afterId: number, onEvent: (event: StreamEvent) => void, onError: () => void, onReconnect?: () => void) {
     const controller = new AbortController();

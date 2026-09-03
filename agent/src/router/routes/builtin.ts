@@ -16,13 +16,18 @@ export function createBuiltinRoutes(): RouteRecordRaw[] {
           component: ConversationView
         },
         {
-          path: 'c/:conversationId',
+          path: 'conversation/:conversationId',
           name: 'conversation-detail',
           component: ConversationView
         },
         {
           path: 'settings/appearance',
           name: 'settings-appearance',
+          component: SettingsView
+        },
+        {
+          path: 'settings/api-keys',
+          name: 'settings-api-keys',
           component: SettingsView
         },
         {

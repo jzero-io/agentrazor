@@ -1,7 +1,7 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-export type SettingsSection = 'appearance' | 'archives';
+export type SettingsSection = 'appearance' | 'api-keys' | 'archives';
 
 export function useSettingsView(options: {
   onOpen?: () => void;
@@ -14,16 +14,23 @@ export function useSettingsView(options: {
 
   const section = computed<SettingsSection>({
     get() {
-      return route.path === '/settings/archives' ? 'archives' : 'appearance';
+      if (route.path === '/settings/api-keys') return 'api-keys';
+      if (route.path === '/settings/archives') return 'archives';
+      return 'appearance';
     },
     set(value) {
-      void router.push(value === 'archives' ? '/settings/archives' : '/settings/appearance');
+      const paths: Record<SettingsSection, string> = {
+        appearance: '/settings/appearance',
+        'api-keys': '/settings/api-keys',
+        archives: '/settings/archives'
+      };
+      void router.push(paths[value]);
     }
   });
 
   const visible = computed<boolean>({
     get() {
-      return route.path === '/settings/appearance' || route.path === '/settings/archives';
+      return route.path === '/settings/appearance' || route.path === '/settings/api-keys' || route.path === '/settings/archives';
     },
     set(value) {
       if (value) openAppearance();
@@ -40,7 +47,7 @@ export function useSettingsView(options: {
   }
 
   function syncConversationUrl(id: string) {
-    const path = id ? `/c/${encodeURIComponent(id)}` : '/';
+    const path = id ? `/conversation/${encodeURIComponent(id)}` : '/';
     returnPath.value = path;
     if (!visible.value) void router.replace(path);
   }

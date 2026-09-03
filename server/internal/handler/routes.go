@@ -9,6 +9,7 @@ import (
 
 	swagger "github.com/jzero-io/agentrazor/server/internal/handler/swagger"
 	v1auth "github.com/jzero-io/agentrazor/server/internal/handler/v1/auth"
+	v1authapikey "github.com/jzero-io/agentrazor/server/internal/handler/v1/auth/apikey"
 	v1conversation "github.com/jzero-io/agentrazor/server/internal/handler/v1/conversation"
 	v1conversationgroup "github.com/jzero-io/agentrazor/server/internal/handler/v1/conversation/group"
 	v1manageagent "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/agent"
@@ -36,6 +37,32 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Handler: swagger.Swagger(serverCtx),
 				},
 			},
+		)
+	}
+	{
+		server.AddRoutes(
+			[]rest.Route{
+				{
+
+					Method:  http.MethodGet,
+					Path:    "/auth/api-keys",
+					Handler: v1authapikey.List(serverCtx),
+				},
+				{
+
+					Method:  http.MethodPost,
+					Path:    "/auth/api-keys",
+					Handler: v1authapikey.Create(serverCtx),
+				},
+				{
+
+					Method:  http.MethodDelete,
+					Path:    "/auth/api-keys/:id",
+					Handler: v1authapikey.Delete(serverCtx),
+				},
+			},
+			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
+			rest.WithPrefix("/api/v1"),
 		)
 	}
 	{
@@ -100,21 +127,9 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					},
 					{
 
-						Method:  http.MethodGet,
-						Path:    "/conversations/stats",
-						Handler: v1conversation.Stats(serverCtx),
-					},
-					{
-
 						Method:  http.MethodPost,
 						Path:    "/conversations",
 						Handler: v1conversation.SendMessage(serverCtx),
-					},
-					{
-
-						Method:  http.MethodGet,
-						Path:    "/conversations/:conversation_id/metadata",
-						Handler: v1conversation.Metadata(serverCtx),
 					},
 					{
 
@@ -136,13 +151,30 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					},
 					{
 
+						Method:  http.MethodGet,
+						Path:    "/conversations/:conversation_id/metadata",
+						Handler: v1conversation.Metadata(serverCtx),
+					},
+					{
+
 						Method:  http.MethodPost,
 						Path:    "/conversations/:conversation_id/turn/cancel",
 						Handler: v1conversation.CancelTurn(serverCtx),
 					},
+					{
+
+						Method:  http.MethodGet,
+						Path:    "/conversations/:conversation_id/workspace/files",
+						Handler: v1conversation.WorkspaceFiles(serverCtx),
+					},
+					{
+
+						Method:  http.MethodGet,
+						Path:    "/conversations/stats",
+						Handler: v1conversation.Stats(serverCtx),
+					},
 				}...,
 			),
-			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
 			rest.WithPrefix("/api/v1"),
 		)
 
@@ -158,7 +190,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					},
 				}...,
 			),
-			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
 			rest.WithPrefix("/api/v1"),
 			rest.WithSSE(),
 		)
@@ -202,7 +233,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					},
 				}...,
 			),
-			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
 			rest.WithPrefix("/api/v1"),
 		)
 	}

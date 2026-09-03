@@ -6,7 +6,6 @@ defineOptions({
 
 import type { ComponentPublicInstance } from 'vue';
 import { Icon } from '@iconify/vue';
-import { NButton, NEmpty, NImage, NSpin } from 'naive-ui';
 import type { Conversation, ThreadItem, Turn } from '../../../service/api';
 import type { ProcessDisplayItem } from '../../../utils/processDisplay';
 import type { WorkspaceDescriptor } from '../../../hooks/business/useWorkspacePanel';
@@ -38,7 +37,6 @@ interface ParsedAgentMessage {
 }
 
 defineProps<{
-  showConversationLoading: boolean;
   selectedConversationId: string;
   isNewChat: boolean;
   currentUser: unknown;
@@ -71,7 +69,6 @@ defineProps<{
   openWorkspace: (workspace: WorkspaceDescriptor) => void;
   activityIcon: (item: ThreadItem) => string;
   activityTitle: (item: ThreadItem) => string;
-  createConversation: () => void;
   openLogin: () => void;
 }>();
 
@@ -89,13 +86,11 @@ function emitError(message: string) {
 </script>
 
 <template>
-  <section v-if="showConversationLoading" class="conversation-opening" aria-label="正在加载对话">
-    <div class="conversation-opening-indicator">
-      <Icon icon="solar:chat-round-dots-outline" />
-    </div>
-    <div class="conversation-opening-copy">
-      <strong>正在加载会话</strong>
-    </div>
+  <section v-if="!currentUser" class="empty-state guest-empty-state">
+    <div class="welcome-icon"><Icon icon="solar:lock-keyhole-minimalistic-bold-duotone" /></div>
+    <h1>登录后开始</h1>
+    <p>登录账号即可使用你的专属 Agent 对话。</p>
+    <n-button type="primary" size="large" class="guest-login-button" @click="openLogin">登录</n-button>
   </section>
 
   <template v-else-if="selectedConversationId && isNewChat">
@@ -292,17 +287,5 @@ function emitError(message: string) {
     />
   </template>
 
-  <section v-else-if="!currentUser" class="empty-state">
-    <div class="welcome-icon"><Icon icon="solar:lock-keyhole-minimalistic-bold-duotone" /></div>
-    <h1>登录后开始</h1>
-    <p>登录账号即可使用你的专属 Agent 对话。</p>
-    <n-button type="primary" size="large" @click="openLogin">登录</n-button>
-  </section>
-
-  <section v-else class="empty-state">
-    <div class="welcome-icon"><img src="/agentrazor-icon.png" alt="" /></div>
-    <h1>从一个想法开始</h1>
-    <p>创建对话，让 AgentRazor 持续处理你的目标。</p>
-    <n-button type="primary" size="large" @click="createConversation">开始新对话</n-button>
-  </section>
+  <section v-else class="chat-empty" aria-hidden="true"></section>
 </template>

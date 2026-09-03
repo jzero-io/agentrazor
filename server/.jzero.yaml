@@ -2,6 +2,11 @@ hooks:
   before:
     - go install tool
 
+migrate:
+  driver: pgx
+  datasource-url: "postgres://root:123456@127.0.0.1:5432/agentrazor?sslmode=disable"
+  source-append-driver: true
+
 gen:
   hooks:
     after:
@@ -17,6 +22,7 @@ gen:
   model-datasource: true
   model-datasource-url: "postgres://root:123456@127.0.0.1:5432/agentrazor?sslmode=disable"
   model-datasource-table:
+    - agent_api_key
     - conversation
     - conversation_group
     - conversation_token_usage_event

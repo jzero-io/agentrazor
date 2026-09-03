@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/jzero-io/agentrazor/server/internal/middleware"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 	"github.com/zeromicro/go-zero/rest"
@@ -68,6 +69,16 @@ func serveWorkspaceFile(w http.ResponseWriter, r *http.Request, svcCtx *svc.Serv
 }
 
 func authenticatedUserUUID(r *http.Request, svcCtx *svc.ServiceContext, parser *token.TokenParser) (string, bool) {
+	if key, ok := middleware.APIKeyFromRequest(r); ok {
+		ctx, err := middleware.ContextForAPIKey(r.Context(), key, svcCtx.Model)
+		if err != nil {
+			return "", false
+		}
+		userUUID, _ := ctx.Value("uuid").(string)
+		userUUID = strings.TrimSpace(userUUID)
+		return userUUID, userUUID != ""
+	}
+
 	tok, err := parser.ParseToken(r, svcCtx.MustGetConfig().Jwt.AccessSecret, "")
 	if err != nil || !tok.Valid {
 		return "", false
