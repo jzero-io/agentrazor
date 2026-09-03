@@ -2,14 +2,12 @@ package auth
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/jzero-io/jzero/core/stores/condition"
 	"github.com/pkg/errors"
 	"github.com/zeromicro/go-zero/core/logx"
 
-	"github.com/jzero-io/agentrazor/server/internal/constant"
 	"github.com/jzero-io/agentrazor/server/internal/model/manage_user"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/auth"
@@ -31,20 +29,15 @@ func NewResetPassword(ctx context.Context, svcCtx *svc.ServiceContext, r *http.R
 }
 
 func (l *ResetPassword) ResetPassword(req *types.ResetPasswordRequest) (resp *types.ResetPasswordResponse, err error) {
-	// check verificationUuid
-	var verificationUuidVal string
-	if err = l.svcCtx.Cache.Get(fmt.Sprintf("%s:%s", constant.CacheVerificationCodePrefix, req.VerificationUuid), &verificationUuidVal); err != nil {
+	matched, err := verifyEmailCode(l.svcCtx, req.VerificationUuid, req.Email, req.VerificationCode)
+	if err != nil {
 		return nil, RegisterError
 	}
-	if verificationUuidVal != req.VerificationCode {
-		return nil, errors.New("验证码错误")
+	if !matched {
+		return nil, errors.New("邮箱或验证码错误")
 	}
 
-	user, err := l.svcCtx.Model.ManageUser.FindOneByCondition(l.ctx, nil, condition.Condition{
-		Field:    manage_user.Email,
-		Operator: condition.Equal,
-		Value:    req.Email,
-	})
+	user, err := l.svcCtx.Model.ManageUser.FindOneByCondition(l.ctx, nil, condition.NewChain().Equal(manage_user.Email, req.Email).Build()...)
 	if err != nil {
 		return nil, errors.New("用户名/密码错误")
 	}

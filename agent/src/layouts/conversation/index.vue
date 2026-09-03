@@ -384,20 +384,28 @@ const { message: toast } = createDiscreteApi(['message'], {
 });
 const authSession = useAuthSession({
   onAuthError: resetApplicationState,
-  showError
+  showError,
+  showSuccess: message => toast.success(message)
 });
 const {
   currentUser,
   authChecking,
   hasAuthToken,
   loginVisible,
+  loginMode,
   loginUsername,
   loginPassword,
+  loginEmail,
+  loginVerificationCode,
+  loginVerificationUuid,
+  verificationSending,
+  verificationCountdown,
   loginLoading,
   userInitial,
   installAuthErrorHandler,
   restoreSession,
   submitLogin: submitLoginSession,
+  sendLoginVerificationCode,
   openLogin,
   clearSession,
   finishAuthChecking
@@ -1478,11 +1486,18 @@ watch(isDarkAppearance, value => {
 
     <LoginModal
       v-model:visible="loginVisible"
+      v-model:mode="loginMode"
       v-model:username="loginUsername"
       v-model:password="loginPassword"
+      v-model:email="loginEmail"
+      v-model:verification-code="loginVerificationCode"
+      :verification-ready="Boolean(loginVerificationUuid)"
+      :verification-sending="verificationSending"
+      :verification-countdown="verificationCountdown"
       :loading="loginLoading"
       :offset-x="loginModalOffsetX"
       @submit="submitLogin"
+      @send-verification-code="sendLoginVerificationCode"
     />
 
 

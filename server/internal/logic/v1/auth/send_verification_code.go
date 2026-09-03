@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,6 +21,23 @@ import (
 )
 
 var SendVerificationError = errors.New("发送失败, 请联系管理员")
+
+func verificationCacheKey(verificationUUID string) string {
+	return fmt.Sprintf("%s:%s", constant.CacheVerificationCodePrefix, verificationUUID)
+}
+
+func encodedEmailVerification(email, code string) string {
+	return strings.TrimSpace(email) + "\n" + code
+}
+
+func verifyEmailCode(svcCtx *svc.ServiceContext, verificationUUID, email, code string) (bool, error) {
+	var cached string
+	if err := svcCtx.Cache.Get(verificationCacheKey(verificationUUID), &cached); err != nil {
+		return false, err
+	}
+	parts := strings.SplitN(cached, "\n", 2)
+	return len(parts) == 2 && strings.EqualFold(parts[0], strings.TrimSpace(email)) && parts[1] == code, nil
+}
 
 type SendVerificationCode struct {
 	logx.Logger
@@ -63,7 +81,7 @@ func (l *SendVerificationCode) SendVerificationCode(req *types.SendVerificationC
 			return nil, SendVerificationError
 		}
 
-		if err = l.svcCtx.Cache.SetWithExpireCtx(context.Background(), fmt.Sprintf("%s:%s", constant.CacheVerificationCodePrefix, verificationUuid), verificationCode, time.Minute*5); err != nil {
+		if err = l.svcCtx.Cache.SetWithExpireCtx(context.Background(), verificationCacheKey(verificationUuid), encodedEmailVerification(req.Email, verificationCode), time.Minute*5); err != nil {
 			return nil, SendVerificationError
 		}
 

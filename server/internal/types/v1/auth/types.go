@@ -10,9 +10,9 @@ var (
 )
 
 type CodeLoginRequest struct {
-	Email            string `json:"email"`
-	VerificationUuid string `json:"verificationUuid"`
-	VerificationCode string `json:"verificationCode"`
+	Email            string `json:"email" validate:"required,email"`
+	VerificationUuid string `json:"verificationUuid" validate:"required"`
+	VerificationCode string `json:"verificationCode" validate:"required,len=6"`
 }
 
 type GetUserInfoRequest struct {
@@ -45,9 +45,9 @@ type RefreshTokenResponse struct {
 }
 
 type RegisterRequest struct {
-	Email            string `json:"email"`
-	VerificationUuid string `json:"verificationUuid"`
-	VerificationCode string `json:"verificationCode"`
+	Email            string `json:"email" validate:"required,email"`
+	VerificationUuid string `json:"verificationUuid" validate:"required"`
+	VerificationCode string `json:"verificationCode" validate:"required,len=6"`
 	Username         string `json:"username"`
 	Password         string `json:"password"`
 }
@@ -56,9 +56,9 @@ type RegisterResponse struct {
 }
 
 type ResetPasswordRequest struct {
-	Email            string `json:"email"`
-	VerificationUuid string `json:"verificationUuid"`
-	VerificationCode string `json:"verificationCode"`
+	Email            string `json:"email" validate:"required,email"`
+	VerificationUuid string `json:"verificationUuid" validate:"required"`
+	VerificationCode string `json:"verificationCode" validate:"required,len=6"`
 	Password         string `json:"password"`
 }
 
@@ -66,7 +66,7 @@ type ResetPasswordResponse struct {
 }
 
 type SendVerificationCodeRequest struct {
-	Email            string `form:"email" validate:"email"`
+	Email            string `form:"email" validate:"required,email"`
 	VerificationType string `form:"verificationType,option=email|phone"`
 }
 

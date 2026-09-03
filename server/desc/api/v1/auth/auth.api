@@ -10,9 +10,9 @@ type PwdLoginRequest {
 }
 
 type CodeLoginRequest {
-	Email            string `json:"email"`
-	VerificationUuid string `json:"verificationUuid"`
-	VerificationCode string `json:"verificationCode"`
+	Email            string `json:"email" validate:"required,email"`
+	VerificationUuid string `json:"verificationUuid" validate:"required"`
+	VerificationCode string `json:"verificationCode" validate:"required,len=6"`
 }
 
 type LoginResponse {
@@ -21,9 +21,9 @@ type LoginResponse {
 }
 
 type RegisterRequest {
-	Email            string `json:"email"`
-	VerificationUuid string `json:"verificationUuid"`
-	VerificationCode string `json:"verificationCode"`
+	Email            string `json:"email" validate:"required,email"`
+	VerificationUuid string `json:"verificationUuid" validate:"required"`
+	VerificationCode string `json:"verificationCode" validate:"required,len=6"`
 	Username         string `json:"username"`
 	Password         string `json:"password"`
 }
@@ -49,7 +49,7 @@ type RefreshTokenResponse {
 }
 
 type SendVerificationCodeRequest {
-	Email            string `form:"email" validate:"email"`
+	Email            string `form:"email" validate:"required,email"`
 	VerificationType string `form:"verificationType,option=email|phone"`
 }
 
@@ -58,9 +58,9 @@ type SendVerificationCodeResponse {
 }
 
 type ResetPasswordRequest {
-	Email            string `json:"email"`
-	VerificationUuid string `json:"verificationUuid"`
-	VerificationCode string `json:"verificationCode"`
+	Email            string `json:"email" validate:"required,email"`
+	VerificationUuid string `json:"verificationUuid" validate:"required"`
+	VerificationCode string `json:"verificationCode" validate:"required,len=6"`
 	Password         string `json:"password"`
 }
 

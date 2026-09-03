@@ -2,14 +2,12 @@ package auth
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/zeromicro/go-zero/core/logx"
 
-	"github.com/jzero-io/agentrazor/server/internal/constant"
 	"github.com/jzero-io/agentrazor/server/internal/model/manage_user"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/auth"
@@ -33,13 +31,12 @@ func NewRegister(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Reques
 }
 
 func (l *Register) Register(req *types.RegisterRequest) (resp *types.RegisterResponse, err error) {
-	// check verificationUuid
-	var verificationUuidVal string
-	if err = l.svcCtx.Cache.Get(fmt.Sprintf("%s:%s", constant.CacheVerificationCodePrefix, req.VerificationUuid), &verificationUuidVal); err != nil {
+	matched, err := verifyEmailCode(l.svcCtx, req.VerificationUuid, req.Email, req.VerificationCode)
+	if err != nil {
 		return nil, RegisterError
 	}
-	if verificationUuidVal != req.VerificationCode {
-		return nil, errors.New("验证码错误")
+	if !matched {
+		return nil, errors.New("邮箱或验证码错误")
 	}
 
 	_, err = l.svcCtx.Model.ManageUser.FindOneByUsername(l.ctx, nil, req.Username)

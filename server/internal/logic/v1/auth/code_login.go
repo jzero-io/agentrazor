@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -12,7 +11,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/zeromicro/go-zero/core/logx"
 
-	"github.com/jzero-io/agentrazor/server/internal/constant"
 	manage_usermodel "github.com/jzero-io/agentrazor/server/internal/model/manage_user"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/auth"
@@ -41,13 +39,12 @@ func (l *CodeLogin) CodeLogin(req *types.CodeLoginRequest) (resp *types.LoginRes
 		return nil, err
 	}
 
-	// check verificationUuid
-	var verificationUuidVal string
-	if err = l.svcCtx.Cache.Get(fmt.Sprintf("%s:%s", constant.CacheVerificationCodePrefix, req.VerificationUuid), &verificationUuidVal); err != nil {
+	matched, err := verifyEmailCode(l.svcCtx, req.VerificationUuid, req.Email, req.VerificationCode)
+	if err != nil {
 		l.Errorf("get verification code: %v", err)
 		return nil, ErrEmailOrVerificationCode
 	}
-	if verificationUuidVal != req.VerificationCode {
+	if !matched {
 		return nil, ErrEmailOrVerificationCode
 	}
 
