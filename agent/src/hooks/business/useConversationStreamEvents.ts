@@ -17,6 +17,7 @@ interface BeginActiveTurnOptions {
   id?: string;
   status?: string;
   startedAt?: string;
+  observedAt?: string;
   resetResultSeen?: boolean;
   restartTimer?: boolean;
 }
@@ -124,6 +125,7 @@ export function useConversationStreamEvents(options: ConversationStreamEventsOpt
         id: String(turn?.id || event.turnId || options.cachedActiveTurn(event.conversationId)?.id || ''),
         status: String(turn?.status || 'inProgress'),
         startedAt,
+        observedAt: event.createdAt,
         resetResultSeen: true,
         restartTimer: true
       });

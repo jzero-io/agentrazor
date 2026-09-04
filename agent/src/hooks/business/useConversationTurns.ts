@@ -29,6 +29,7 @@ interface BeginActiveTurnOptions {
   id?: string;
   status?: string;
   startedAt?: string;
+  observedAt?: string;
   resetResultSeen?: boolean;
   restartTimer?: boolean;
 }
@@ -126,7 +127,6 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
   const activeTurnsByConversation = reactive(new Map<string, Turn>());
   const activeTurnResultSeenByConversation = reactive(new Map<string, boolean>());
   const activeTurnStartedAtByConversation = reactive(new Map<string, number>());
-  const processStartedAtByConversation = reactive(new Map<string, number>());
   const processActiveConversationIds = reactive(new Set<string>());
   const nowMs = ref(Date.now());
   let turnTimer: number | undefined;
@@ -136,7 +136,7 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
   );
   const currentTurnElapsedMs = computed(() => {
     if (!selectedConversationId.value) return 0;
-    const startedAt = processStartedAtByConversation.get(selectedConversationId.value);
+    const startedAt = activeTurnStartedAtByConversation.get(selectedConversationId.value);
     return startedAt ? Math.max(1000, nowMs.value - startedAt) : 1000;
   });
   const currentTurnResultSeen = computed(() =>
@@ -366,7 +366,9 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
       sending.value = true;
       stopping.value = false;
     }
-    if (opts.restartTimer || !activeTurnStartedAtByConversation.has(conversationId)) startTurnTimer(conversationId, current.startedAt || opts.startedAt);
+    if (opts.restartTimer || !activeTurnStartedAtByConversation.has(conversationId)) {
+      startTurnTimer(conversationId, current.startedAt || opts.startedAt, opts.observedAt);
+    }
     return current;
   }
 
@@ -466,7 +468,6 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
   function resetActiveTurn(opts: { clearCache?: boolean } = {}) {
     if (opts.clearCache && selectedConversationId.value) {
       stopTurnTimer(selectedConversationId.value);
-      processStartedAtByConversation.delete(selectedConversationId.value);
       processActiveConversationIds.delete(selectedConversationId.value);
       activeTurnsByConversation.delete(selectedConversationId.value);
       activeTurnResultSeenByConversation.delete(selectedConversationId.value);
@@ -505,7 +506,7 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
           startedAt: activeTurnStartedAt(snapshot),
           items: []
         });
-        restoreProcessState(snapshot.conversation.id, activeTurn, activeTurnStartedAt(snapshot, activeTurn));
+        restoreProcessState(snapshot.conversation.id, activeTurn);
         beginActiveTurn({
           conversationId: snapshot.conversation.id,
           turn: activeTurn,
@@ -529,7 +530,7 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
     };
     setConversationDetail(displaySnapshot);
     const startedAt = activeTurnStartedAt(snapshot, activeTurn);
-    restoreProcessState(snapshot.conversation.id, activeTurn, startedAt);
+    restoreProcessState(snapshot.conversation.id, activeTurn);
     beginActiveTurn({
       conversationId: snapshot.conversation.id,
       turn: activeTurn,
@@ -635,30 +636,33 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
   }
 
   function stopTurnTickerIfIdle() {
-    if (activeTurnStartedAtByConversation.size > 0 || processStartedAtByConversation.size > 0 || turnTimer === undefined) return;
+    if (activeTurnStartedAtByConversation.size > 0 || turnTimer === undefined) return;
     window.clearInterval(turnTimer);
     turnTimer = undefined;
   }
 
-  function startTurnTimer(conversationId: string, startedAt?: string) {
+  function startTurnTimer(conversationId: string, startedAt?: string, observedAt?: string) {
     if (!conversationId) return;
     const parsed = startedAt ? Date.parse(startedAt) : Number.NaN;
-    activeTurnStartedAtByConversation.set(conversationId, Number.isFinite(parsed) ? parsed : Date.now());
+    const observed = observedAt ? Date.parse(observedAt) : Number.NaN;
+    const serverElapsedMs = Number.isFinite(parsed) && Number.isFinite(observed)
+      ? Math.max(0, observed - parsed)
+      : undefined;
+    const localStartedAt = serverElapsedMs === undefined
+      ? (Number.isFinite(parsed) ? parsed : Date.now())
+      : Date.now() - serverElapsedMs;
+    activeTurnStartedAtByConversation.set(conversationId, localStartedAt);
     ensureTurnTicker();
   }
 
-  function startProcessTimer(conversationId: string, startedAt?: string) {
+  function startProcessTimer(conversationId: string) {
     if (!conversationId) return;
     processActiveConversationIds.add(conversationId);
-    if (processStartedAtByConversation.has(conversationId)) return;
-    const parsed = startedAt ? Date.parse(startedAt) : Number.NaN;
-    processStartedAtByConversation.set(conversationId, Number.isFinite(parsed) ? parsed : Date.now());
-    ensureTurnTicker();
   }
 
-  function restoreProcessState(conversationId: string, turn: Turn, startedAt?: string) {
+  function restoreProcessState(conversationId: string, turn: Turn) {
     if (!conversationId || (!isRestoredRunningTurn(turn) && !hasVisibleProcessItems(turn))) return;
-    startProcessTimer(conversationId, startedAt || turn.startedAt);
+    startProcessTimer(conversationId);
   }
 
   function markProcessActive(conversationId: string) {
@@ -667,24 +671,19 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
 
   function resetProcessTimer(conversationId: string) {
     if (!conversationId) return;
-    processStartedAtByConversation.delete(conversationId);
     processActiveConversationIds.delete(conversationId);
   }
 
   function stopTurnTimer(conversationId: string) {
     const startedAt = activeTurnStartedAtByConversation.get(conversationId);
-    const processStartedAt = processStartedAtByConversation.get(conversationId);
     activeTurnStartedAtByConversation.delete(conversationId);
-    processStartedAtByConversation.delete(conversationId);
     processActiveConversationIds.delete(conversationId);
     stopTurnTickerIfIdle();
-    const displayStartedAt = processStartedAt ?? startedAt;
-    return displayStartedAt ? Math.max(0, Date.now() - displayStartedAt) : undefined;
+    return startedAt ? Math.max(0, Date.now() - startedAt) : undefined;
   }
 
   function stopAllTurnTimers() {
     activeTurnStartedAtByConversation.clear();
-    processStartedAtByConversation.clear();
     processActiveConversationIds.clear();
     if (turnTimer !== undefined) window.clearInterval(turnTimer);
     turnTimer = undefined;
