@@ -63,6 +63,34 @@ export function cloneThreadItem(item: ThreadItem): ThreadItem {
   return next;
 }
 
+function mergeProgressiveText(current: string | undefined, incoming: string | undefined) {
+  if (incoming === undefined) return current;
+  if (current === undefined) return incoming;
+  if (current.startsWith(incoming)) return current;
+  return incoming;
+}
+
+function mergeThreadItemSnapshot(current: ThreadItem, incoming: ThreadItem): ThreadItem {
+  const merged = { ...current, ...incoming };
+  merged.text = mergeProgressiveText(current.text, incoming.text);
+  if (typeof current.aggregatedOutput === 'string' || typeof incoming.aggregatedOutput === 'string') {
+    merged.aggregatedOutput = mergeProgressiveText(
+      typeof current.aggregatedOutput === 'string' ? current.aggregatedOutput : undefined,
+      typeof incoming.aggregatedOutput === 'string' ? incoming.aggregatedOutput : undefined
+    );
+  }
+  if (Array.isArray(current.content) && Array.isArray(incoming.content)
+    && current.content.every(value => typeof value === 'string')
+    && incoming.content.every(value => typeof value === 'string')) {
+    const length = Math.max(current.content.length, incoming.content.length);
+    merged.content = Array.from({ length }, (_, index) => mergeProgressiveText(
+      current.content?.[index] as string | undefined,
+      incoming.content?.[index] as string | undefined
+    ) || '');
+  }
+  return merged;
+}
+
 export function mergeTurnItems(current: ThreadItem[], incoming: ThreadItem[], options: { skipIncomingReasoning?: boolean } = {}) {
   if (!incoming.length) return current;
 
@@ -91,7 +119,7 @@ export function mergeTurnItems(current: ThreadItem[], incoming: ThreadItem[], op
     if (options.skipIncomingReasoning && incomingItem.type === 'reasoning') continue;
     const currentItem = pickCurrent(incomingItem);
     if (currentItem) usedCurrent.add(currentItem);
-    merged.push(currentItem ?? incomingItem);
+    merged.push(currentItem ? mergeThreadItemSnapshot(currentItem, incomingItem) : incomingItem);
   }
 
   for (const currentItem of current) {

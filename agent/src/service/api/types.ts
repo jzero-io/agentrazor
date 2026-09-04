@@ -67,12 +67,10 @@ export interface GeneratedImage {
 
 export interface ConversationDetail {
   conversation: Conversation;
-  eventCursor: number;
   turns: Turn[];
 }
 
 export interface StreamEvent {
-  id: number;
   type: string;
   conversationId: string;
   turnId?: string;
@@ -87,10 +85,8 @@ export interface Envelope<T> {
 }
 
 export interface EventsResponse {
-  id: number;
   event: string;
   data: string;
-  createdAt: string;
 }
 
 export interface StartedTurn {

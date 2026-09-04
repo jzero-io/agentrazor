@@ -518,6 +518,7 @@ const conversationStreamEvents = useConversationStreamEvents({
 
 const conversationStreams = useConversationStreams({
   onEvent: conversationStreamEvents.handleStreamEvent,
+  onBufferedEvents: conversationStreamEvents.handleBufferedStreamEvents,
   onStreamError: reconcileConversationStream,
   onReconnect: reconcileConversationStream
 });
@@ -530,8 +531,8 @@ function closeAllConversationStreams() {
   conversationStreams.closeAll();
 }
 
-function ensureConversationStream(id: string, afterId = 0): Promise<void> {
-  return conversationStreams.ensureStream(id, afterId);
+function ensureConversationStream(id: string): Promise<void> {
+  return conversationStreams.ensureStream(id);
 }
 
 async function reconcileConversationStream(id: string) {
@@ -631,7 +632,7 @@ async function selectInitialConversation() {
 }
 
 async function resolveRequestedConversation(id: string) {
-  const listed = visibleConversations.value.find(item => item.id === id);
+  const listed = conversations.value.find(item => item.id === id);
   if (listed) return listed;
 
   try {
@@ -717,9 +718,21 @@ async function selectConversation(id: string) {
   enableAutoScroll();
   syncDisplayedActiveTurnState();
 
-  const snapshot = await refreshDetail({ forceScroll: true });
+  const archived = conversations.value.find(item => item.id === id)?.status === 'archived';
+  if (archived) {
+    await refreshDetail({ forceScroll: true });
+  } else {
+    try {
+      await conversationStreams.synchronizeStream(id, async () => {
+        if (conversationSelectionToken !== token || selectedConversationId.value !== id) return;
+        await refreshDetail({ forceScroll: true });
+      });
+    } catch {
+      if (conversationSelectionToken !== token || selectedConversationId.value !== id) return;
+      await refreshDetail({ forceScroll: true });
+    }
+  }
   if (conversationSelectionToken !== token || selectedConversationId.value !== id) return;
-  ensureConversationStream(id, snapshot?.eventCursor ?? 0);
   closeIdleConversationStreams(id);
 }
 
@@ -736,6 +749,14 @@ async function refreshDetail(options: RefreshDetailOptions = {}): Promise<Conver
   try {
     const snapshot = await conversationApi.get(id);
     if (selectedConversationId.value !== id) return null;
+    const listed = conversations.value.find(item => item.id === id);
+    if (listed?.status === 'archived') {
+      snapshot.conversation = {
+        ...snapshot.conversation,
+        status: 'archived',
+        archivedAt: listed.archivedAt
+      };
+    }
     restoreActiveTurn(snapshot, options.restoreActiveTurn !== false);
     return snapshot;
   } catch (error) {
@@ -749,6 +770,21 @@ async function refreshDetail(options: RefreshDetailOptions = {}): Promise<Conver
     if (selectedConversationId.value === id) {
       void scrollToBottom({ force: options.forceScroll });
     }
+  }
+}
+
+async function synchronizeSelectedConversationDetail(): Promise<ConversationDetail | null> {
+  const id = selectedConversationId.value;
+  if (!id) return null;
+  if (conversations.value.find(item => item.id === id)?.status === 'archived') return refreshDetail();
+  let snapshot: ConversationDetail | null = null;
+  try {
+    await conversationStreams.synchronizeStream(id, async () => {
+      if (selectedConversationId.value === id) snapshot = await refreshDetail();
+    });
+    return snapshot;
+  } catch {
+    return selectedConversationId.value === id ? refreshDetail() : null;
   }
 }
 
@@ -784,7 +820,7 @@ const conversationComposer = useConversationComposer({
   revealConversationSection,
   scheduleConversationTitleRefresh,
   ensureConversationStream,
-  refreshDetail,
+  refreshDetail: synchronizeSelectedConversationDetail,
   enableAutoScroll,
   scrollToBottom,
   syncConversationUrl,

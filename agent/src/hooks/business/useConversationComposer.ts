@@ -32,7 +32,7 @@ interface UseConversationComposerOptions {
   syncConversationMetadata: (conversation: ConversationDetail['conversation']) => void;
   revealConversationSection: (conversation: ConversationDetail['conversation']) => void;
   scheduleConversationTitleRefresh: (conversationId: string, conversation: ConversationDetail['conversation']) => void;
-  ensureConversationStream: (conversationId: string, afterId?: number) => Promise<void>;
+  ensureConversationStream: (conversationId: string) => Promise<void>;
   refreshDetail: () => Promise<ConversationDetail | null>;
   enableAutoScroll: () => void;
   scrollToBottom: (options?: { force?: boolean }) => Promise<void> | void;
@@ -97,7 +97,6 @@ export function useConversationComposer(options: UseConversationComposerOptions)
         const draftDetail = options.detail.value?.conversation.id === draftKey ? options.detail.value : null;
         options.setConversationDetail({
           conversation: createdConversation,
-          eventCursor: draftDetail?.eventCursor ?? 0,
           turns: draftDetail?.turns ?? []
         });
         options.upsertConversationListItem(createdConversation);
@@ -106,17 +105,14 @@ export function useConversationComposer(options: UseConversationComposerOptions)
         if (options.isConversationRunning(conversationId)) return;
       }
 
-      const eventCursor = options.activeDetail.value?.conversation.id === conversationId
-        ? options.activeDetail.value.eventCursor
-        : 0;
-      await options.ensureConversationStream(conversationId, eventCursor);
+      await options.ensureConversationStream(conversationId);
       const sent = await conversationApi.send(conversationId, content);
 
       if (createdConversation) options.scheduleConversationTitleRefresh(conversationId, createdConversation);
 
       options.setConversationProcessing(conversationId, true);
       if (draftKey !== conversationId) options.setConversationDraft(conversationId, '');
-      options.ensureConversationStream(conversationId, options.activeDetail.value?.conversation.id === conversationId ? options.activeDetail.value.eventCursor : 0);
+      options.ensureConversationStream(conversationId);
 
       if (options.selectedConversationId.value === conversationId) {
         const confirmedTurn: Turn = {
@@ -131,7 +127,7 @@ export function useConversationComposer(options: UseConversationComposerOptions)
     } catch (error) {
       if (options.activeTurnError(error)) {
         options.setConversationProcessing(conversationId, true);
-        options.ensureConversationStream(conversationId, options.activeDetail.value?.conversation.id === conversationId ? options.activeDetail.value.eventCursor : 0);
+        options.ensureConversationStream(conversationId);
         if (options.selectedConversationId.value === conversationId) await options.refreshDetail();
         return;
       }
@@ -140,7 +136,7 @@ export function useConversationComposer(options: UseConversationComposerOptions)
         || (conversationId !== draftKey && options.discardOptimisticTurn(draftKey, optimisticTurn.id));
       if (!discarded && options.cachedActiveTurn(conversationId)) {
         options.setConversationProcessing(conversationId, true);
-        options.ensureConversationStream(conversationId, options.activeDetail.value?.conversation.id === conversationId ? options.activeDetail.value.eventCursor : 0);
+        options.ensureConversationStream(conversationId);
         return;
       }
       if (discarded) {

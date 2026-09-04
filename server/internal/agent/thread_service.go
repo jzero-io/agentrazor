@@ -105,7 +105,7 @@ func NewThreadService(runtime ThreadRuntime, factory RuntimeFactory) *ThreadServ
 		runtime:         runtime,
 		runtimeFactory:  factory,
 		idleTimeout:     turnIdleTimeout,
-		events:          NewEventHub(32),
+		events:          NewEventHub(),
 		turns:           make(map[string]*activeTurn),
 		lastRestartTime: time.Now().UTC(),
 	}
@@ -188,13 +188,6 @@ func (s *ThreadService) ActiveTurn(threadID string) (ActiveTurn, bool) {
 		return ActiveTurn{}, false
 	}
 	return ActiveTurn{ID: turn.id, ThreadID: threadID, CreatedAt: turn.createdAt}, true
-}
-
-func (s *ThreadService) EventCursor(threadID string) int64 {
-	if err := validateThreadID(threadID); err != nil {
-		return 0
-	}
-	return s.events.Cursor(threadID)
 }
 
 func (s *ThreadService) SetName(ctx context.Context, threadID, title string) error {
@@ -301,11 +294,7 @@ func (s *ThreadService) Send(threadID, prompt string) (StartedTurn, error) {
 			s.recordTokenUsage(event)
 		}
 		turnID := s.resolveActiveTurnID(threadID, active, codexEventTurnID(event))
-		if eventType == "turn.started" || eventType == "turn.completed" {
-			s.events.Publish(threadID, turnID, eventType, event)
-			return
-		}
-		s.events.Broadcast(threadID, turnID, eventType, event)
+		s.events.Publish(threadID, turnID, eventType, event)
 	}
 
 	started, err := runtime.StartTurn(ctx, threadID, prompt, emit)
@@ -361,8 +350,8 @@ func codexEventTurnID(event map[string]any) string {
 	return stringValue(turn["id"])
 }
 
-func (s *ThreadService) Subscribe(threadID string, afterID int64) *Subscription {
-	return s.events.Subscribe(threadID, afterID)
+func (s *ThreadService) Subscribe(threadID string) *Subscription {
+	return s.events.Subscribe(threadID)
 }
 
 func (s *ThreadService) RuntimeStatus() RuntimeStatus {

@@ -193,13 +193,13 @@ function emitError(message: string) {
             </div>
 
             <details
-              v-else-if="view.processMode === 'completed'"
+              v-else-if="view.processMode === 'completed' && view.processDisplays.length"
               class="turn-process turn-process-done"
             >
               <summary>
                 <span>{{ view.processSummary }}</span>
               </summary>
-              <div v-if="view.processDisplays.length" class="turn-process-content">
+              <div class="turn-process-content">
                 <ProcessItemCard
                   v-for="display in view.processDisplays"
                   :key="display.item.id"
@@ -211,6 +211,12 @@ function emitError(message: string) {
                 />
               </div>
             </details>
+
+            <div v-else-if="view.processMode === 'completed'" class="turn-process turn-process-done">
+              <div class="turn-process-summary">
+                <span>{{ view.processSummary }}</span>
+              </div>
+            </div>
 
             <template v-for="item in view.resultItems" :key="item.id">
               <article v-if="item.type === 'agentMessage'" class="message assistant">

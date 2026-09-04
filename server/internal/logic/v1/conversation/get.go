@@ -131,7 +131,6 @@ func buildDetail(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 	setConversationActiveTurn(&conversation, svcCtx.AgentThreads, conversationID)
 	detail := &types.DetailResponse{
 		Conversation: conversation,
-		EventCursor:  svcCtx.AgentThreads.EventCursor(conversationID),
 		Turns:        make([]types.Turn, 0, len(thread.Turns)),
 	}
 	assignments, err := groupAssignments(ctx, svcCtx, uuid)

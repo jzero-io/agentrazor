@@ -68,7 +68,6 @@ export const conversationApi = {
   },
   subscribe(
     id: string,
-    afterId: number,
     onEvent: (event: StreamEvent) => void | Promise<void>,
     onError: () => void,
     onReconnect?: () => void | Promise<void>
@@ -76,7 +75,6 @@ export const conversationApi = {
     const controller = new AbortController();
     const url = `${apiBase}/api/v1/conversation/${encodeURIComponent(id)}/events`;
     let retried = false;
-    let lastEventId = Math.max(0, Number(afterId) || 0);
     let readySettled = false;
     let resolveReady!: () => void;
     let rejectReady!: (error: Error) => void;
@@ -105,19 +103,17 @@ export const conversationApi = {
       retried = true;
       await new Promise(resolve => setTimeout(resolve, 1000));
       if (refresh && !(await refreshAccessTokenOrExpire())) return false;
-      await onReconnect?.();
-      await connect();
+      await connect(true);
       return true;
     };
 
-    const connect = async (): Promise<void> => {
+    const connect = async (reconcileAfterReady = false): Promise<void> => {
       if (controller.signal.aborted) return;
       try {
         const token = getToken();
         const response = await fetch(url, {
           headers: {
             Accept: 'text/event-stream',
-            ...(lastEventId > 0 ? { 'Last-Event-ID': String(lastEventId) } : {}),
             ...(token ? { Authorization: `Bearer ${token}` } : {})
           },
           cache: 'no-store',
@@ -155,11 +151,13 @@ export const conversationApi = {
               const eventResponse = JSON.parse(payload) as EventsResponse;
               if (eventResponse.event === 'stream.ready') {
                 markReady();
+                if (reconcileAfterReady) {
+                  reconcileAfterReady = false;
+                  void Promise.resolve(onReconnect?.()).catch(() => undefined);
+                }
                 continue;
               }
               if (eventResponse.event === 'stream.heartbeat') continue;
-              if (eventResponse.id <= lastEventId) continue;
-              lastEventId = eventResponse.id;
               await onEvent(JSON.parse(eventResponse.data) as StreamEvent);
             } catch {
               fail();

@@ -8,8 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -50,17 +48,11 @@ func (l *StreamEvents) stream(req *types.EventsRequest, client chan<- *types.Eve
 	if err := l.svcCtx.AgentThreads.ValidateThread(l.ctx, req.ConversationId); err != nil {
 		return err
 	}
-	afterID, err := parseLastEventID(req)
-	if err != nil {
-		return err
-	}
-	subscription := l.svcCtx.AgentThreads.Subscribe(req.ConversationId, afterID)
+	subscription := l.svcCtx.AgentThreads.Subscribe(req.ConversationId)
 	defer subscription.Close()
 	if !sendStreamResponse(l.ctx.Done(), client, &types.EventsResponse{
-		Id:        afterID,
-		Event:     "stream.ready",
-		Data:      "{}",
-		CreatedAt: time.Now().UTC().Format(time.RFC3339Nano),
+		Event: "stream.ready",
+		Data:  "{}",
 	}) {
 		return nil
 	}
@@ -83,11 +75,10 @@ func (l *StreamEvents) stream(req *types.EventsRequest, client chan<- *types.Eve
 			if !sendStreamResponse(l.ctx.Done(), client, response) {
 				return nil
 			}
-		case now := <-heartbeat.C:
+		case <-heartbeat.C:
 			response := &types.EventsResponse{
-				Event:     "stream.heartbeat",
-				Data:      "{}",
-				CreatedAt: now.UTC().Format(time.RFC3339Nano),
+				Event: "stream.heartbeat",
+				Data:  "{}",
 			}
 			if !sendStreamResponse(l.ctx.Done(), client, response) {
 				return nil
@@ -96,31 +87,14 @@ func (l *StreamEvents) stream(req *types.EventsRequest, client chan<- *types.Eve
 	}
 }
 
-func parseLastEventID(req *types.EventsRequest) (int64, error) {
-	value := strings.TrimSpace(req.LastEventId)
-	if value == "" {
-		value = strings.TrimSpace(req.LastEventIdForm)
-	}
-	if value == "" {
-		return 0, nil
-	}
-	id, err := strconv.ParseInt(value, 10, 64)
-	if err != nil || id < 0 {
-		return 0, fmt.Errorf("invalid last event id %q", value)
-	}
-	return id, nil
-}
-
 func toEventsResponse(event agentdomain.StreamEvent) (*types.EventsResponse, error) {
 	payload, err := json.Marshal(event)
 	if err != nil {
 		return nil, fmt.Errorf("marshal stream event: %w", err)
 	}
 	return &types.EventsResponse{
-		Id:        event.ID,
-		Event:     event.Type,
-		Data:      string(payload),
-		CreatedAt: event.CreatedAt.Format(time.RFC3339Nano),
+		Event: event.Type,
+		Data:  string(payload),
 	}, nil
 }
 

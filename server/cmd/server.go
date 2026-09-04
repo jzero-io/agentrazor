@@ -44,9 +44,9 @@ var serverCmd = &cobra.Command{
 		logx.Infof("Starting rest server at %s:%d...", cc.MustGetConfig().Rest.Host, cc.MustGetConfig().Rest.Port)
 		restServer := rest.MustNewServer(cc.MustGetConfig().Rest.RestConf, rest.WithUnauthorizedCallback(func(w http.ResponseWriter, r *http.Request, err error) {
 			httpx.ErrorCtx(r.Context(), w, err)
-		}), rest.WithCorsHeaders("Content-Type", "Last-Event-ID", "Authorization", "X-API-Key"), rest.WithCustomCors(func(header http.Header) {
+		}), rest.WithCorsHeaders("Content-Type", "Authorization", "X-API-Key"), rest.WithCustomCors(func(header http.Header) {
 			header.Set("Access-Control-Allow-Origin", "*")
-			header.Add("Access-Control-Allow-Headers", "X-Request-Id, Content-Type, Last-Event-ID, Authorization, X-API-Key")
+			header.Add("Access-Control-Allow-Headers", "X-Request-Id, Content-Type, Authorization, X-API-Key")
 			header.Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, PATCH, DELETE")
 		}, nil, "*"))
 

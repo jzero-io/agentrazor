@@ -34,21 +34,16 @@ type DeleteResponse struct {
 
 type DetailResponse struct {
 	Conversation Conversation `json:"conversation"`
-	EventCursor  int64        `json:"eventCursor"`
 	Turns        []Turn       `json:"turns"`
 }
 
 type EventsRequest struct {
-	ConversationId  string `path:"conversation_id" validate:"required"`
-	LastEventId     string `header:"Last-Event-ID,optional"`
-	LastEventIdForm string `form:"lastEventId,optional"`
+	ConversationId string `path:"conversation_id" validate:"required"`
 }
 
 type EventsResponse struct {
-	Id        int64  `json:"id"`
-	Event     string `json:"event"`
-	Data      string `json:"data"`
-	CreatedAt string `json:"createdAt"`
+	Event string `json:"event"`
+	Data  string `json:"data"`
 }
 
 type GeneratedImage struct {

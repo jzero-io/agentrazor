@@ -158,7 +158,6 @@ export function useConversationList(options: {
         createdAt: now,
         updatedAt: now
       },
-      eventCursor: 0,
       turns: []
     };
   }

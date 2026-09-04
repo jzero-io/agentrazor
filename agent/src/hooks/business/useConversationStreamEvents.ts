@@ -56,6 +56,12 @@ interface PendingStreamDelta {
   text: string;
 }
 
+interface BufferedStreamDelta {
+  key: string;
+  text: string;
+  existingText: string;
+}
+
 function streamAgentMessagePhase(params: { phase?: string | null; item?: ThreadItem } | undefined, existing?: ThreadItem) {
   if (params?.phase) return params.phase;
   if (params?.item?.phase) return params.item.phase;
@@ -259,7 +265,98 @@ export function useConversationStreamEvents(options: ConversationStreamEventsOpt
 
   }
 
+  function bufferedStreamDelta(event: StreamEvent): BufferedStreamDelta | null {
+    if (event.type === 'item.reasoning.textDelta') {
+      const params = textDeltaParams(event.data);
+      const text = params?.delta ?? '';
+      if (!text) return null;
+      const itemId = params?.itemId || `stream-reasoning-${event.turnId || 'active'}`;
+      const contentIndex = Number(params?.contentIndex) || 0;
+      const item = options.findStreamingItem(event.conversationId, itemId);
+      const content = Array.isArray(item?.content) ? item.content[contentIndex] : '';
+      return {
+        key: `reasoning\u0000${itemId}\u0000${contentIndex}`,
+        text,
+        existingText: typeof content === 'string' ? content : ''
+      };
+    }
+    if (event.type === 'item.agentMessage.delta') {
+      const params = agentMessageDeltaParams(event.data);
+      const text = params?.delta ?? '';
+      if (!text) return null;
+      const itemId = params?.itemId || params?.item?.id || `stream-agent-${event.turnId || 'active'}`;
+      const item = options.findStreamingItem(event.conversationId, itemId);
+      const phase = streamAgentMessagePhase(params, item);
+      return {
+        key: `agentMessage\u0000${itemId}\u0000${phase}`,
+        text,
+        existingText: item?.text || ''
+      };
+    }
+    return null;
+  }
+
+  function snapshotOverlapLength(existing: string, buffered: string) {
+    const maximum = Math.min(existing.length, buffered.length);
+    for (let length = maximum; length > 0; length -= 1) {
+      if (existing.endsWith(buffered.slice(0, length))) return length;
+    }
+    return 0;
+  }
+
+  function replaceStreamDelta(event: StreamEvent, delta: string): StreamEvent {
+    const data = event.data && typeof event.data === 'object'
+      ? event.data as Record<string, unknown>
+      : {};
+    const params = data.params && typeof data.params === 'object'
+      ? data.params as Record<string, unknown>
+      : {};
+    return {
+      ...event,
+      data: {
+        ...data,
+        params: { ...params, delta }
+      }
+    };
+  }
+
+  async function handleBufferedStreamEvents(events: StreamEvent[], dedupeSnapshotOverlap: boolean) {
+    const remainingOverlap = new Map<string, number>();
+    if (dedupeSnapshotOverlap) {
+      const groups = new Map<string, { existingText: string; bufferedText: string }>();
+      for (const event of events) {
+        const delta = bufferedStreamDelta(event);
+        if (!delta) continue;
+        const group = groups.get(delta.key);
+        if (group) group.bufferedText += delta.text;
+        else groups.set(delta.key, { existingText: delta.existingText, bufferedText: delta.text });
+      }
+      for (const [key, group] of groups) {
+        remainingOverlap.set(key, snapshotOverlapLength(group.existingText, group.bufferedText));
+      }
+    }
+
+    const conversations = new Set<string>();
+    for (const event of events) {
+      conversations.add(event.conversationId);
+      const delta = bufferedStreamDelta(event);
+      const overlap = delta ? remainingOverlap.get(delta.key) || 0 : 0;
+      if (!delta || overlap === 0) {
+        await handleStreamEvent(event);
+        continue;
+      }
+      if (overlap >= delta.text.length) {
+        remainingOverlap.set(delta.key, overlap - delta.text.length);
+        continue;
+      }
+      remainingOverlap.set(delta.key, 0);
+      await handleStreamEvent(replaceStreamDelta(event, delta.text.slice(overlap)));
+    }
+    for (const conversationId of conversations) flushPendingDeltas(conversationId);
+  }
+
   return {
-    handleStreamEvent
+    handleStreamEvent,
+    handleBufferedStreamEvents
   };
 }
