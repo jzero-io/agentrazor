@@ -1,4 +1,4 @@
-import { apiBase, expireSession, getToken, isEnvelope, refreshAccessToken, refreshAccessTokenOrExpire, request, withAuthHeaders } from './request';
+import { apiBase, expireSession, getToken, isEnvelope, refreshAccessToken, request, withAuthHeaders } from './request';
 import type { Conversation, ConversationDetail, ConversationMetadata, Envelope, EventsResponse, StartedTurn, StreamEvent, WorkspaceEntry, WorkspaceFileBlob, WorkspaceFileContent } from './types';
 
 export const conversationApi = {
@@ -74,7 +74,9 @@ export const conversationApi = {
   ) {
     const controller = new AbortController();
     const url = `${apiBase}/api/v1/conversation/${encodeURIComponent(id)}/events`;
-    let retried = false;
+    let reconnectAttempts = 0;
+    let connected = false;
+    let terminal = false;
     let readySettled = false;
     let resolveReady!: () => void;
     let rejectReady!: (error: Error) => void;
@@ -91,6 +93,8 @@ export const conversationApi = {
     };
 
     const fail = () => {
+      if (terminal) return;
+      terminal = true;
       if (!readySettled) {
         readySettled = true;
         rejectReady(new Error('conversation stream connection failed'));
@@ -98,56 +102,94 @@ export const conversationApi = {
       onError();
     };
 
-    const reconnect = async (refresh = false): Promise<boolean> => {
-      if (controller.signal.aborted || retried) return false;
-      retried = true;
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      if (refresh && !(await refreshAccessTokenOrExpire())) return false;
-      await connect(true);
-      return true;
+    const waitForReconnect = () => new Promise<boolean>(resolve => {
+      if (controller.signal.aborted) {
+        resolve(false);
+        return;
+      }
+      const delay = Math.min(1000 * (2 ** Math.min(reconnectAttempts, 4)), 15000);
+      reconnectAttempts += 1;
+      const finish = (ready: boolean) => {
+        window.clearTimeout(timer);
+        controller.signal.removeEventListener('abort', abort);
+        resolve(ready);
+      };
+      const abort = () => finish(false);
+      const timer = window.setTimeout(() => finish(true), delay);
+      controller.signal.addEventListener('abort', abort, { once: true });
+    });
+
+    const retryResponse = async (response: Response, body: Envelope<unknown> | null) => {
+      const authFailed = response.status === 401 || (body !== null && isEnvelope<unknown>(body) && body.code === 40101);
+      if (authFailed) {
+        const refreshResult = await refreshAccessToken();
+        if (refreshResult === 'refreshed') {
+          reconnectAttempts = 0;
+          return true;
+        }
+        if (refreshResult === 'expired') {
+          expireSession();
+          fail();
+          return false;
+        }
+        return waitForReconnect();
+      }
+      if (response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429) {
+        fail();
+        return false;
+      }
+      return waitForReconnect();
     };
 
-    const connect = async (reconcileAfterReady = false): Promise<void> => {
-      if (controller.signal.aborted) return;
-      try {
-        const token = getToken();
-        const response = await fetch(url, {
-          headers: {
-            Accept: 'text/event-stream',
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-          },
-          cache: 'no-store',
-          signal: controller.signal
-        });
+    const connect = async (): Promise<void> => {
+      while (!controller.signal.aborted && !terminal) {
+        let response: Response;
+        try {
+          const token = getToken();
+          response = await fetch(url, {
+            headers: {
+              Accept: 'text/event-stream',
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+            },
+            cache: 'no-store',
+            signal: controller.signal
+          });
+        } catch (error) {
+          if ((error as Error)?.name === 'AbortError') return;
+          if (!(await waitForReconnect())) return;
+          continue;
+        }
+
         const contentType = response.headers.get('content-type') || '';
         if (!response.ok || !response.body || !contentType.includes('text/event-stream')) {
           const body = await response.clone().json().catch(() => null) as Envelope<unknown> | null;
-          const authFailed = response.status === 401 || (body !== null && isEnvelope<unknown>(body) && body.code === 40101);
-          if (await reconnect(authFailed)) return;
-          if (!controller.signal.aborted) fail();
-          return;
+          if (!(await retryResponse(response, body))) return;
+          continue;
         }
-        retried = false;
+
+        let reconcileAfterReady = connected;
+        connected = true;
+        reconnectAttempts = 0;
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          let sep: number;
-          while ((sep = buffer.indexOf('\n\n')) >= 0 || (sep = buffer.indexOf('\r\n\r\n')) >= 0) {
-            const sepLength = buffer.startsWith('\r\n', sep) ? 4 : 2;
-            const raw = buffer.slice(0, sep);
-            buffer = buffer.slice(sep + sepLength);
-            const payload = raw
-              .split(/\r?\n/)
-              .filter(line => line.startsWith('data:'))
-              .map(line => line.slice(5).trimStart())
-              .join('\n')
-              .trim();
-            if (!payload) continue;
-            try {
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let sep: number;
+            while ((sep = buffer.indexOf('\n\n')) >= 0 || (sep = buffer.indexOf('\r\n\r\n')) >= 0) {
+              const sepLength = buffer.startsWith('\r\n', sep) ? 4 : 2;
+              const raw = buffer.slice(0, sep);
+              buffer = buffer.slice(sep + sepLength);
+              const payload = raw
+                .split(/\r?\n/)
+                .filter(line => line.startsWith('data:'))
+                .map(line => line.slice(5).trimStart())
+                .join('\n')
+                .trim();
+              if (!payload) continue;
               const eventResponse = JSON.parse(payload) as EventsResponse;
               if (eventResponse.event === 'stream.ready') {
                 markReady();
@@ -159,18 +201,12 @@ export const conversationApi = {
               }
               if (eventResponse.event === 'stream.heartbeat') continue;
               await onEvent(JSON.parse(eventResponse.data) as StreamEvent);
-            } catch {
-              fail();
             }
           }
+        } catch (error) {
+          if ((error as Error)?.name === 'AbortError') return;
         }
-        if (await reconnect(false)) return;
-        if (!controller.signal.aborted) fail();
-      } catch (error) {
-        if ((error as Error)?.name !== 'AbortError') {
-          if (await reconnect(false)) return;
-          if (!controller.signal.aborted) fail();
-        }
+        if (!(await waitForReconnect())) return;
       }
     };
 

@@ -33,8 +33,9 @@ type DeleteResponse struct {
 }
 
 type DetailResponse struct {
-	Conversation Conversation `json:"conversation"`
-	Turns        []Turn       `json:"turns"`
+	Conversation   Conversation `json:"conversation"`
+	StreamPosition string       `json:"streamPosition"`
+	Turns          []Turn       `json:"turns"`
 }
 
 type EventsRequest struct {

@@ -23,7 +23,7 @@ var (
 	ErrAppServerTerminated = errors.New("codex app-server terminated")
 )
 
-type EventHandler func(map[string]any)
+type EventHandler func(map[string]any, string)
 
 type CodexAppServerOptions struct {
 	Binary             string
@@ -51,6 +51,8 @@ type CodexAppServerRuntime struct {
 	waitOnce sync.Once
 
 	nextRequestID atomic.Int64
+	nextInboundID atomic.Int64
+	streamEpoch   string
 
 	stateMu     sync.Mutex
 	pending     map[int64]chan rpcEnvelope
@@ -62,11 +64,12 @@ type CodexAppServerRuntime struct {
 }
 
 type rpcEnvelope struct {
-	ID     *int64          `json:"id,omitempty"`
-	Method string          `json:"method,omitempty"`
-	Params json.RawMessage `json:"params,omitempty"`
-	Result json.RawMessage `json:"result,omitempty"`
-	Error  *rpcError       `json:"error,omitempty"`
+	ID             *int64          `json:"id,omitempty"`
+	Method         string          `json:"method,omitempty"`
+	Params         json.RawMessage `json:"params,omitempty"`
+	Result         json.RawMessage `json:"result,omitempty"`
+	Error          *rpcError       `json:"error,omitempty"`
+	StreamPosition string          `json:"-"`
 }
 
 type rpcError struct {
@@ -182,6 +185,7 @@ func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRun
 		_ = stdin.Close()
 		return nil, fmt.Errorf("start Codex app-server: %w", err)
 	}
+	runtime.streamEpoch = fmt.Sprintf("%d-%d", time.Now().UnixNano(), cmd.Process.Pid)
 	go runtime.readLoop(stdout)
 	go runtime.waitProcess()
 
@@ -229,7 +233,7 @@ func (r *CodexAppServerRuntime) StartTurn(ctx context.Context, threadID, prompt 
 	if resumed {
 		emitRuntimeEvent(emit, "thread.resumed", map[string]any{
 			"threadId": threadID,
-		})
+		}, r.currentStreamPosition())
 	}
 	return r.startTurn(ctx, threadID, prompt, emit)
 }
@@ -404,18 +408,23 @@ func (r *CodexAppServerRuntime) unregisterExecution(threadID string, execution *
 }
 
 func (r *CodexAppServerRuntime) request(ctx context.Context, method string, params any) (map[string]any, error) {
+	result, _, err := r.requestWithPosition(ctx, method, params)
+	return result, err
+}
+
+func (r *CodexAppServerRuntime) requestWithPosition(ctx context.Context, method string, params any) (map[string]any, string, error) {
 	requestID := r.nextRequestID.Add(1)
 	responseCh := make(chan rpcEnvelope, 1)
 
 	r.stateMu.Lock()
 	if r.closed {
 		r.stateMu.Unlock()
-		return nil, ErrRuntimeClosed
+		return nil, "", ErrRuntimeClosed
 	}
 	if r.terminalErr != nil {
 		err := r.terminalErr
 		r.stateMu.Unlock()
-		return nil, err
+		return nil, "", err
 	}
 	r.pending[requestID] = responseCh
 	r.stateMu.Unlock()
@@ -426,29 +435,29 @@ func (r *CodexAppServerRuntime) request(ctx context.Context, method string, para
 		"params": params,
 	}); err != nil {
 		r.removePending(requestID)
-		return nil, err
+		return nil, "", err
 	}
 
 	select {
 	case response := <-responseCh:
 		if response.Error != nil {
-			return nil, &RPCError{
+			return nil, response.StreamPosition, &RPCError{
 				Method:  method,
 				Code:    response.Error.Code,
 				Message: response.Error.Message,
 			}
 		}
 		if len(response.Result) == 0 || string(response.Result) == "null" {
-			return map[string]any{}, nil
+			return map[string]any{}, response.StreamPosition, nil
 		}
 		var result map[string]any
 		if err := json.Unmarshal(response.Result, &result); err != nil {
-			return nil, fmt.Errorf("decode Codex app-server RPC %s result: %w", method, err)
+			return nil, response.StreamPosition, fmt.Errorf("decode Codex app-server RPC %s result: %w", method, err)
 		}
-		return result, nil
+		return result, response.StreamPosition, nil
 	case <-ctx.Done():
 		r.removePending(requestID)
-		return nil, ctx.Err()
+		return nil, "", ctx.Err()
 	}
 }
 
@@ -483,6 +492,7 @@ func (r *CodexAppServerRuntime) readLoop(stdout io.Reader) {
 			r.failAll(fmt.Errorf("decode Codex app-server message: %w", err))
 			return
 		}
+		envelope.StreamPosition = r.nextStreamPosition()
 		switch {
 		case envelope.Method != "" && envelope.ID != nil:
 			// This integration runs with approvalPolicy=never. Reject any server
@@ -495,7 +505,7 @@ func (r *CodexAppServerRuntime) readLoop(stdout io.Reader) {
 				},
 			})
 		case envelope.Method != "":
-			r.handleNotification(envelope.Method, envelope.Params)
+			r.handleNotification(envelope.Method, envelope.Params, envelope.StreamPosition)
 		case envelope.ID != nil:
 			r.stateMu.Lock()
 			responseCh := r.pending[*envelope.ID]
@@ -516,7 +526,7 @@ func (r *CodexAppServerRuntime) readLoop(stdout io.Reader) {
 	<-r.waitDone
 }
 
-func (r *CodexAppServerRuntime) handleNotification(method string, rawParams json.RawMessage) {
+func (r *CodexAppServerRuntime) handleNotification(method string, rawParams json.RawMessage, streamPosition string) {
 	var params map[string]any
 	if len(rawParams) > 0 {
 		if err := json.Unmarshal(rawParams, &params); err != nil {
@@ -545,7 +555,7 @@ func (r *CodexAppServerRuntime) handleNotification(method string, rawParams json
 	if execution == nil {
 		return
 	}
-	execution.handleNotification(method, params)
+	execution.handleNotification(method, params, streamPosition)
 }
 
 func (r *CodexAppServerRuntime) waitProcess() {
@@ -613,7 +623,7 @@ func (r *CodexAppServerRuntime) Close() error {
 	return nil
 }
 
-func (t *appServerTurn) handleNotification(method string, params map[string]any) {
+func (t *appServerTurn) handleNotification(method string, params map[string]any, streamPosition string) {
 	eventType := strings.ReplaceAll(method, "/", ".")
 	event := map[string]any{
 		"type":   eventType,
@@ -621,7 +631,7 @@ func (t *appServerTurn) handleNotification(method string, params map[string]any)
 		"params": params,
 	}
 	if t.emit != nil {
-		t.emit(event)
+		t.emit(event, streamPosition)
 	}
 	if method != "turn/completed" {
 		return
@@ -651,7 +661,7 @@ func (t *appServerTurn) finish(outcome turnOutcome) {
 	})
 }
 
-func emitRuntimeEvent(emit EventHandler, eventType string, params map[string]any) {
+func emitRuntimeEvent(emit EventHandler, eventType string, params map[string]any, streamPosition string) {
 	if emit == nil {
 		return
 	}
@@ -659,7 +669,15 @@ func emitRuntimeEvent(emit EventHandler, eventType string, params map[string]any
 		"type":   eventType,
 		"method": strings.ReplaceAll(eventType, ".", "/"),
 		"params": params,
-	})
+	}, streamPosition)
+}
+
+func (r *CodexAppServerRuntime) nextStreamPosition() string {
+	return fmt.Sprintf("%s:%d", r.streamEpoch, r.nextInboundID.Add(1))
+}
+
+func (r *CodexAppServerRuntime) currentStreamPosition() string {
+	return fmt.Sprintf("%s:%d", r.streamEpoch, r.nextInboundID.Load())
 }
 
 func stringValue(value any) string {

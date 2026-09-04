@@ -68,8 +68,9 @@ type (
 		Data  string `json:"data"`
 	}
 	DetailResponse {
-		Conversation Conversation `json:"conversation"`
-		Turns        []Turn       `json:"turns"`
+		Conversation   Conversation `json:"conversation"`
+		StreamPosition string       `json:"streamPosition"`
+		Turns          []Turn       `json:"turns"`
 	}
 	WorkspaceEntry {
 		Name string `json:"name"`

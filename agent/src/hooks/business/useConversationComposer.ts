@@ -97,6 +97,7 @@ export function useConversationComposer(options: UseConversationComposerOptions)
         const draftDetail = options.detail.value?.conversation.id === draftKey ? options.detail.value : null;
         options.setConversationDetail({
           conversation: createdConversation,
+          streamPosition: draftDetail?.streamPosition || '',
           turns: draftDetail?.turns ?? []
         });
         options.upsertConversationListItem(createdConversation);

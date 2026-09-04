@@ -24,14 +24,15 @@ var (
 const turnIdleTimeout = 10 * time.Minute
 
 type StoredThread struct {
-	ID        string
-	Name      string
-	Preview   string
-	IsPinned  bool
-	Archived  bool
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	Turns     []StoredTurn
+	ID             string
+	Name           string
+	Preview        string
+	IsPinned       bool
+	Archived       bool
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	StreamPosition string
+	Turns          []StoredTurn
 }
 
 type StoredTurn struct {
@@ -284,7 +285,7 @@ func (s *ThreadService) Send(threadID, prompt string) (StartedTurn, error) {
 	s.mu.Unlock()
 
 	idleTimer := time.AfterFunc(s.idleTimeout, cancel)
-	emit := func(event map[string]any) {
+	emit := func(event map[string]any, streamPosition string) {
 		idleTimer.Reset(s.idleTimeout)
 		eventType, _ := event["type"].(string)
 		if eventType == "" {
@@ -294,7 +295,7 @@ func (s *ThreadService) Send(threadID, prompt string) (StartedTurn, error) {
 			s.recordTokenUsage(event)
 		}
 		turnID := s.resolveActiveTurnID(threadID, active, codexEventTurnID(event))
-		s.events.Publish(threadID, turnID, eventType, event)
+		s.events.Publish(threadID, turnID, eventType, streamPosition, event)
 	}
 
 	started, err := runtime.StartTurn(ctx, threadID, prompt, emit)

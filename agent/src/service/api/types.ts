@@ -67,6 +67,7 @@ export interface GeneratedImage {
 
 export interface ConversationDetail {
   conversation: Conversation;
+  streamPosition: string;
   turns: Turn[];
 }
 
@@ -74,6 +75,7 @@ export interface StreamEvent {
   type: string;
   conversationId: string;
   turnId?: string;
+  streamPosition?: string;
   data?: unknown;
   createdAt: string;
 }

@@ -112,11 +112,6 @@ func (r *CodexAppServerRuntime) ReadStoredThread(ctx context.Context, threadID s
 			return StoredThread{}, ErrThreadNotFound
 		}
 	}
-	if err != nil && includeTurns {
-		// Turns are only available once a thread has received its first user
-		// message; degrade to a metadata-only read instead of erroring.
-		thread, err = r.readThread(ctx, threadID, false)
-	}
 	if err != nil {
 		return StoredThread{}, fmt.Errorf("read Codex thread %s: %w", threadID, err)
 	}
@@ -124,10 +119,23 @@ func (r *CodexAppServerRuntime) ReadStoredThread(ctx context.Context, threadID s
 }
 
 func (r *CodexAppServerRuntime) readThread(ctx context.Context, threadID string, includeTurns bool) (StoredThread, error) {
-	result, err := r.request(ctx, "thread/read", map[string]any{
+	result, streamPosition, err := r.requestWithPosition(ctx, "thread/read", map[string]any{
 		"threadId":     threadID,
 		"includeTurns": includeTurns,
 	})
+	if includeTurns && threadNotMaterializedError(err) {
+		// app-server cannot include turns before the first user message. Read the
+		// draft's metadata explicitly, but retain the rejected response position:
+		// events after that boundary may contain the first turn and must be applied.
+		var metadataPosition string
+		result, metadataPosition, err = r.requestWithPosition(ctx, "thread/read", map[string]any{
+			"threadId":     threadID,
+			"includeTurns": false,
+		})
+		if streamPosition == "" {
+			streamPosition = metadataPosition
+		}
+	}
 	if err != nil {
 		return StoredThread{}, err
 	}
@@ -142,6 +150,7 @@ func (r *CodexAppServerRuntime) readThread(ctx context.Context, threadID string,
 	if thread.ID == "" {
 		return StoredThread{}, errors.New("Codex thread/read response did not contain a thread id")
 	}
+	thread.StreamPosition = streamPosition
 	return thread, nil
 }
 
@@ -152,6 +161,14 @@ func (r *CodexAppServerRuntime) readThread(ctx context.Context, threadID string,
 func threadMissingError(err error) bool {
 	var rpcErr *RPCError
 	return errors.As(err, &rpcErr) && rpcErr.Code == -32600
+}
+
+func threadNotMaterializedError(err error) bool {
+	var rpcErr *RPCError
+	return errors.As(err, &rpcErr) &&
+		rpcErr.Code == -32600 &&
+		strings.Contains(rpcErr.Message, "is not materialized yet") &&
+		strings.Contains(rpcErr.Message, "includeTurns is unavailable before first user message")
 }
 
 func (r *CodexAppServerRuntime) SetThreadName(ctx context.Context, threadID, name string) error {

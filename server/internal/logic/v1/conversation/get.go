@@ -130,8 +130,9 @@ func buildDetail(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 	conversation := toConversation(thread)
 	setConversationActiveTurn(&conversation, svcCtx.AgentThreads, conversationID)
 	detail := &types.DetailResponse{
-		Conversation: conversation,
-		Turns:        make([]types.Turn, 0, len(thread.Turns)),
+		Conversation:   conversation,
+		StreamPosition: thread.StreamPosition,
+		Turns:          make([]types.Turn, 0, len(thread.Turns)),
 	}
 	assignments, err := groupAssignments(ctx, svcCtx, uuid)
 	if err != nil {

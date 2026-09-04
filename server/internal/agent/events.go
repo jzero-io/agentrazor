@@ -9,6 +9,7 @@ type StreamEvent struct {
 	Type           string    `json:"type"`
 	ConversationID string    `json:"conversationId"`
 	TurnID         string    `json:"turnId,omitempty"`
+	StreamPosition string    `json:"streamPosition,omitempty"`
 	Data           any       `json:"data,omitempty"`
 	CreatedAt      time.Time `json:"createdAt"`
 }
@@ -113,7 +114,7 @@ func NewEventHub() *EventHub {
 	return &EventHub{streams: make(map[string]map[*eventSubscriber]struct{})}
 }
 
-func (h *EventHub) Publish(conversationID, turnID, eventType string, data any) {
+func (h *EventHub) Publish(conversationID, turnID, eventType, streamPosition string, data any) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.closed {
@@ -128,6 +129,7 @@ func (h *EventHub) Publish(conversationID, turnID, eventType string, data any) {
 		Type:           eventType,
 		ConversationID: conversationID,
 		TurnID:         turnID,
+		StreamPosition: streamPosition,
 		Data:           data,
 		CreatedAt:      time.Now().UTC(),
 	}

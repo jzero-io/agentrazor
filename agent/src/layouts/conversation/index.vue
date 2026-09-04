@@ -519,7 +519,9 @@ const conversationStreamEvents = useConversationStreamEvents({
 const conversationStreams = useConversationStreams({
   onEvent: conversationStreamEvents.handleStreamEvent,
   onBufferedEvents: conversationStreamEvents.handleBufferedStreamEvents,
-  onStreamError: reconcileConversationStream,
+  onStreamError: async id => {
+    await reconcileConversationStream(id);
+  },
   onReconnect: reconcileConversationStream
 });
 
@@ -540,7 +542,9 @@ async function reconcileConversationStream(id: string) {
   await loadConversations(false, false);
   const conversation = conversations.value.find(item => item.id === id);
   if (conversation?.running) {
-    if (selectedConversationId.value === id) await refreshDetail({ restoreActiveTurn: true });
+    if (selectedConversationId.value === id) {
+      return (await refreshDetailForSynchronization(id, { restoreActiveTurn: true })).streamPosition;
+    }
     return;
   }
 
@@ -550,7 +554,7 @@ async function reconcileConversationStream(id: string) {
   activeTurnResultSeenByConversation.delete(id);
   if (selectedConversationId.value === id) {
     clearDisplayedActiveTurn();
-    await refreshDetail({ restoreActiveTurn: false });
+    return (await refreshDetailForSynchronization(id, { restoreActiveTurn: false })).streamPosition;
   }
 }
 
@@ -725,11 +729,11 @@ async function selectConversation(id: string) {
     try {
       await conversationStreams.synchronizeStream(id, async () => {
         if (conversationSelectionToken !== token || selectedConversationId.value !== id) return;
-        await refreshDetail({ forceScroll: true });
+        return (await refreshDetailForSynchronization(id, { forceScroll: true })).streamPosition;
       });
-    } catch {
+    } catch (error) {
       if (conversationSelectionToken !== token || selectedConversationId.value !== id) return;
-      await refreshDetail({ forceScroll: true });
+      showError(error);
     }
   }
   if (conversationSelectionToken !== token || selectedConversationId.value !== id) return;
@@ -739,6 +743,8 @@ async function selectConversation(id: string) {
 interface RefreshDetailOptions {
   forceScroll?: boolean;
   restoreActiveTurn?: boolean;
+  reportError?: boolean;
+  throwOnError?: boolean;
 }
 
 async function refreshDetail(options: RefreshDetailOptions = {}): Promise<ConversationDetail | null> {
@@ -760,7 +766,8 @@ async function refreshDetail(options: RefreshDetailOptions = {}): Promise<Conver
     restoreActiveTurn(snapshot, options.restoreActiveTurn !== false);
     return snapshot;
   } catch (error) {
-    if (selectedConversationId.value === id) showError(error);
+    if (selectedConversationId.value === id && options.reportError !== false) showError(error);
+    if (options.throwOnError) throw error;
     return null;
   } finally {
     if (loadingDetailId.value === id) {
@@ -773,6 +780,32 @@ async function refreshDetail(options: RefreshDetailOptions = {}): Promise<Conver
   }
 }
 
+const snapshotRetryDelays = [0, 400, 1000];
+
+async function refreshDetailForSynchronization(
+  id: string,
+  options: Omit<RefreshDetailOptions, 'reportError' | 'throwOnError'> = {}
+): Promise<ConversationDetail> {
+  let lastError: unknown = new Error('读取会话快照失败');
+  for (const delay of snapshotRetryDelays) {
+    if (selectedConversationId.value !== id) throw lastError;
+    if (delay > 0) await new Promise(resolve => window.setTimeout(resolve, delay));
+    if (selectedConversationId.value !== id) throw lastError;
+    try {
+      const snapshot = await refreshDetail({
+        ...options,
+        reportError: false,
+        throwOnError: true
+      });
+      if (snapshot?.streamPosition) return snapshot;
+      lastError = new Error('会话快照缺少同步位置');
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
 async function synchronizeSelectedConversationDetail(): Promise<ConversationDetail | null> {
   const id = selectedConversationId.value;
   if (!id) return null;
@@ -780,11 +813,14 @@ async function synchronizeSelectedConversationDetail(): Promise<ConversationDeta
   let snapshot: ConversationDetail | null = null;
   try {
     await conversationStreams.synchronizeStream(id, async () => {
-      if (selectedConversationId.value === id) snapshot = await refreshDetail();
+      if (selectedConversationId.value !== id) return;
+      snapshot = await refreshDetailForSynchronization(id);
+      return snapshot.streamPosition;
     });
     return snapshot;
-  } catch {
-    return selectedConversationId.value === id ? refreshDetail() : null;
+  } catch (error) {
+    if (selectedConversationId.value === id) showError(error);
+    return null;
   }
 }
 

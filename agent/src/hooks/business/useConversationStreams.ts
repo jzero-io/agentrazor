@@ -2,9 +2,9 @@ import { conversationApi, type StreamEvent } from '../../service/api';
 
 interface ConversationStreamsOptions {
   onEvent: (event: StreamEvent) => void | Promise<void>;
-  onBufferedEvents: (events: StreamEvent[], dedupeSnapshotOverlap: boolean) => void | Promise<void>;
+  onBufferedEvents: (events: StreamEvent[], snapshotStreamPosition?: string) => void | Promise<void>;
   onStreamError: (conversationId: string) => void | Promise<void>;
-  onReconnect: (conversationId: string) => void | Promise<void>;
+  onReconnect: (conversationId: string) => string | void | Promise<string | void>;
 }
 
 interface ManagedConversationStream {
@@ -75,7 +75,7 @@ export function useConversationStreams(options: ConversationStreamsOptions) {
     }
   }
 
-  function synchronize(stream: ManagedConversationStream, loadSnapshot: () => void | Promise<void>) {
+  function synchronize(stream: ManagedConversationStream, loadSnapshot: () => string | void | Promise<string | void>) {
     stream.buffering = true;
     const previous = stream.synchronization || Promise.resolve();
     const current = previous
@@ -83,18 +83,15 @@ export function useConversationStreams(options: ConversationStreamsOptions) {
       .then(async () => {
         await stream.ready;
         let snapshotError: unknown;
-        let snapshotLoaded = false;
+        let snapshotStreamPosition: string | undefined;
         try {
-          await loadSnapshot();
-          snapshotLoaded = true;
+          snapshotStreamPosition = await loadSnapshot() || undefined;
         } catch (error) {
           snapshotError = error;
         }
-        let dedupeSnapshotOverlap = snapshotLoaded;
         while (stream.pendingEvents.length) {
           const events = stream.pendingEvents.splice(0);
-          await options.onBufferedEvents(events, dedupeSnapshotOverlap);
-          dedupeSnapshotOverlap = false;
+          await options.onBufferedEvents(events, snapshotStreamPosition);
         }
         if (snapshotError) throw snapshotError;
       });
@@ -106,7 +103,7 @@ export function useConversationStreams(options: ConversationStreamsOptions) {
     });
   }
 
-  function synchronizeStream(id: string, loadSnapshot: () => void | Promise<void>): Promise<void> {
+  function synchronizeStream(id: string, loadSnapshot: () => string | void | Promise<string | void>): Promise<void> {
     try {
       return synchronize(getOrCreateStream(id, true), loadSnapshot);
     } catch (error) {
