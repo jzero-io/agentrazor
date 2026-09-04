@@ -25,6 +25,21 @@ type Conversation struct {
 	UpdatedAt        string  `json:"updatedAt"`
 }
 
+type ConversationTrendPoint struct {
+	Period                string `json:"period"`
+	TotalConversations    int64  `json:"totalConversations"`
+	ArchivedConversations int64  `json:"archivedConversations"`
+}
+
+type ConversationTrendRequest struct {
+	Dimension string `form:"dimension,default=day,optional" validate:"oneof=day month"`
+}
+
+type ConversationTrendResponse struct {
+	Dimension string                   `json:"dimension"`
+	Points    []ConversationTrendPoint `json:"points"`
+}
+
 type CreateRequest struct {
 	GroupId *string `json:"groupId,optional"`
 }
@@ -84,6 +99,20 @@ type StatsResponse struct {
 	ArchivedConversations int64 `json:"archivedConversations"`
 	TotalTokens           int64 `json:"totalTokens"`
 	TokenUsageAvailable   bool  `json:"tokenUsageAvailable"`
+}
+
+type TokenUsageTrendPoint struct {
+	Period string `json:"period"`
+	Tokens int64  `json:"tokens"`
+}
+
+type TokenUsageTrendRequest struct {
+	Dimension string `form:"dimension,default=day,optional" validate:"oneof=day month"`
+}
+
+type TokenUsageTrendResponse struct {
+	Dimension string                 `json:"dimension"`
+	Points    []TokenUsageTrendPoint `json:"points"`
 }
 
 type Turn struct {

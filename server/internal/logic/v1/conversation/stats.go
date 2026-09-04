@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"sort"
 
 	"github.com/jzero-io/agentrazor/core-engine/helper/auth"
 	"github.com/jzero-io/jzero/core/stores/condition"
@@ -50,18 +49,10 @@ func (l *Stats) Stats() (resp *types.StatsResponse, err error) {
 	if err != nil {
 		return nil, err
 	}
-	threads, err := l.listOwnedThreadMetadata(owned)
+	threads, err := l.listOwnedThreads(owned)
 	if err != nil {
 		return nil, err
 	}
-	order := conversationOrder(owned)
-	sort.SliceStable(threads, func(i, j int) bool {
-		left, right := order[threads[i].ID], order[threads[j].ID]
-		if left != nil && right != nil && !left.CreateTime.Equal(right.CreateTime) {
-			return left.CreateTime.After(right.CreateTime)
-		}
-		return threads[i].ID > threads[j].ID
-	})
 
 	resp = &types.StatsResponse{}
 	for _, thread := range threads {
@@ -89,14 +80,18 @@ func (l *Stats) Stats() (resp *types.StatsResponse, err error) {
 }
 
 func (l *Stats) isSuperAdmin() (bool, error) {
-	info, err := auth.Info(l.ctx)
+	return isSuperAdmin(l.ctx, l.svcCtx)
+}
+
+func isSuperAdmin(ctx context.Context, svcCtx *svc.ServiceContext) (bool, error) {
+	info, err := auth.Info(ctx)
 	if err != nil {
 		return false, err
 	}
 	if len(info.RoleUuids) == 0 {
 		return false, nil
 	}
-	roles, err := l.svcCtx.Model.ManageRole.FindByCondition(l.ctx, nil, condition.NewChain().
+	roles, err := svcCtx.Model.ManageRole.FindByCondition(ctx, nil, condition.NewChain().
 		In(manage_role.Uuid, info.RoleUuids).
 		Build()...)
 	if err != nil {
@@ -119,17 +114,29 @@ func (l *Stats) conversationRows(userUUID string, superAdmin bool) ([]*conversat
 		condition.NewChain().Equal(conversationmodel.UserUuid, userUUID).Build()...)
 }
 
-func (l *Stats) listOwnedThreadMetadata(owned []*conversationmodel.Conversation) ([]agentdomain.StoredThread, error) {
-	threads := make([]agentdomain.StoredThread, 0, len(owned))
+func (l *Stats) listOwnedThreads(owned []*conversationmodel.Conversation) ([]agentdomain.StoredThread, error) {
+	listed, err := l.svcCtx.AgentThreads.List(l.ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	ownedSet := make(map[string]struct{}, len(owned))
 	for _, row := range owned {
-		thread, err := l.svcCtx.AgentThreads.Metadata(l.ctx, row.Id)
-		if errors.Is(err, agentdomain.ErrThreadNotFound) {
-			continue
+		ownedSet[row.Id] = struct{}{}
+	}
+
+	byID := make(map[string]agentdomain.StoredThread, len(listed))
+	for _, thread := range listed {
+		if _, ok := ownedSet[thread.ID]; ok {
+			byID[thread.ID] = thread
 		}
-		if err != nil {
-			return nil, err
+	}
+
+	threads := make([]agentdomain.StoredThread, 0, len(byID))
+	for _, row := range owned {
+		if thread, ok := byID[row.Id]; ok {
+			threads = append(threads, thread)
 		}
-		threads = append(threads, thread)
 	}
 	return threads, nil
 }

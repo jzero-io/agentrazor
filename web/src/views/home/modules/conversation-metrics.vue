@@ -46,13 +46,6 @@ onMounted(loadStats);
         </div>
         <h2>Agent 指标</h2>
       </div>
-
-      <NButton secondary size="small" :loading="loading" class="refresh-button" @click="loadStats">
-        <template #icon>
-          <SvgIcon icon="carbon:renew" />
-        </template>
-        刷新
-      </NButton>
     </div>
 
     <NSpin :show="loading && !stats">
@@ -126,12 +119,6 @@ onMounted(loadStats);
   font-size: 18px;
   font-weight: 700;
   line-height: 1.2;
-}
-
-
-.refresh-button {
-  min-width: 78px;
-  border-radius: 8px;
 }
 
 .metric-card {

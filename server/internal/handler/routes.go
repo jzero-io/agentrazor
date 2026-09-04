@@ -179,6 +179,18 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 						Path:    "/conversation/stats",
 						Handler: v1conversation.Stats(serverCtx),
 					},
+					{
+
+						Method:  http.MethodGet,
+						Path:    "/conversation/token-usage-trend",
+						Handler: v1conversation.TokenUsageTrend(serverCtx),
+					},
+					{
+
+						Method:  http.MethodGet,
+						Path:    "/conversation/trend",
+						Handler: v1conversation.ConversationTrend(serverCtx),
+					},
 				}...,
 			),
 			rest.WithPrefix("/api/v1"),

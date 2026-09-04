@@ -192,6 +192,44 @@ func Stats(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
+// 获取 Token 消耗趋势
+func TokenUsageTrend(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req types.TokenUsageTrendRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+			return
+		}
+
+		l := conversation.NewTokenUsageTrend(r.Context(), svcCtx, r)
+		resp, err := l.TokenUsageTrend(&req)
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.OkJsonCtx(r.Context(), w, resp)
+		}
+	}
+}
+
+// 获取对话数量趋势
+func ConversationTrend(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req types.ConversationTrendRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+			return
+		}
+
+		l := conversation.NewConversationTrend(r.Context(), svcCtx, r)
+		resp, err := l.ConversationTrend(&req)
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.OkJsonCtx(r.Context(), w, resp)
+		}
+	}
+}
+
 // 订阅会话与 Agent 流式事件
 func StreamEvents(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

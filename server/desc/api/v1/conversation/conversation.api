@@ -55,6 +55,29 @@ type (
 		TotalTokens           int64 `json:"totalTokens"`
 		TokenUsageAvailable   bool  `json:"tokenUsageAvailable"`
 	}
+	ConversationTrendRequest {
+		Dimension string `form:"dimension,default=day,optional" validate:"oneof=day month"`
+	}
+	ConversationTrendPoint {
+		Period                string `json:"period"`
+		TotalConversations    int64  `json:"totalConversations"`
+		ArchivedConversations int64  `json:"archivedConversations"`
+	}
+	ConversationTrendResponse {
+		Dimension string                   `json:"dimension"`
+		Points    []ConversationTrendPoint `json:"points"`
+	}
+	TokenUsageTrendRequest {
+		Dimension string `form:"dimension,default=day,optional" validate:"oneof=day month"`
+	}
+	TokenUsageTrendPoint {
+		Period string `json:"period"`
+		Tokens int64  `json:"tokens"`
+	}
+	TokenUsageTrendResponse {
+		Dimension string                 `json:"dimension"`
+		Points    []TokenUsageTrendPoint `json:"points"`
+	}
 	PathRequest {
 		ConversationId string `path:"conversation_id" validate:"required"`
 	}
@@ -111,6 +134,14 @@ service server {
 	@doc "获取会话统计"
 	@handler Stats
 	get /conversation/stats returns (StatsResponse)
+
+	@doc "获取对话数量趋势"
+	@handler ConversationTrend
+	get /conversation/trend (ConversationTrendRequest) returns (ConversationTrendResponse)
+
+	@doc "获取 Token 消耗趋势"
+	@handler TokenUsageTrend
+	get /conversation/token-usage-trend (TokenUsageTrendRequest) returns (TokenUsageTrendResponse)
 
 	@doc "创建会话"
 	@handler Create

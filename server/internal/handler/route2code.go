@@ -35,6 +35,8 @@ var RoutesCodesMap = map[string]string{
 	"POST:/api/v1/conversation/:conversation_id/turn/cancel":                   "v1:conversation:cancelTurn",
 	"GET:/api/v1/conversation/:conversation_id/workspace/files":                "v1:conversation:workspaceFiles",
 	"GET:/api/v1/conversation/stats":                                           "v1:conversation:stats",
+	"GET:/api/v1/conversation/token-usage-trend":                               "v1:conversation:tokenUsageTrend",
+	"GET:/api/v1/conversation/trend":                                           "v1:conversation:conversationTrend",
 	"GET:/api/v1/conversation-groups":                                          "v1:conversation:group:list",
 	"POST:/api/v1/conversation-groups":                                         "v1:conversation:group:create",
 	"DELETE:/api/v1/conversation-groups/:group_id":                             "v1:conversation:group:delete",

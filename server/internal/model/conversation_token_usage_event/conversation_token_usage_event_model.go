@@ -1,6 +1,8 @@
 package conversation_token_usage_event
 
 import (
+	"context"
+
 	"github.com/eddieowens/opts"
 	"github.com/jzero-io/jzero/core/stores/modelx"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
@@ -13,6 +15,7 @@ type (
 	// and implement the added methods in customConversationTokenUsageEventModel.
 	ConversationTokenUsageEventModel interface {
 		conversationTokenUsageEventModel
+		TokenUsageTrend(ctx context.Context, userUUID, dimension string) ([]TokenUsageTrendPoint, error)
 	}
 
 	customConversationTokenUsageEventModel struct {
