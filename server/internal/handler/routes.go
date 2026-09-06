@@ -182,6 +182,18 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					{
 
 						Method:  http.MethodGet,
+						Path:    "/conversation/token-usage-conversations",
+						Handler: v1conversation.TokenUsageConversations(serverCtx),
+					},
+					{
+
+						Method:  http.MethodGet,
+						Path:    "/conversation/token-usage-details",
+						Handler: v1conversation.TokenUsageDetails(serverCtx),
+					},
+					{
+
+						Method:  http.MethodGet,
 						Path:    "/conversation/token-usage-trend",
 						Handler: v1conversation.TokenUsageTrend(serverCtx),
 					},

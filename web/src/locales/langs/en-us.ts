@@ -173,8 +173,9 @@ const local: App.I18n.Schema = {
     manage_menu: 'Menu Manage',
     manage_email: 'Email Settings',
     agent: 'Agent Manage',
-    'agent_config': 'Config Manage',
-    'agent_skills': 'Skills Manage',
+    agent_config: 'Config Manage',
+    agent_skills: 'Skills Manage',
+    'agent_token-usage': 'Token Usage',
     exception: 'Exception',
     exception_403: '403',
     exception_404: '404',
@@ -261,7 +262,7 @@ const local: App.I18n.Schema = {
       projectNews: {
         title: 'Project News',
         moreNews: 'More News',
-         desc1: 'Created the open source project jzero on April 07, 2024!',
+        desc1: 'Created the open source project jzero on April 07, 2024!',
         desc2: 'Created the open source project agentrazor-admin on October 14, 2024!',
         desc3: 'Continuously improving and perfecting in 2025!',
         desc4: 'Created the open source project jzero-intellij on November 30, 2025!',
@@ -312,7 +313,8 @@ const local: App.I18n.Schema = {
           password: 'Please enter password'
         },
         addUser: 'Add User',
-        editUser: 'Edit User'      },
+        editUser: 'Edit User'
+      },
       menu: {
         home: 'Home',
         title: 'Menu List',

@@ -192,6 +192,44 @@ func Stats(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
+// 分页获取账号下的对话和 Turn Token 消耗明细
+func TokenUsageConversations(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req types.TokenUsageConversationsRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+			return
+		}
+
+		l := conversation.NewTokenUsageConversations(r.Context(), svcCtx, r)
+		resp, err := l.TokenUsageConversations(&req)
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.OkJsonCtx(r.Context(), w, resp)
+		}
+	}
+}
+
+// 分页获取账号 Token 消耗明细
+func TokenUsageDetails(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req types.TokenUsageDetailsRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+			return
+		}
+
+		l := conversation.NewTokenUsageDetails(r.Context(), svcCtx, r)
+		resp, err := l.TokenUsageDetails(&req)
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.OkJsonCtx(r.Context(), w, resp)
+		}
+	}
+}
+
 // 获取 Token 消耗趋势
 func TokenUsageTrend(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

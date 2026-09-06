@@ -72,6 +72,17 @@ export const generatedRoutes: GeneratedRoute[] = [
           icon: 'carbon:skill-level-basic',
           order: 1
         }
+      },
+      {
+        name: 'agent_token-usage',
+        path: '/agent/token-usage',
+        component: 'view.agent_token-usage',
+        meta: {
+          title: 'agent_token-usage',
+          i18nKey: 'route.agent_token-usage',
+          icon: 'carbon:meter',
+          order: 3
+        }
       }
     ]
   },

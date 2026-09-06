@@ -16,6 +16,9 @@ type (
 	ConversationTokenUsageEventModel interface {
 		conversationTokenUsageEventModel
 		TokenUsageTrend(ctx context.Context, userUUID, dimension string) ([]TokenUsageTrendPoint, error)
+		TokenUsageSummary(ctx context.Context, userUUID string) (*TokenUsageSummaryRow, error)
+		TokenUsageAccounts(ctx context.Context, userUUID, username string, current, size int) ([]TokenUsageAccountRow, error)
+		TokenUsageConversations(ctx context.Context, userUUID, conversationID string, current, size int) ([]TokenUsageConversationRow, error)
 	}
 
 	customConversationTokenUsageEventModel struct {

@@ -35,6 +35,7 @@ declare module "@elegant-router/types" {
     "agent": "/agent";
     "agent_config": "/agent/config";
     "agent_skills": "/agent/skills";
+    "agent_token-usage": "/agent/token-usage";
     "home": "/home";
     "iframe-page": "/iframe-page/:url";
     "login": "/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?";
@@ -122,6 +123,7 @@ declare module "@elegant-router/types" {
     | "login"
     | "agent_config"
     | "agent_skills"
+    | "agent_token-usage"
     | "home"
     | "manage_email"
     | "manage_menu"

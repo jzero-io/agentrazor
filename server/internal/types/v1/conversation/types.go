@@ -78,6 +78,17 @@ type MetadataResponse struct {
 	UpdatedAt string `json:"updatedAt"`
 }
 
+type PageRequest struct {
+	Current int `form:"current,default=1,optional"`
+	Size    int `form:"size,default=10,optional"`
+}
+
+type PageResponse struct {
+	Current int   `json:"current"`
+	Size    int   `json:"size"`
+	Total   int64 `json:"total"`
+}
+
 type PathRequest struct {
 	ConversationId string `path:"conversation_id" validate:"required"`
 }
@@ -101,6 +112,55 @@ type StatsResponse struct {
 	TokenUsageAvailable   bool  `json:"tokenUsageAvailable"`
 }
 
+type TokenUsageAccount struct {
+	UserUuid          string `json:"userUuid"`
+	Username          string `json:"username"`
+	Nickname          string `json:"nickname"`
+	TotalTokens       int64  `json:"totalTokens"`
+	ConversationCount int64  `json:"conversationCount"`
+	TurnCount         int64  `json:"turnCount"`
+}
+
+type TokenUsageConversation struct {
+	ConversationId string           `json:"conversationId"`
+	TotalTokens    int64            `json:"totalTokens"`
+	TurnCount      int64            `json:"turnCount"`
+	FirstUsedAt    string           `json:"firstUsedAt"`
+	LastUsedAt     string           `json:"lastUsedAt"`
+	Turns          []TokenUsageTurn `json:"turns"`
+}
+
+type TokenUsageConversationsRequest struct {
+	PageRequest
+	UserUuid       string `form:"userUuid" validate:"required"`
+	ConversationId string `form:"conversationId,optional"`
+}
+
+type TokenUsageConversationsResponse struct {
+	PageResponse
+	Conversations []TokenUsageConversation `json:"conversations"`
+}
+
+type TokenUsageDetailsRequest struct {
+	PageRequest
+	Username string `form:"username,optional"`
+}
+
+type TokenUsageDetailsResponse struct {
+	PageResponse
+	Summary  TokenUsageSummary   `json:"summary"`
+	Accounts []TokenUsageAccount `json:"accounts"`
+}
+
+type TokenUsageSummary struct {
+	InputTokens           int64 `json:"inputTokens"`
+	CachedInputTokens     int64 `json:"cachedInputTokens"`
+	CacheWriteInputTokens int64 `json:"cacheWriteInputTokens"`
+	OutputTokens          int64 `json:"outputTokens"`
+	ReasoningOutputTokens int64 `json:"reasoningOutputTokens"`
+	TotalTokens           int64 `json:"totalTokens"`
+}
+
 type TokenUsageTrendPoint struct {
 	Period string `json:"period"`
 	Tokens int64  `json:"tokens"`
@@ -113,6 +173,19 @@ type TokenUsageTrendRequest struct {
 type TokenUsageTrendResponse struct {
 	Dimension string                 `json:"dimension"`
 	Points    []TokenUsageTrendPoint `json:"points"`
+}
+
+type TokenUsageTurn struct {
+	TurnId                string `json:"turnId"`
+	InputTokens           int64  `json:"inputTokens"`
+	CachedInputTokens     int64  `json:"cachedInputTokens"`
+	CacheWriteInputTokens int64  `json:"cacheWriteInputTokens"`
+	OutputTokens          int64  `json:"outputTokens"`
+	ReasoningOutputTokens int64  `json:"reasoningOutputTokens"`
+	TotalTokens           int64  `json:"totalTokens"`
+	ModelContextWindow    *int64 `json:"modelContextWindow,omitempty"`
+	StartedAt             string `json:"startedAt"`
+	UpdatedAt             string `json:"updatedAt"`
 }
 
 type Turn struct {

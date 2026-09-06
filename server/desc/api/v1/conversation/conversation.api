@@ -8,6 +8,11 @@ info (
 	go_package: "v1/conversation"
 )
 
+import (
+	"../../common/request.api"
+	"../../common/response.api"
+)
+
 type (
 	Conversation {
 		Id               string  `json:"id"`
@@ -78,6 +83,60 @@ type (
 		Dimension string                 `json:"dimension"`
 		Points    []TokenUsageTrendPoint `json:"points"`
 	}
+	TokenUsageTurn {
+		TurnId                string `json:"turnId"`
+		InputTokens           int64  `json:"inputTokens"`
+		CachedInputTokens     int64  `json:"cachedInputTokens"`
+		CacheWriteInputTokens int64  `json:"cacheWriteInputTokens"`
+		OutputTokens          int64  `json:"outputTokens"`
+		ReasoningOutputTokens int64  `json:"reasoningOutputTokens"`
+		TotalTokens           int64  `json:"totalTokens"`
+		ModelContextWindow    *int64 `json:"modelContextWindow,omitempty"`
+		StartedAt             string `json:"startedAt"`
+		UpdatedAt             string `json:"updatedAt"`
+	}
+	TokenUsageConversation {
+		ConversationId string           `json:"conversationId"`
+		TotalTokens    int64            `json:"totalTokens"`
+		TurnCount      int64            `json:"turnCount"`
+		FirstUsedAt    string           `json:"firstUsedAt"`
+		LastUsedAt     string           `json:"lastUsedAt"`
+		Turns          []TokenUsageTurn `json:"turns"`
+	}
+	TokenUsageAccount {
+		UserUuid          string `json:"userUuid"`
+		Username          string `json:"username"`
+		Nickname          string `json:"nickname"`
+		TotalTokens       int64  `json:"totalTokens"`
+		ConversationCount int64  `json:"conversationCount"`
+		TurnCount         int64  `json:"turnCount"`
+	}
+	TokenUsageSummary {
+		InputTokens           int64 `json:"inputTokens"`
+		CachedInputTokens     int64 `json:"cachedInputTokens"`
+		CacheWriteInputTokens int64 `json:"cacheWriteInputTokens"`
+		OutputTokens          int64 `json:"outputTokens"`
+		ReasoningOutputTokens int64 `json:"reasoningOutputTokens"`
+		TotalTokens           int64 `json:"totalTokens"`
+	}
+	TokenUsageDetailsRequest {
+		PageRequest
+		Username string `form:"username,optional"`
+	}
+	TokenUsageDetailsResponse {
+		PageResponse
+		Summary  TokenUsageSummary   `json:"summary"`
+		Accounts []TokenUsageAccount `json:"accounts"`
+	}
+	TokenUsageConversationsRequest {
+		PageRequest
+		UserUuid       string `form:"userUuid" validate:"required"`
+		ConversationId string `form:"conversationId,optional"`
+	}
+	TokenUsageConversationsResponse {
+		PageResponse
+		Conversations []TokenUsageConversation `json:"conversations"`
+	}
 	PathRequest {
 		ConversationId string `path:"conversation_id" validate:"required"`
 	}
@@ -142,6 +201,14 @@ service server {
 	@doc "获取 Token 消耗趋势"
 	@handler TokenUsageTrend
 	get /conversation/token-usage-trend (TokenUsageTrendRequest) returns (TokenUsageTrendResponse)
+
+	@doc "分页获取账号 Token 消耗明细"
+	@handler TokenUsageDetails
+	get /conversation/token-usage-details (TokenUsageDetailsRequest) returns (TokenUsageDetailsResponse)
+
+	@doc "分页获取账号下的对话和 Turn Token 消耗明细"
+	@handler TokenUsageConversations
+	get /conversation/token-usage-conversations (TokenUsageConversationsRequest) returns (TokenUsageConversationsResponse)
 
 	@doc "创建会话"
 	@handler Create

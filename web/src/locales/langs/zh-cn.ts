@@ -173,8 +173,9 @@ const local: App.I18n.Schema = {
     manage_menu: '菜单管理',
     manage_email: '邮箱配置',
     agent: 'Agent 管理',
-    'agent_config': '配置管理',
-    'agent_skills': 'Skills 管理',
+    agent_config: '配置管理',
+    agent_skills: 'Skills 管理',
+    'agent_token-usage': 'Token 消耗',
     exception: '异常页',
     exception_403: '403',
     exception_404: '404',
@@ -265,7 +266,7 @@ const local: App.I18n.Schema = {
         desc2: '2024 年 10 月 14 号创建了开源项目 agentrazor-admin!',
         desc3: '2025 年不断的改进完善ing!',
         desc4: '2025 年 11 月 30 号创建了开源项目 jzero-intellij!',
-        desc5: '2026 年 01 月 01 号发布了 jzero v1.0.0!',
+        desc5: '2026 年 01 月 01 号发布了 jzero v1.0.0!'
       },
       creativity: '创意'
     },
@@ -312,7 +313,8 @@ const local: App.I18n.Schema = {
           password: '请输入密码'
         },
         addUser: '新增用户',
-        editUser: '编辑用户'      },
+        editUser: '编辑用户'
+      },
       menu: {
         home: '首页',
         title: '菜单列表',
