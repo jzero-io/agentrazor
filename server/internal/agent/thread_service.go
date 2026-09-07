@@ -72,10 +72,16 @@ type TokenUsageRecorder func(context.Context, TokenUsageEvent) error
 
 type RuntimeFactory func() (ThreadRuntime, error)
 
+type runtimeAdministration interface {
+	AccountStatus(context.Context) (AccountStatus, error)
+	LoginAPIKey(context.Context, string) error
+	StartChatGPTLogin(context.Context) (DeviceLogin, error)
+	Logout(context.Context) error
+}
+
 type RuntimeStatus struct {
 	Running         bool
 	Restarting      bool
-	ActiveTurnCount int
 	LastRestartTime time.Time
 }
 
@@ -361,9 +367,52 @@ func (s *ThreadService) RuntimeStatus() RuntimeStatus {
 	return RuntimeStatus{
 		Running:         !s.closed && s.runtime != nil,
 		Restarting:      s.restarting,
-		ActiveTurnCount: len(s.turns),
 		LastRestartTime: s.lastRestartTime,
 	}
+}
+
+func (s *ThreadService) AccountStatus(ctx context.Context) (AccountStatus, error) {
+	runtime, err := s.administrationRuntime()
+	if err != nil {
+		return AccountStatus{}, err
+	}
+	return runtime.AccountStatus(ctx)
+}
+
+func (s *ThreadService) LoginAPIKey(ctx context.Context, apiKey string) error {
+	runtime, err := s.administrationRuntime()
+	if err != nil {
+		return err
+	}
+	return runtime.LoginAPIKey(ctx, apiKey)
+}
+
+func (s *ThreadService) StartChatGPTLogin(ctx context.Context) (DeviceLogin, error) {
+	runtime, err := s.administrationRuntime()
+	if err != nil {
+		return DeviceLogin{}, err
+	}
+	return runtime.StartChatGPTLogin(ctx)
+}
+
+func (s *ThreadService) Logout(ctx context.Context) error {
+	runtime, err := s.administrationRuntime()
+	if err != nil {
+		return err
+	}
+	return runtime.Logout(ctx)
+}
+
+func (s *ThreadService) administrationRuntime() (runtimeAdministration, error) {
+	runtime, err := s.currentRuntime()
+	if err != nil {
+		return nil, err
+	}
+	admin, ok := runtime.(runtimeAdministration)
+	if !ok {
+		return nil, errors.New("agent runtime does not support administration")
+	}
+	return admin, nil
 }
 
 func (s *ThreadService) RestartRuntime() error {
@@ -376,33 +425,50 @@ func (s *ThreadService) RestartRuntime() error {
 		s.mu.Unlock()
 		return ErrRuntimeRestarting
 	}
-	if len(s.turns) > 0 {
-		s.mu.Unlock()
-		return ErrThreadTurnRunning
-	}
 	factory := s.runtimeFactory
-	old := s.runtime
 	if factory == nil {
 		s.mu.Unlock()
 		return errors.New("agent runtime factory is not configured")
 	}
+	old := s.runtime
+	cancels := make([]context.CancelFunc, 0, len(s.turns))
+	for _, turn := range s.turns {
+		cancels = append(cancels, turn.cancel)
+	}
+	s.turns = make(map[string]*activeTurn)
+	s.runtime = nil
 	s.restarting = true
 	s.mu.Unlock()
 
+	for _, cancel := range cancels {
+		cancel()
+	}
+	if old != nil {
+		if err := old.Close(); err != nil {
+			s.mu.Lock()
+			s.restarting = false
+			s.mu.Unlock()
+			return fmt.Errorf("close old agent runtime: %w", err)
+		}
+	}
 	next, err := factory()
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err != nil {
 		s.restarting = false
+		s.mu.Unlock()
 		return err
+	}
+	if s.closed {
+		s.restarting = false
+		s.mu.Unlock()
+		_ = next.Close()
+		return ErrServiceStopped
 	}
 	s.runtime = next
 	s.lastRestartTime = time.Now().UTC()
 	s.restarting = false
-	if old != nil {
-		go func() { _ = old.Close() }()
-	}
+	s.mu.Unlock()
 	return nil
 }
 

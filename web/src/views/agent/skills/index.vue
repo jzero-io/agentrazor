@@ -2,7 +2,14 @@
 import { computed, onMounted, ref } from 'vue';
 import { NButton, NCard, NEmpty, NInput, NPopconfirm, NTree, NUpload } from 'naive-ui';
 import type { TreeOption, UploadCustomRequestOptions } from 'naive-ui';
-import { DeleteAgentSkill, GetAgentSkillDetail, GetAgentSkills, UpdateAgentSkillFile, UploadAgentSkill } from '@/service/api';
+import {
+  DeleteAgentSkill,
+  GetAgentSkillDetail,
+  GetAgentSkills,
+  UpdateAgentSkillFile,
+  UploadAgentSkill
+} from '@/service/api';
+import { $t } from '@/locales';
 
 const loading = ref(false);
 const detailLoading = ref(false);
@@ -48,7 +55,12 @@ function buildTreeOptions(files: Api.Manage.AgentSkillFile[]): TreeOption[] {
     label: item.name,
     isLeaf: item.type === 'file',
     disabled: item.type === 'directory',
-    prefix: () => (item.type === 'directory' ? <icon-mdi-folder-outline class="text-icon text-gray-400" /> : <icon-mdi-file-document-outline class="text-icon text-gray-400" />),
+    prefix: () =>
+      item.type === 'directory' ? (
+        <icon-mdi-folder-outline class="text-icon text-gray-400" />
+      ) : (
+        <icon-mdi-file-document-outline class="text-icon text-gray-400" />
+      ),
     children: item.children?.length ? buildTreeOptions(item.children) : undefined
   }));
 }
@@ -168,26 +180,33 @@ onMounted(getData);
 
 <template>
   <div class="min-h-500px flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto">
-    <NCard title="Skills 管理" :bordered="false" size="small" class="sm:flex-1-hidden card-wrapper skills-card">
-      <div class="min-h-0 flex-1 grid grid-cols-[320px_minmax(0,1fr)] gap-16px lt-lg:grid-cols-1">
-        <section class="min-h-0 flex flex-col overflow-hidden rounded-6px border border-gray-100 bg-white p-16px dark:border-gray-700 dark:bg-#18181c">
+    <NCard
+      :title="$t('page.agentSkills.title')"
+      :bordered="false"
+      size="small"
+      class="skills-card sm:flex-1-hidden card-wrapper"
+    >
+      <div class="grid grid-cols-[320px_minmax(0,1fr)] min-h-0 flex-1 gap-16px lt-lg:grid-cols-1">
+        <section
+          class="min-h-0 flex flex-col overflow-hidden border border-gray-100 rounded-6px bg-white p-16px dark:border-gray-700 dark:bg-#18181c"
+        >
           <div class="mb-12px flex items-center justify-between gap-12px">
-            <div class="font-medium">已安装 Skills</div>
+            <div class="font-medium">{{ $t('page.agentSkills.installed') }}</div>
             <div class="flex shrink-0 items-center gap-8px">
               <NUpload :show-file-list="false" accept=".zip" :custom-request="uploadSkill">
                 <NButton type="primary" size="small" :loading="uploading">
                   <template #icon><icon-ic-round-plus class="text-icon" /></template>
-                  上传 zip
+                  {{ $t('page.agentSkills.uploadZip') }}
                 </NButton>
               </NUpload>
               <NButton :loading="loading" size="small" secondary @click="getData">
                 <template #icon><icon-mdi-refresh class="text-icon" /></template>
-                刷新
+                {{ $t('common.refresh') }}
               </NButton>
             </div>
           </div>
 
-          <NInput v-model:value="searchKeyword" clearable placeholder="搜索名称">
+          <NInput v-model:value="searchKeyword" clearable :placeholder="$t('page.agentSkills.searchPlaceholder')">
             <template #prefix><icon-ic-round-search class="text-icon text-gray-400" /></template>
           </NInput>
 
@@ -196,8 +215,12 @@ onMounted(getData);
               v-for="item in filteredSkills"
               :key="item.name"
               type="button"
-              class="group mb-8px w-full rounded-6px border px-12px py-11px text-left transition-colors last:mb-0"
-              :class="selectedName === item.name ? 'border-primary bg-primary bg-opacity-8' : 'border-gray-200 bg-white hover:border-primary/60 dark:border-gray-700 dark:bg-#101014'"
+              class="group mb-8px w-full border rounded-6px px-12px py-11px text-left transition-colors last:mb-0"
+              :class="
+                selectedName === item.name
+                  ? 'border-primary bg-primary bg-opacity-8'
+                  : 'border-gray-200 bg-white hover:border-primary/60 dark:border-gray-700 dark:bg-#101014'
+              "
               @click="selectSkill(item)"
             >
               <div class="flex items-center justify-between gap-8px">
@@ -209,20 +232,33 @@ onMounted(getData);
                         <template #icon><icon-material-symbols-delete-outline class="text-icon" /></template>
                       </NButton>
                     </template>
-                    删除 {{ item.name }}？
+                    {{ $t('page.agentSkills.deleteConfirm', { name: item.name }) }}
                   </NPopconfirm>
                 </div>
               </div>
             </button>
           </div>
-          <NEmpty v-else class="py-44px" :description="skills.length ? '没有匹配的 skill' : '暂无 skills'" />
+          <NEmpty
+            v-else
+            class="py-44px"
+            :description="skills.length ? $t('page.agentSkills.noMatch') : $t('page.agentSkills.empty')"
+          />
         </section>
 
-        <section class="min-h-0 min-w-0 overflow-hidden rounded-6px border border-gray-100 bg-white dark:border-gray-700 dark:bg-#18181c">
-          <div v-if="selectedSkill" class="grid h-full min-h-0 grid-cols-[280px_minmax(0,1fr)] lt-xl:grid-cols-[240px_minmax(0,1fr)] lt-lg:grid-cols-1">
-            <aside class="min-h-0 flex flex-col border-r border-gray-100 p-16px dark:border-gray-700 lt-lg:border-b lt-lg:border-r-0">
+        <section
+          class="min-h-0 min-w-0 overflow-hidden border border-gray-100 rounded-6px bg-white dark:border-gray-700 dark:bg-#18181c"
+        >
+          <div
+            v-if="selectedSkill"
+            class="grid grid-cols-[280px_minmax(0,1fr)] h-full min-h-0 lt-xl:grid-cols-[240px_minmax(0,1fr)] lt-lg:grid-cols-1"
+          >
+            <aside
+              class="min-h-0 flex flex-col border-r border-gray-100 p-16px lt-lg:border-b lt-lg:border-r-0 dark:border-gray-700"
+            >
               <div class="mb-12px shrink-0 truncate text-15px font-semibold">{{ selectedSkill.name }}</div>
-              <div class="skill-file-tree-scroll min-h-0 flex-1 overflow-auto rounded-6px bg-gray-50 p-8px dark:bg-#141418 lt-lg:h-280px">
+              <div
+                class="skill-file-tree-scroll min-h-0 flex-1 overflow-auto rounded-6px bg-gray-50 p-8px lt-lg:h-280px dark:bg-#141418"
+              >
                 <NTree
                   class="skill-file-tree"
                   :data="treeData"
@@ -237,40 +273,47 @@ onMounted(getData);
             </aside>
 
             <div class="min-h-0 min-w-0 flex flex-col p-16px">
-              <div class="mb-12px flex min-w-0 shrink-0 items-start justify-between gap-12px">
+              <div class="mb-12px min-w-0 flex shrink-0 items-start justify-between gap-12px">
                 <div class="min-w-0">
                   <div class="truncate text-15px font-semibold">{{ currentFile }}</div>
                 </div>
                 <div class="flex shrink-0 items-center gap-8px">
                   <NButton v-if="!editing" size="small" secondary @click="startEdit">
                     <template #icon><icon-material-symbols-edit-outline class="text-icon" /></template>
-                    编辑
+                    {{ $t('common.edit') }}
                   </NButton>
                   <template v-else>
-                    <NButton size="small" secondary @click="cancelEdit">取消</NButton>
+                    <NButton size="small" secondary @click="cancelEdit">{{ $t('common.cancel') }}</NButton>
                     <NButton size="small" type="primary" :loading="saving" @click="saveFile">
                       <template #icon><icon-material-symbols-save-outline class="text-icon" /></template>
-                      保存
+                      {{ $t('common.save') }}
                     </NButton>
                   </template>
                 </div>
               </div>
 
-              <div class="min-h-0 flex-1 flex flex-col overflow-hidden rounded-6px border border-gray-200 dark:border-gray-700">
+              <div
+                class="min-h-0 flex flex-col flex-1 overflow-hidden border border-gray-200 rounded-6px dark:border-gray-700"
+              >
                 <NInput
                   v-if="editing"
                   v-model:value="editContent"
                   type="textarea"
                   :autosize="false"
-                  class="min-h-0 flex-1 skill-editor"
-                  placeholder="编辑当前文件内容"
+                  class="skill-editor min-h-0 flex-1"
+                  :placeholder="$t('page.agentSkills.editorPlaceholder')"
                 />
-                <pre v-else-if="!detailLoading" class="m-0 min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words bg-white p-16px text-13px text-gray-800 leading-6 dark:bg-#141418 dark:text-gray-200"><code>{{ visibleContent }}</code></pre>
-                <div v-else class="min-h-0 flex-1 p-16px text-13px text-gray-500">加载中...</div>
+                <pre
+                  v-else-if="!detailLoading"
+                  class="m-0 min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words bg-white p-16px text-13px text-gray-800 leading-6 dark:bg-#141418 dark:text-gray-200"
+                ><code>{{ visibleContent }}</code></pre>
+                <div v-else class="min-h-0 flex-1 p-16px text-13px text-gray-500">
+                  {{ $t('page.agentSkills.loading') }}
+                </div>
               </div>
             </div>
           </div>
-          <NEmpty v-else class="py-120px" description="选择左侧 skill 查看内容" />
+          <NEmpty v-else class="py-120px" :description="$t('page.agentSkills.selectGuide')" />
         </section>
       </div>
     </NCard>
@@ -304,7 +347,7 @@ onMounted(getData);
 
 .skill-editor :deep(textarea) {
   height: 100% !important;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.5;
 }

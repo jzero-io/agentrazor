@@ -39,6 +39,7 @@ const local: App.I18n.Schema = {
     pleaseCheckValue: '请检查输入的值是否合法',
     refresh: '刷新',
     reset: '重置',
+    save: '保存',
     search: '搜索',
     switch: '切换',
     tip: '提示',
@@ -255,20 +256,135 @@ const local: App.I18n.Schema = {
       }
     },
     home: {
-      branchDesc:
-        '为了方便大家开发和更新合并，我们对main分支的代码进行了精简，只保留了首页菜单，其余内容已移至example分支进行维护。预览地址显示的内容即为example分支的内容。',
-      greeting: '早安，{username}, 今天又是充满活力的一天!',
-      weatherDesc: '今日多云转晴，20℃ - 25℃!',
-      projectNews: {
-        title: '项目里程碑',
-        moreNews: '更多动态',
-        desc1: '2024 年 04 月 07 日创建了开源项目 jzero!',
-        desc2: '2024 年 10 月 14 号创建了开源项目 agentrazor-admin!',
-        desc3: '2025 年不断的改进完善ing!',
-        desc4: '2025 年 11 月 30 号创建了开源项目 jzero-intellij!',
-        desc5: '2026 年 01 月 01 号发布了 jzero v1.0.0!'
+      dashboard: {
+        welcome: '欢迎回来，{username}',
+        description: '集中查看 Agent 运行状态、当前模型与资源使用情况。',
+        agentOnline: 'Agent 运行中',
+        agentOffline: 'Agent 未运行',
+        unavailable: '暂不可用',
+        agentStatus: 'Agent 状态',
+        currentModel: '当前模型',
+        totalTokens: '累计 Token',
+        installedSkills: '已安装 Skills'
+      }
+    },
+    agentConfig: {
+      title: '模型配置',
+      lastRestart: '最近重启 {time}',
+      restartAgent: '重启 agent',
+      noRestartRecord: '暂无记录',
+      supplier: '供应商',
+      model: '模型',
+      modelPlaceholder: '选择或输入模型 ID',
+      reasoningEffort: '推理强度',
+      defaultReasoningEffort: '使用模型默认值',
+      saveAndRestart: '保存并重启 agent',
+      status: {
+        unknown: '未知',
+        restarting: '重启中',
+        running: '运行中',
+        stopped: '未运行',
+        inUse: '正在使用',
+        configured: '已配置',
+        pending: '待配置'
       },
-      creativity: '创意'
+      effort: {
+        low: '轻度',
+        medium: '中',
+        high: '高',
+        xhigh: '极高',
+        max: 'Max',
+        ultra: 'Ultra'
+      },
+      message: {
+        selectProviderModel: '请选择供应商并填写模型',
+        providerApiKeyRequired: '请输入 {provider} API Key',
+        applied: '模型配置已应用，agent 已重启',
+        restarted: 'agent 已重启',
+        openAIApiKeyRequired: '请输入 OpenAI API Key',
+        openAIApiKeySaved: 'OpenAI API Key 已保存',
+        chatGPTLoginSuccess: 'ChatGPT 账号登录成功',
+        openAILogoutSuccess: '已退出 OpenAI 账号'
+      },
+      openAI: {
+        title: 'OpenAI 认证',
+        chatGPTAccount: 'ChatGPT 账号',
+        apiKey: 'OpenAI API Key',
+        email: '邮箱',
+        planType: '订阅类型',
+        logout: '退出账号',
+        logoutConfirm: '确认清除当前 ChatGPT 登录凭据？',
+        apiKeyConfigured: 'API Key 已配置',
+        clearApiKey: '清除 API Key',
+        clearApiKeyConfirm: '确认清除当前 OpenAI API Key？',
+        loginChatGPT: '登录 ChatGPT',
+        useApiKey: '使用 API Key',
+        saveAndUse: '保存并使用',
+        backToChatGPT: '返回 ChatGPT 登录'
+      },
+      external: {
+        title: '{provider} 配置',
+        guide: '尚未配置 {provider}，请输入 API Key 后保存并重启。',
+        apiAddress: 'API 地址',
+        replaceKey: '输入新 Key 以替换当前配置',
+        keyPlaceholder: '输入 {provider} API Key'
+      },
+      login: {
+        title: '登录 ChatGPT',
+        guide: '请按以下步骤完成登录，本页面会等待验证结果。',
+        expired: '验证码已过期，请重新获取后继续。',
+        openStep: '打开验证页面并登录 ChatGPT',
+        openPage: '打开验证页面',
+        codeStep: '在验证页面输入以下一次性验证码',
+        copyCode: '复制',
+        copySuccess: '验证码已复制',
+        copyFailed: '复制失败，请手动复制',
+        expiresIn: '有效期 {time}',
+        waiting: '正在等待验证完成…',
+        retry: '重新获取验证码'
+      }
+    },
+    agentSkills: {
+      title: 'Skills 管理',
+      installed: '已安装 Skills',
+      uploadZip: '上传 ZIP',
+      searchPlaceholder: '搜索名称',
+      deleteConfirm: '确认删除 {name}？',
+      noMatch: '没有匹配的 Skill',
+      empty: '暂无 Skills',
+      editorPlaceholder: '编辑当前文件内容',
+      loading: '加载中…',
+      selectGuide: '选择左侧 Skill 查看内容'
+    },
+    agentTokenUsage: {
+      summaryTitle: 'Token 概览',
+      trendTitle: 'Token 消耗趋势',
+      detailsTitle: '用量明细',
+      input: '输入',
+      cachedInput: '缓存输入',
+      cacheWrite: '缓存写入',
+      output: '输出',
+      reasoningOutput: '推理输出',
+      totalToken: '总 Token',
+      tokenUnit: 'Token',
+      byDay: '按天',
+      byMonth: '按月',
+      accountSearchPlaceholder: '输入用户名查询',
+      conversationSearchPlaceholder: '输入 Conversation ID 查询',
+      detailsTip: '账号分页展示，展开账号后按需加载对话和 Turn',
+      emptyRecords: '暂无匹配的 Token 用量记录',
+      unknownAccount: '未知账号',
+      conversation: '对话',
+      turn: 'Turn',
+      turns: 'Turns',
+      conversationCount: '共 {count} 个对话',
+      emptyConversations: '暂无匹配的对话',
+      lastUsed: '最近使用 {time}',
+      seriesName: 'Token 消耗',
+      turnId: 'Turn ID',
+      time: '时间',
+      contextWindow: '上下文窗口',
+      accountCount: '共 {count} 个账号'
     },
     manage: {
       common: {

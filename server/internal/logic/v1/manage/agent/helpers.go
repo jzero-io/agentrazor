@@ -3,7 +3,6 @@ package agent
 import (
 	"archive/zip"
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -405,15 +404,7 @@ func deleteSkill(codexHome, name string) error {
 	return os.RemoveAll(pathReal)
 }
 
-var allowedConfigFiles = []string{"config.toml", "models.json", "auth.json"}
-
-func listAgentConfigFiles() []managetypes.AgentConfigFile {
-	result := make([]managetypes.AgentConfigFile, 0, len(allowedConfigFiles))
-	for _, name := range allowedConfigFiles {
-		result = append(result, managetypes.AgentConfigFile{Name: name})
-	}
-	return result
-}
+var allowedConfigFiles = []string{"config.toml", "models.json"}
 
 func codexHomeRoot(codexHome string) (string, error) {
 	if strings.TrimSpace(codexHome) == "" {
@@ -446,22 +437,22 @@ func resolveAgentConfigFile(codexHome, name string) (string, string, error) {
 	return name, path, nil
 }
 
-func readAgentConfigFile(codexHome, name string) (managetypes.ConfigFileResponse, error) {
-	resolvedName, path, err := resolveAgentConfigFile(codexHome, name)
+func readAgentConfigFile(codexHome, name string) (string, error) {
+	_, path, err := resolveAgentConfigFile(codexHome, name)
 	if err != nil {
-		return managetypes.ConfigFileResponse{}, err
+		return "", err
 	}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return managetypes.ConfigFileResponse{Name: resolvedName, Content: ""}, nil
+		return "", nil
 	}
 	if err != nil {
-		return managetypes.ConfigFileResponse{}, err
+		return "", err
 	}
 	if len(data) > 4<<20 {
-		return managetypes.ConfigFileResponse{}, errors.New("config file is larger than 4 MiB")
+		return "", errors.New("config file is larger than 4 MiB")
 	}
-	return managetypes.ConfigFileResponse{Name: resolvedName, Content: string(data)}, nil
+	return string(data), nil
 }
 
 func writeAgentConfigFile(codexHome, name, content string) error {
@@ -503,30 +494,12 @@ func writeAgentConfigFile(codexHome, name, content string) error {
 }
 
 func validateAgentConfigContent(name, content string) error {
-	switch name {
-	case "config.toml":
-		var value map[string]any
-		if err := toml.Unmarshal([]byte(content), &value); err != nil {
-			return fmt.Errorf("invalid TOML: %w", err)
-		}
-	case "models.json":
-		if strings.TrimSpace(content) == "" {
-			return nil
-		}
-		var value any
-		if err := json.Unmarshal([]byte(content), &value); err != nil {
-			return fmt.Errorf("invalid JSON: %w", err)
-		}
-	case "auth.json":
-		if strings.TrimSpace(content) == "" {
-			return nil
-		}
-		var value any
-		if err := json.Unmarshal([]byte(content), &value); err != nil {
-			return fmt.Errorf("invalid JSON: %w", err)
-		}
-	default:
-		return fmt.Errorf("unsupported config file %q", name)
+	if name != "config.toml" {
+		return fmt.Errorf("unsupported writable config file %q", name)
+	}
+	var value map[string]any
+	if err := toml.Unmarshal([]byte(content), &value); err != nil {
+		return fmt.Errorf("invalid TOML: %w", err)
 	}
 	return nil
 }
@@ -539,7 +512,15 @@ func runtimeStatus(status agentdomain.RuntimeStatus) managetypes.RuntimeStatus {
 	return managetypes.RuntimeStatus{
 		Running:         status.Running,
 		Restarting:      status.Restarting,
-		ActiveTurnCount: int64(status.ActiveTurnCount),
 		LastRestartTime: lastRestartTime,
+	}
+}
+
+func toAccountStatus(status agentdomain.AccountStatus) managetypes.AccountStatus {
+	return managetypes.AccountStatus{
+		AuthMode: status.AuthMode,
+		Email:    status.Email,
+		PlanType: status.PlanType,
+		LoggedIn: status.LoggedIn,
 	}
 }

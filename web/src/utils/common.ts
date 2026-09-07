@@ -37,6 +37,20 @@ export function translateOptions(options: CommonType.Option<string>[]) {
   }));
 }
 
+/** Format a large count with a compact, locale-aware K/M/B suffix. */
+export function formatCompactNumber(value: number, locale: string) {
+  const units = [
+    { threshold: 1_000_000_000, suffix: 'B' },
+    { threshold: 1_000_000, suffix: 'M' },
+    { threshold: 1_000, suffix: 'K' }
+  ];
+  const unit = units.find(item => value >= item.threshold);
+  if (!unit) return value.toLocaleString(locale);
+
+  const scaled = value / unit.threshold;
+  return `${scaled.toLocaleString(locale, { maximumFractionDigits: 2 })}${unit.suffix}`;
+}
+
 /**
  * Toggle html class
  *

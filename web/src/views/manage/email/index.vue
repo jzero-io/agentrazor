@@ -109,14 +109,7 @@ onMounted(loadConfig);
         此配置用于登录、注册和重置密码的验证码邮件。密码或授权码保存后不会由接口返回；留空表示保留原值。
       </NAlert>
 
-      <NForm
-        ref="formRef"
-        :model="model"
-        :rules="rules"
-        label-placement="top"
-        :disabled="loading"
-        class="max-w-900px"
-      >
+      <NForm ref="formRef" :model="model" :rules="rules" label-placement="top" :disabled="loading" class="max-w-900px">
         <NGrid :cols="24" :x-gap="20">
           <NGridItem :span="24">
             <NFormItem label="发件邮箱" path="from">

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -10,15 +11,15 @@ import (
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/manage/agent"
 )
 
-type RuntimeStatus struct {
+type Logout struct {
 	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 	r      *http.Request
 }
 
-func NewRuntimeStatus(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Request) *RuntimeStatus {
-	return &RuntimeStatus{
+func NewLogout(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Request) *Logout {
+	return &Logout{
 		Logger: logx.WithContext(ctx),
 		ctx:    ctx,
 		svcCtx: svcCtx,
@@ -26,10 +27,12 @@ func NewRuntimeStatus(ctx context.Context, svcCtx *svc.ServiceContext, r *http.R
 	}
 }
 
-func (l *RuntimeStatus) RuntimeStatus(req *types.RuntimeStatusRequest) (resp *types.RuntimeStatus, err error) {
+func (l *Logout) Logout(req *types.LogoutRequest) (resp *types.LogoutResponse, err error) {
 	if l.svcCtx.AgentThreads == nil {
-		return &types.RuntimeStatus{}, nil
+		return nil, errors.New("agent runtime is unavailable")
 	}
-	status := runtimeStatus(l.svcCtx.AgentThreads.RuntimeStatus())
-	return &status, nil
+	if err := l.svcCtx.AgentThreads.Logout(l.ctx); err != nil {
+		return nil, err
+	}
+	return &types.LogoutResponse{}, nil
 }

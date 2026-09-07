@@ -10,16 +10,16 @@ import (
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/manage/agent"
 )
 
-func ConfigFile(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func LoginApiKey(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.ConfigFileRequest
+		var req types.LoginApiKeyRequest
 		if err := httpx.Parse(r, &req); err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 			return
 		}
 
-		l := agent.NewConfigFile(r.Context(), svcCtx, r)
-		resp, err := l.ConfigFile(&req)
+		l := agent.NewLoginApiKey(r.Context(), svcCtx, r)
+		resp, err := l.LoginApiKey(&req)
 		if err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 		} else {
@@ -28,16 +28,16 @@ func ConfigFile(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
-func UpdateConfigFile(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func StartChatGPTLogin(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.UpdateConfigFileRequest
+		var req types.StartChatGPTLoginRequest
 		if err := httpx.Parse(r, &req); err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 			return
 		}
 
-		l := agent.NewUpdateConfigFile(r.Context(), svcCtx, r)
-		resp, err := l.UpdateConfigFile(&req)
+		l := agent.NewStartChatGPTLogin(r.Context(), svcCtx, r)
+		resp, err := l.StartChatGPTLogin(&req)
 		if err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 		} else {
@@ -46,16 +46,52 @@ func UpdateConfigFile(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
-func ListConfigFiles(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func Logout(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.ListConfigFilesRequest
+		var req types.LogoutRequest
 		if err := httpx.Parse(r, &req); err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 			return
 		}
 
-		l := agent.NewListConfigFiles(r.Context(), svcCtx, r)
-		resp, err := l.ListConfigFiles(&req)
+		l := agent.NewLogout(r.Context(), svcCtx, r)
+		resp, err := l.Logout(&req)
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.OkJsonCtx(r.Context(), w, resp)
+		}
+	}
+}
+
+func SaveProviderApiKey(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req types.SaveProviderApiKeyRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+			return
+		}
+
+		l := agent.NewSaveProviderApiKey(r.Context(), svcCtx, r)
+		resp, err := l.SaveProviderApiKey(&req)
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.OkJsonCtx(r.Context(), w, resp)
+		}
+	}
+}
+
+func GetAccountStatus(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req types.GetAccountStatusRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+			return
+		}
+
+		l := agent.NewGetAccountStatus(r.Context(), svcCtx, r)
+		resp, err := l.GetAccountStatus(&req)
 		if err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 		} else {
@@ -82,16 +118,34 @@ func RestartRuntime(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
-func RuntimeStatus(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func GetSettings(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.RuntimeStatusRequest
+		var req types.GetSettingsRequest
 		if err := httpx.Parse(r, &req); err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 			return
 		}
 
-		l := agent.NewRuntimeStatus(r.Context(), svcCtx, r)
-		resp, err := l.RuntimeStatus(&req)
+		l := agent.NewGetSettings(r.Context(), svcCtx, r)
+		resp, err := l.GetSettings(&req)
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.OkJsonCtx(r.Context(), w, resp)
+		}
+	}
+}
+
+func SaveSelection(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req types.SaveSelectionRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+			return
+		}
+
+		l := agent.NewSaveSelection(r.Context(), svcCtx, r)
+		resp, err := l.SaveSelection(&req)
 		if err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 		} else {
@@ -182,6 +236,24 @@ func UploadSkill(svcCtx *svc.ServiceContext) http.HandlerFunc {
 
 		l := agent.NewUploadSkill(r.Context(), svcCtx, r)
 		resp, err := l.UploadSkill(&req)
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.OkJsonCtx(r.Context(), w, resp)
+		}
+	}
+}
+
+func HomeOverview(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req types.HomeOverviewRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+			return
+		}
+
+		l := agent.NewHomeOverview(r.Context(), svcCtx, r)
+		resp, err := l.HomeOverview(&req)
 		if err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 		} else {

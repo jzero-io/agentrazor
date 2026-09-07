@@ -17,6 +17,10 @@ import (
 	"time"
 )
 
+// Codex device-code authentication expires after 15 minutes. The app-server
+// response does not currently expose this timeout, so keep it centralized here.
+const chatGPTDeviceLoginExpiresIn = 15 * time.Minute
+
 var (
 	ErrRuntimeClosed       = errors.New("agent runtime is closed")
 	ErrThreadTurnRunning   = errors.New("agent thread already has an active turn")
@@ -54,13 +58,15 @@ type CodexAppServerRuntime struct {
 	nextInboundID atomic.Int64
 	streamEpoch   string
 
-	stateMu     sync.Mutex
-	pending     map[int64]chan rpcEnvelope
-	executions  map[string]*appServerTurn
-	loaded      map[string]bool
-	loads       map[string]*threadLoad
-	closed      bool
-	terminalErr error
+	stateMu      sync.Mutex
+	pending      map[int64]chan rpcEnvelope
+	executions   map[string]*appServerTurn
+	loaded       map[string]bool
+	loads        map[string]*threadLoad
+	account      AccountStatus
+	accountKnown bool
+	closed       bool
+	terminalErr  error
 }
 
 type rpcEnvelope struct {
@@ -220,6 +226,121 @@ func isolatedCodexEnvironment(environment []string, codexHome string) []string {
 		result = append(result, value)
 	}
 	return append(result, "CODEX_HOME="+codexHome)
+}
+
+type AccountStatus struct {
+	AuthMode string
+	Email    string
+	PlanType string
+	LoggedIn bool
+}
+
+type DeviceLogin struct {
+	LoginID         string
+	VerificationURL string
+	UserCode        string
+	ExpiresIn       int64
+}
+
+func (r *CodexAppServerRuntime) AccountStatus(ctx context.Context) (AccountStatus, error) {
+	result, err := r.request(ctx, "account/read", map[string]any{"refreshToken": false})
+	if err != nil {
+		return AccountStatus{}, err
+	}
+	account, _ := result["account"].(map[string]any)
+	status := accountStatusFromMap(account)
+	if status.LoggedIn {
+		r.setAccountStatus(status)
+		return status, nil
+	}
+	if cached, ok := r.cachedAccountStatus(); ok {
+		return cached, nil
+	}
+	if persisted, ok := r.persistedAccountStatus(); ok {
+		r.setAccountStatus(persisted)
+		return persisted, nil
+	}
+	return status, nil
+}
+
+func (r *CodexAppServerRuntime) LoginAPIKey(ctx context.Context, apiKey string) error {
+	_, err := r.request(ctx, "account/login/start", map[string]any{"type": "apiKey", "apiKey": apiKey})
+	if err == nil {
+		r.setAccountStatus(AccountStatus{AuthMode: "apikey", LoggedIn: true})
+	}
+	return err
+}
+
+func (r *CodexAppServerRuntime) StartChatGPTLogin(ctx context.Context) (DeviceLogin, error) {
+	result, err := r.request(ctx, "account/login/start", map[string]any{"type": "chatgptDeviceCode"})
+	if err != nil {
+		return DeviceLogin{}, err
+	}
+	return DeviceLogin{
+		LoginID:         stringValue(result["loginId"]),
+		VerificationURL: stringValue(result["verificationUrl"]),
+		UserCode:        stringValue(result["userCode"]),
+		ExpiresIn:       int64(chatGPTDeviceLoginExpiresIn / time.Second),
+	}, nil
+}
+
+func (r *CodexAppServerRuntime) Logout(ctx context.Context) error {
+	_, err := r.request(ctx, "account/logout", map[string]any{})
+	if err == nil {
+		r.setAccountStatus(AccountStatus{})
+	}
+	return err
+}
+
+func accountStatusFromMap(account map[string]any) AccountStatus {
+	mode := normalizeAuthMode(stringValue(account["type"]))
+	return AccountStatus{
+		AuthMode: mode,
+		Email:    stringValue(account["email"]),
+		PlanType: stringValue(account["planType"]),
+		LoggedIn: mode != "",
+	}
+}
+
+func normalizeAuthMode(mode string) string {
+	if mode == "apiKey" {
+		return "apikey"
+	}
+	return mode
+}
+
+func (r *CodexAppServerRuntime) setAccountStatus(status AccountStatus) {
+	r.stateMu.Lock()
+	r.account = status
+	r.accountKnown = true
+	r.stateMu.Unlock()
+}
+
+func (r *CodexAppServerRuntime) cachedAccountStatus() (AccountStatus, bool) {
+	r.stateMu.Lock()
+	defer r.stateMu.Unlock()
+	return r.account, r.accountKnown
+}
+
+func (r *CodexAppServerRuntime) persistedAccountStatus() (AccountStatus, bool) {
+	if r.options.CodexHome == "" {
+		return AccountStatus{}, false
+	}
+	data, err := os.ReadFile(filepath.Join(r.options.CodexHome, "auth.json"))
+	if err != nil {
+		return AccountStatus{}, false
+	}
+	var auth struct {
+		AuthMode string `json:"auth_mode"`
+	}
+	if err := json.Unmarshal(data, &auth); err != nil {
+		return AccountStatus{}, false
+	}
+	mode := normalizeAuthMode(auth.AuthMode)
+	if mode == "" {
+		return AccountStatus{}, false
+	}
+	return AccountStatus{AuthMode: mode, LoggedIn: true}, true
 }
 
 func (r *CodexAppServerRuntime) StartTurn(ctx context.Context, threadID, prompt string, emit EventHandler) (StartedTurn, error) {
@@ -533,6 +654,27 @@ func (r *CodexAppServerRuntime) handleNotification(method string, rawParams json
 			r.failAll(fmt.Errorf("decode Codex app-server notification %s: %w", method, err))
 			return
 		}
+	}
+	switch method {
+	case "account/updated":
+		status := AccountStatus{
+			AuthMode: normalizeAuthMode(stringValue(params["authMode"])),
+			PlanType: stringValue(params["planType"]),
+		}
+		status.LoggedIn = status.AuthMode != ""
+		r.setAccountStatus(status)
+		return
+	case "account/login/completed":
+		success, _ := params["success"].(bool)
+		if success {
+			status, _ := r.cachedAccountStatus()
+			if status.AuthMode == "" {
+				status.AuthMode = "chatgpt"
+			}
+			status.LoggedIn = true
+			r.setAccountStatus(status)
+		}
+		return
 	}
 	threadID := stringValue(params["threadId"])
 	if threadID == "" {

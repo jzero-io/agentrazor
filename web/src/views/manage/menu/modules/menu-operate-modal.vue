@@ -100,7 +100,7 @@ function createDefaultModel(): Model {
     i18nKey: null,
     icon: '',
     iconType: '1',
-    parentUuid: "",
+    parentUuid: '',
     status: '1',
     keepAlive: false,
     constant: false,

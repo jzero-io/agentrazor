@@ -53,44 +53,105 @@ type UploadSkillResponse {
 	Name string `json:"name"`
 }
 
-type AgentConfigFile {
-	Name string `json:"name"`
+type ProviderModel {
+	Id                     string   `json:"id"`
+	Name                   string   `json:"name"`
+	DefaultReasoningEffort string   `json:"defaultReasoningEffort,optional"`
+	ReasoningEfforts       []string `json:"reasoningEfforts"`
 }
 
-type ListConfigFilesRequest {}
-
-type ListConfigFilesResponse {
-	Files []AgentConfigFile `json:"files"`
+type ModelProvider {
+	Id        string          `json:"id"`
+	Name      string          `json:"name"`
+	BaseUrl   string          `json:"baseUrl,optional"`
+	WireApi   string          `json:"wireApi"`
+	HasApiKey bool            `json:"hasApiKey"`
+	Models    []ProviderModel `json:"models"`
 }
 
-type ConfigFileRequest {
-	Name string `form:"name" validate:"required"`
+type AccountStatus {
+	AuthMode string `json:"authMode,optional"`
+	Email    string `json:"email,optional"`
+	PlanType string `json:"planType,optional"`
+	LoggedIn bool   `json:"loggedIn"`
 }
 
-type ConfigFileResponse {
-	Name    string `json:"name"`
-	Content string `json:"content"`
+type GetAccountStatusRequest {}
+
+type GetAccountStatusResponse {
+	Account AccountStatus `json:"account"`
 }
 
-type UpdateConfigFileRequest {
-	Name    string `json:"name" validate:"required"`
-	Content string `json:"content"`
-	Restart bool   `json:"restart,optional"`
+type GetSettingsRequest {}
+
+type GetSettingsResponse {
+	ActiveProvider  string          `json:"activeProvider"`
+	Model           string          `json:"model"`
+	ReasoningEffort string          `json:"reasoningEffort"`
+	Providers       []ModelProvider `json:"providers"`
+	Account         AccountStatus   `json:"account"`
+	Runtime         RuntimeStatus   `json:"runtime"`
 }
 
-type UpdateConfigFileResponse {
+type SaveSelectionRequest {
+	ProviderId      string `json:"providerId" validate:"required"`
+	Model           string `json:"model" validate:"required"`
+	ReasoningEffort string `json:"reasoningEffort,optional"`
+}
+
+type SaveSelectionResponse {
 	Runtime RuntimeStatus `json:"runtime"`
 }
 
-type RestartRuntimeRequest {}
+type SaveProviderApiKeyRequest {
+	ProviderId string `json:"providerId" validate:"required"`
+	ApiKey     string `json:"apiKey" validate:"required"`
+}
 
-type RuntimeStatusRequest {}
+type SaveProviderApiKeyResponse {
+	HasApiKey bool          `json:"hasApiKey"`
+	Restarted bool          `json:"restarted"`
+	Runtime   RuntimeStatus `json:"runtime"`
+}
+
+type LoginApiKeyRequest {
+	ApiKey string `json:"apiKey" validate:"required"`
+}
+
+type LoginApiKeyResponse {
+	Account AccountStatus `json:"account"`
+}
+
+type StartChatGPTLoginRequest {}
+
+type StartChatGPTLoginResponse {
+	LoginId         string `json:"loginId"`
+	VerificationUrl string `json:"verificationUrl"`
+	UserCode        string `json:"userCode"`
+	ExpiresIn       int64  `json:"expiresIn,optional"`
+}
+
+type LogoutRequest {}
+
+type LogoutResponse {}
+
+type RestartRuntimeRequest {}
 
 type RuntimeStatus {
 	Running         bool   `json:"running"`
 	Restarting      bool   `json:"restarting"`
-	ActiveTurnCount int64  `json:"activeTurnCount"`
 	LastRestartTime string `json:"lastRestartTime,optional"`
+}
+
+type HomeOverviewRequest {}
+
+type HomeOverviewResponse {
+	AgentRunning   bool   `json:"agentRunning"`
+	ActiveProvider string `json:"activeProvider"`
+	Model          string `json:"model"`
+	ModelName      string `json:"modelName"`
+	TotalTokens    int64  `json:"totalTokens"`
+	SkillCount     int64  `json:"skillCount"`
 }
 
 @server (
@@ -116,19 +177,40 @@ service server {
 	@handler UpdateSkillFile
 	post /manage/agent/skills/:skill_name/file (UpdateSkillFileRequest) returns (UpdateSkillFileResponse)
 
-	@handler ListConfigFiles
-	get /manage/agent/config/files (ListConfigFilesRequest) returns (ListConfigFilesResponse)
+	@handler GetSettings
+	get /manage/agent/settings (GetSettingsRequest) returns (GetSettingsResponse)
 
-	@handler ConfigFile
-	get /manage/agent/config/file (ConfigFileRequest) returns (ConfigFileResponse)
+	@handler GetAccountStatus
+	get /manage/agent/auth/status (GetAccountStatusRequest) returns (GetAccountStatusResponse)
 
-	@handler UpdateConfigFile
-	post /manage/agent/config/file (UpdateConfigFileRequest) returns (UpdateConfigFileResponse)
+	@handler SaveSelection
+	post /manage/agent/settings/selection (SaveSelectionRequest) returns (SaveSelectionResponse)
 
-	@handler RuntimeStatus
-	get /manage/agent/runtime/status (RuntimeStatusRequest) returns (RuntimeStatus)
+	@handler SaveProviderApiKey
+	post /manage/agent/auth/provider-api-key (SaveProviderApiKeyRequest) returns (SaveProviderApiKeyResponse)
+
+	@handler LoginApiKey
+	post /manage/agent/auth/api-key (LoginApiKeyRequest) returns (LoginApiKeyResponse)
+
+	@handler StartChatGPTLogin
+	post /manage/agent/auth/chatgpt/start (StartChatGPTLoginRequest) returns (StartChatGPTLoginResponse)
+
+	@handler Logout
+	post /manage/agent/auth/logout (LogoutRequest) returns (LogoutResponse)
 
 	@handler RestartRuntime
 	post /manage/agent/runtime/restart (RestartRuntimeRequest) returns (RuntimeStatus)
+}
+
+@server (
+	prefix:          /api/v1
+	group:           v1/manage/agent
+	compact_handler: true
+	jwt:             Jwt
+	middleware:      Authx
+)
+service server {
+	@handler HomeOverview
+	get /home/overview (HomeOverviewRequest) returns (HomeOverviewResponse)
 }
 

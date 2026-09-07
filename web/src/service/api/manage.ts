@@ -176,14 +176,12 @@ export function GetMenuTree() {
 
 export function GetAllButtons() {}
 
-
 export function GetAgentSkills() {
   return request<Api.Manage.ListSkillsResponse>({
     url: '/api/v1/manage/agent/skills',
     method: 'get'
   });
 }
-
 
 export function GetAgentSkillDetail(name: string, file?: string) {
   return request<Api.Manage.SkillDetailResponse>({
@@ -217,35 +215,50 @@ export function UpdateAgentSkillFile(name: string, file: string, content: string
   });
 }
 
-
-export function GetAgentConfigFiles() {
-  return request<Api.Manage.ListAgentConfigFilesResponse>({
-    url: '/api/v1/manage/agent/config/files',
-    method: 'get'
-  });
+export function GetAgentSettings() {
+  return request<Api.Manage.AgentSettings>({ url: '/api/v1/manage/agent/settings', method: 'get' });
 }
 
-export function GetAgentConfigFile(name: string) {
-  return request<Api.Manage.AgentConfigFileDetail>({
-    url: '/api/v1/manage/agent/config/file',
-    method: 'get',
-    params: { name }
-  });
-}
-
-export function UpdateAgentConfigFile(name: string, content: string, restart = false) {
-  return request<Api.Manage.UpdateAgentConfigFileResponse>({
-    url: '/api/v1/manage/agent/config/file',
+export function SaveAgentSelection(data: Api.Manage.SaveAgentSelectionRequest) {
+  return request<Api.Manage.SaveAgentSelectionResponse>({
+    url: '/api/v1/manage/agent/settings/selection',
     method: 'post',
-    data: { name, content, restart }
+    data
   });
 }
 
-export function GetAgentRuntimeStatus() {
-  return request<Api.Manage.AgentRuntimeStatus>({
-    url: '/api/v1/manage/agent/runtime/status',
+export function SaveAgentProviderApiKey(data: Api.Manage.SaveAgentProviderApiKeyRequest) {
+  return request<Api.Manage.SaveAgentProviderApiKeyResponse>({
+    url: '/api/v1/manage/agent/auth/provider-api-key',
+    method: 'post',
+    data
+  });
+}
+
+export function GetAgentAccountStatus() {
+  return request<{ account: Api.Manage.AgentAccountStatus }>({
+    url: '/api/v1/manage/agent/auth/status',
     method: 'get'
   });
+}
+
+export function LoginAgentWithApiKey(apiKey: string) {
+  return request<{ account: Api.Manage.AgentAccountStatus }>({
+    url: '/api/v1/manage/agent/auth/api-key',
+    method: 'post',
+    data: { apiKey }
+  });
+}
+
+export function StartAgentChatGPTLogin() {
+  return request<Api.Manage.AgentDeviceLogin>({
+    url: '/api/v1/manage/agent/auth/chatgpt/start',
+    method: 'post'
+  });
+}
+
+export function LogoutAgentAccount() {
+  return request<Record<string, never>>({ url: '/api/v1/manage/agent/auth/logout', method: 'post' });
 }
 
 export function RestartAgentRuntime() {

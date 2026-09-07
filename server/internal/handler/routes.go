@@ -272,19 +272,29 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				[]rest.Middleware{serverCtx.Authx},
 				[]rest.Route{
 					{
-						Method:  http.MethodGet,
-						Path:    "/manage/agent/config/file",
-						Handler: v1manageagent.ConfigFile(serverCtx),
+						Method:  http.MethodPost,
+						Path:    "/manage/agent/auth/api-key",
+						Handler: v1manageagent.LoginApiKey(serverCtx),
 					},
 					{
 						Method:  http.MethodPost,
-						Path:    "/manage/agent/config/file",
-						Handler: v1manageagent.UpdateConfigFile(serverCtx),
+						Path:    "/manage/agent/auth/chatgpt/start",
+						Handler: v1manageagent.StartChatGPTLogin(serverCtx),
+					},
+					{
+						Method:  http.MethodPost,
+						Path:    "/manage/agent/auth/logout",
+						Handler: v1manageagent.Logout(serverCtx),
+					},
+					{
+						Method:  http.MethodPost,
+						Path:    "/manage/agent/auth/provider-api-key",
+						Handler: v1manageagent.SaveProviderApiKey(serverCtx),
 					},
 					{
 						Method:  http.MethodGet,
-						Path:    "/manage/agent/config/files",
-						Handler: v1manageagent.ListConfigFiles(serverCtx),
+						Path:    "/manage/agent/auth/status",
+						Handler: v1manageagent.GetAccountStatus(serverCtx),
 					},
 					{
 						Method:  http.MethodPost,
@@ -293,8 +303,13 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					},
 					{
 						Method:  http.MethodGet,
-						Path:    "/manage/agent/runtime/status",
-						Handler: v1manageagent.RuntimeStatus(serverCtx),
+						Path:    "/manage/agent/settings",
+						Handler: v1manageagent.GetSettings(serverCtx),
+					},
+					{
+						Method:  http.MethodPost,
+						Path:    "/manage/agent/settings/selection",
+						Handler: v1manageagent.SaveSelection(serverCtx),
 					},
 					{
 						Method:  http.MethodGet,
@@ -320,6 +335,21 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 						Method:  http.MethodPost,
 						Path:    "/manage/agent/skills/upload",
 						Handler: v1manageagent.UploadSkill(serverCtx),
+					},
+				}...,
+			),
+			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
+			rest.WithPrefix("/api/v1"),
+		)
+
+		server.AddRoutes(
+			rest.WithMiddlewares(
+				[]rest.Middleware{serverCtx.Authx},
+				[]rest.Route{
+					{
+						Method:  http.MethodGet,
+						Path:    "/home/overview",
+						Handler: v1manageagent.HomeOverview(serverCtx),
 					},
 				}...,
 			),

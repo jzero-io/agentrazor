@@ -39,6 +39,7 @@ const local: App.I18n.Schema = {
     pleaseCheckValue: 'Please check whether the value is valid',
     refresh: 'Refresh',
     reset: 'Reset',
+    save: 'Save',
     search: 'Search',
     switch: 'Switch',
     tip: 'Tip',
@@ -255,20 +256,135 @@ const local: App.I18n.Schema = {
       }
     },
     home: {
-      branchDesc:
-        'For the convenience of everyone in developing and updating the merge, we have streamlined the code of the main branch, only retaining the homepage menu, and the rest of the content has been moved to the example branch for maintenance. The preview address displays the content of the example branch.',
-      greeting: 'Good morning, {username}, today is another day full of vitality!',
-      weatherDesc: 'Today is cloudy to clear, 20℃ - 25℃!',
-      projectNews: {
-        title: 'Project News',
-        moreNews: 'More News',
-        desc1: 'Created the open source project jzero on April 07, 2024!',
-        desc2: 'Created the open source project agentrazor-admin on October 14, 2024!',
-        desc3: 'Continuously improving and perfecting in 2025!',
-        desc4: 'Created the open source project jzero-intellij on November 30, 2025!',
-        desc5: 'Released jzero v1.0.0 on January 01, 2026!'
+      dashboard: {
+        welcome: 'Welcome back, {username}',
+        description: 'Monitor agent health, the current model, and resource usage in one place.',
+        agentOnline: 'Agent is running',
+        agentOffline: 'Agent is stopped',
+        unavailable: 'Unavailable',
+        agentStatus: 'Agent status',
+        currentModel: 'Current model',
+        totalTokens: 'Total tokens',
+        installedSkills: 'Installed Skills'
+      }
+    },
+    agentConfig: {
+      title: 'Model configuration',
+      lastRestart: 'Last restarted {time}',
+      restartAgent: 'Restart agent',
+      noRestartRecord: 'No record',
+      supplier: 'Provider',
+      model: 'Model',
+      modelPlaceholder: 'Select or enter a model ID',
+      reasoningEffort: 'Reasoning effort',
+      defaultReasoningEffort: 'Use model default',
+      saveAndRestart: 'Save and restart agent',
+      status: {
+        unknown: 'Unknown',
+        restarting: 'Restarting',
+        running: 'Running',
+        stopped: 'Stopped',
+        inUse: 'In use',
+        configured: 'Configured',
+        pending: 'Not configured'
       },
-      creativity: 'Creativity'
+      effort: {
+        low: 'Low',
+        medium: 'Medium',
+        high: 'High',
+        xhigh: 'Extra high',
+        max: 'Max',
+        ultra: 'Ultra'
+      },
+      message: {
+        selectProviderModel: 'Select a provider and model',
+        providerApiKeyRequired: 'Enter the {provider} API Key',
+        applied: 'Model configuration applied and agent restarted',
+        restarted: 'Agent restarted',
+        openAIApiKeyRequired: 'Enter an OpenAI API Key',
+        openAIApiKeySaved: 'OpenAI API Key saved',
+        chatGPTLoginSuccess: 'ChatGPT account connected',
+        openAILogoutSuccess: 'OpenAI account disconnected'
+      },
+      openAI: {
+        title: 'OpenAI authentication',
+        chatGPTAccount: 'ChatGPT account',
+        apiKey: 'OpenAI API Key',
+        email: 'Email',
+        planType: 'Plan',
+        logout: 'Sign out',
+        logoutConfirm: 'Clear the current ChatGPT login credentials?',
+        apiKeyConfigured: 'API Key configured',
+        clearApiKey: 'Clear API Key',
+        clearApiKeyConfirm: 'Clear the current OpenAI API Key?',
+        loginChatGPT: 'Log in with ChatGPT',
+        useApiKey: 'Use API Key',
+        saveAndUse: 'Save and use',
+        backToChatGPT: 'Back to ChatGPT login'
+      },
+      external: {
+        title: '{provider} configuration',
+        guide: '{provider} is not configured. Enter an API Key, then save and restart.',
+        apiAddress: 'API endpoint',
+        replaceKey: 'Enter a new Key to replace the current value',
+        keyPlaceholder: 'Enter the {provider} API Key'
+      },
+      login: {
+        title: 'Log in with ChatGPT',
+        guide: 'Follow the steps below. This page will wait for verification.',
+        expired: 'This code has expired. Get a new code to continue.',
+        openStep: 'Open the verification page and log in to ChatGPT',
+        openPage: 'Open verification page',
+        codeStep: 'Enter this one-time code on the verification page',
+        copyCode: 'Copy',
+        copySuccess: 'Verification code copied',
+        copyFailed: 'Copy failed. Please copy the code manually.',
+        expiresIn: 'Expires in {time}',
+        waiting: 'Waiting for verification…',
+        retry: 'Get a new code'
+      }
+    },
+    agentSkills: {
+      title: 'Skills',
+      installed: 'Installed Skills',
+      uploadZip: 'Upload ZIP',
+      searchPlaceholder: 'Search by name',
+      deleteConfirm: 'Delete {name}?',
+      noMatch: 'No matching Skill',
+      empty: 'No Skills installed',
+      editorPlaceholder: 'Edit the current file',
+      loading: 'Loading…',
+      selectGuide: 'Select a Skill on the left to view its contents'
+    },
+    agentTokenUsage: {
+      summaryTitle: 'Token overview',
+      trendTitle: 'Token usage trend',
+      detailsTitle: 'Usage details',
+      input: 'Input',
+      cachedInput: 'Cached input',
+      cacheWrite: 'Cache write',
+      output: 'Output',
+      reasoningOutput: 'Reasoning output',
+      totalToken: 'Total tokens',
+      tokenUnit: 'Tokens',
+      byDay: 'Daily',
+      byMonth: 'Monthly',
+      accountSearchPlaceholder: 'Search by username',
+      conversationSearchPlaceholder: 'Search by Conversation ID',
+      detailsTip: 'Accounts are paginated; expand one to load conversations and turns as needed',
+      emptyRecords: 'No matching token usage records',
+      unknownAccount: 'Unknown account',
+      conversation: 'Conversations',
+      turn: 'Turns',
+      turns: 'Turns',
+      conversationCount: '{count} conversations',
+      emptyConversations: 'No matching conversations',
+      lastUsed: 'Last used {time}',
+      seriesName: 'Token usage',
+      turnId: 'Turn ID',
+      time: 'Time',
+      contextWindow: 'Context window',
+      accountCount: '{count} accounts'
     },
     manage: {
       common: {

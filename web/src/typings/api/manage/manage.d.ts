@@ -134,8 +134,7 @@ declare namespace Api {
 
     /** user search params */
     type UserSearchParams = CommonType.RecordNullable<
-      Pick<Api.Manage.User, 'username' | 'nickName' | 'userPhone' | 'userEmail' | 'status'> &
-        CommonSearchParams
+      Pick<Api.Manage.User, 'username' | 'nickName' | 'userPhone' | 'userEmail' | 'status'> & CommonSearchParams
     >;
 
     /** user list */
@@ -299,29 +298,68 @@ declare namespace Api {
       content: string;
     };
 
-
-    type AgentConfigFile = {
+    type AgentProviderModel = {
+      id: string;
       name: string;
+      defaultReasoningEffort?: string;
+      reasoningEfforts: string[];
     };
 
-    type ListAgentConfigFilesResponse = {
-      files: AgentConfigFile[];
+    type AgentModelProvider = {
+      id: string;
+      name: string;
+      baseUrl?: string;
+      wireApi: string;
+      hasApiKey: boolean;
+      models: AgentProviderModel[];
     };
 
-    type AgentConfigFileDetail = {
-      name: string;
-      content: string;
+    type AgentAccountStatus = {
+      authMode?: string;
+      email?: string;
+      planType?: string;
+      loggedIn: boolean;
     };
 
     type AgentRuntimeStatus = {
       running: boolean;
       restarting: boolean;
-      activeTurnCount: number;
       lastRestartTime?: string;
     };
 
-    type UpdateAgentConfigFileResponse = {
+    type AgentSettings = {
+      activeProvider: string;
+      model: string;
+      reasoningEffort: string;
+      providers: AgentModelProvider[];
+      account: AgentAccountStatus;
       runtime: AgentRuntimeStatus;
+    };
+
+    type SaveAgentSelectionRequest = {
+      providerId: string;
+      model: string;
+      reasoningEffort: string;
+    };
+
+    type SaveAgentSelectionResponse = { runtime: AgentRuntimeStatus };
+
+    type SaveAgentProviderApiKeyRequest = {
+      providerId: string;
+      apiKey: string;
+    };
+
+    type SaveAgentProviderApiKeyResponse = {
+      hasApiKey: boolean;
+      restarted: boolean;
+      runtime: AgentRuntimeStatus;
+    };
+
+    type AgentDeviceLogin = {
+      loginId: string;
+      verificationUrl: string;
+      userCode: string;
+      expiresIn?: number;
     };
 
     type EmailConfig = {

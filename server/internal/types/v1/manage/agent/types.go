@@ -9,17 +9,11 @@ var (
 	_ = time.Now()
 )
 
-type AgentConfigFile struct {
-	Name string `json:"name"`
-}
-
-type ConfigFileRequest struct {
-	Name string `form:"name" validate:"required"`
-}
-
-type ConfigFileResponse struct {
-	Name    string `json:"name"`
-	Content string `json:"content"`
+type AccountStatus struct {
+	AuthMode string `json:"authMode,optional"`
+	Email    string `json:"email,optional"`
+	PlanType string `json:"planType,optional"`
+	LoggedIn bool   `json:"loggedIn"`
 }
 
 type DeleteSkillRequest struct {
@@ -29,11 +23,35 @@ type DeleteSkillRequest struct {
 type DeleteSkillResponse struct {
 }
 
-type ListConfigFilesRequest struct {
+type GetAccountStatusRequest struct {
 }
 
-type ListConfigFilesResponse struct {
-	Files []AgentConfigFile `json:"files"`
+type GetAccountStatusResponse struct {
+	Account AccountStatus `json:"account"`
+}
+
+type GetSettingsRequest struct {
+}
+
+type GetSettingsResponse struct {
+	ActiveProvider  string          `json:"activeProvider"`
+	Model           string          `json:"model"`
+	ReasoningEffort string          `json:"reasoningEffort"`
+	Providers       []ModelProvider `json:"providers"`
+	Account         AccountStatus   `json:"account"`
+	Runtime         RuntimeStatus   `json:"runtime"`
+}
+
+type HomeOverviewRequest struct {
+}
+
+type HomeOverviewResponse struct {
+	AgentRunning   bool   `json:"agentRunning"`
+	ActiveProvider string `json:"activeProvider"`
+	Model          string `json:"model"`
+	ModelName      string `json:"modelName"`
+	TotalTokens    int64  `json:"totalTokens"`
+	SkillCount     int64  `json:"skillCount"`
 }
 
 type ListSkillsRequest struct {
@@ -43,17 +61,64 @@ type ListSkillsResponse struct {
 	Skills []Skill `json:"skills"`
 }
 
+type LoginApiKeyRequest struct {
+	ApiKey string `json:"apiKey" validate:"required"`
+}
+
+type LoginApiKeyResponse struct {
+	Account AccountStatus `json:"account"`
+}
+
+type LogoutRequest struct {
+}
+
+type LogoutResponse struct {
+}
+
+type ModelProvider struct {
+	Id        string          `json:"id"`
+	Name      string          `json:"name"`
+	BaseUrl   string          `json:"baseUrl,optional"`
+	WireApi   string          `json:"wireApi"`
+	HasApiKey bool            `json:"hasApiKey"`
+	Models    []ProviderModel `json:"models"`
+}
+
+type ProviderModel struct {
+	Id                     string   `json:"id"`
+	Name                   string   `json:"name"`
+	DefaultReasoningEffort string   `json:"defaultReasoningEffort,optional"`
+	ReasoningEfforts       []string `json:"reasoningEfforts"`
+}
+
 type RestartRuntimeRequest struct {
 }
 
 type RuntimeStatus struct {
 	Running         bool   `json:"running"`
 	Restarting      bool   `json:"restarting"`
-	ActiveTurnCount int64  `json:"activeTurnCount"`
 	LastRestartTime string `json:"lastRestartTime,optional"`
 }
 
-type RuntimeStatusRequest struct {
+type SaveProviderApiKeyRequest struct {
+	ProviderId string `json:"providerId" validate:"required"`
+	ApiKey     string `json:"apiKey" validate:"required"`
+}
+
+type SaveProviderApiKeyResponse struct {
+	HasApiKey bool          `json:"hasApiKey"`
+	Restarted bool          `json:"restarted"`
+	Runtime   RuntimeStatus `json:"runtime"`
+}
+
+type SaveSelectionRequest struct {
+	ProviderId      string `json:"providerId" validate:"required"`
+	Model           string `json:"model" validate:"required"`
+	ReasoningEffort string `json:"reasoningEffort,optional"`
+}
+
+type SaveSelectionResponse struct {
+	Runtime RuntimeStatus `json:"runtime"`
 }
 
 type Skill struct {
@@ -79,14 +144,14 @@ type SkillFile struct {
 	Children []SkillFile `json:"children,optional"`
 }
 
-type UpdateConfigFileRequest struct {
-	Name    string `json:"name" validate:"required"`
-	Content string `json:"content"`
-	Restart bool   `json:"restart,optional"`
+type StartChatGPTLoginRequest struct {
 }
 
-type UpdateConfigFileResponse struct {
-	Runtime RuntimeStatus `json:"runtime"`
+type StartChatGPTLoginResponse struct {
+	LoginId         string `json:"loginId"`
+	VerificationUrl string `json:"verificationUrl"`
+	UserCode        string `json:"userCode"`
+	ExpiresIn       int64  `json:"expiresIn,optional"`
 }
 
 type UpdateSkillFileRequest struct {

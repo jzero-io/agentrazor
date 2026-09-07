@@ -11,7 +11,10 @@ import {
   type TokenUsageTrendPoint
 } from '@/service/api';
 import { useEcharts } from '@/hooks/common/echarts';
+import { $t } from '@/locales';
+import { useAppStore } from '@/store/modules/app';
 import { useThemeStore } from '@/store/modules/theme';
+import { formatCompactNumber } from '@/utils/common';
 
 defineOptions({ name: 'AgentTokenUsage' });
 
@@ -35,6 +38,7 @@ const emptySummary = (): TokenUsageSummary => ({
 });
 
 const themeStore = useThemeStore();
+const appStore = useAppStore();
 const dimension = ref<TokenUsageDimension>('day');
 const trendLoading = ref(false);
 const detailsLoading = ref(false);
@@ -50,16 +54,46 @@ const conversationPages = ref<Record<string, ConversationPageState>>({});
 let requestSequence = 0;
 
 const tokenMetrics = computed(() => [
-  { label: '输入', value: tokenSummary.value.inputTokens, icon: 'carbon:download', tone: 'blue' },
-  { label: '缓存输入', value: tokenSummary.value.cachedInputTokens, icon: 'carbon:data-base', tone: 'cyan' },
-  { label: '缓存写入', value: tokenSummary.value.cacheWriteInputTokens, icon: 'carbon:save', tone: 'orange' },
-  { label: '输出', value: tokenSummary.value.outputTokens, icon: 'carbon:upload', tone: 'green' },
-  { label: '推理输出', value: tokenSummary.value.reasoningOutputTokens, icon: 'carbon:idea', tone: 'violet' },
-  { label: '总 Token', value: tokenSummary.value.totalTokens, icon: 'carbon:meter', tone: 'primary' }
+  {
+    label: $t('page.agentTokenUsage.input'),
+    value: tokenSummary.value.inputTokens,
+    icon: 'carbon:download',
+    tone: 'blue'
+  },
+  {
+    label: $t('page.agentTokenUsage.cachedInput'),
+    value: tokenSummary.value.cachedInputTokens,
+    icon: 'carbon:data-base',
+    tone: 'cyan'
+  },
+  {
+    label: $t('page.agentTokenUsage.cacheWrite'),
+    value: tokenSummary.value.cacheWriteInputTokens,
+    icon: 'carbon:save',
+    tone: 'orange'
+  },
+  {
+    label: $t('page.agentTokenUsage.output'),
+    value: tokenSummary.value.outputTokens,
+    icon: 'carbon:upload',
+    tone: 'green'
+  },
+  {
+    label: $t('page.agentTokenUsage.reasoningOutput'),
+    value: tokenSummary.value.reasoningOutputTokens,
+    icon: 'carbon:idea',
+    tone: 'violet'
+  },
+  {
+    label: $t('page.agentTokenUsage.totalToken'),
+    value: tokenSummary.value.totalTokens,
+    icon: 'carbon:meter',
+    tone: 'primary'
+  }
 ]);
 
 function formatToken(value: number) {
-  return value.toLocaleString('zh-CN');
+  return value.toLocaleString(appStore.locale);
 }
 function formatCompactToken(value: number) {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -67,16 +101,12 @@ function formatCompactToken(value: number) {
   return String(value);
 }
 function formatTime(value: string) {
-  return new Date(value).toLocaleString('zh-CN', { hour12: false });
+  return new Date(value).toLocaleString(appStore.locale, { hour12: false });
 }
 function accountName(account: TokenUsageAccount) {
-  return account.nickname || account.username || '未知账号';
+  return account.username || $t('page.agentTokenUsage.unknownAccount');
 }
 function accountMeta(account: TokenUsageAccount) {
-  const username = account.username ? `@${account.username}` : '';
-  if (account.nickname && account.nickname !== account.username) {
-    return [username, account.userUuid].filter(Boolean).join(' · ');
-  }
   return account.userUuid;
 }
 function conversationPage(userUuid: string) {
@@ -114,7 +144,7 @@ function createOptions() {
     },
     series: [
       {
-        name: 'Token 消耗',
+        name: $t('page.agentTokenUsage.seriesName'),
         type: 'line' as const,
         smooth: true,
         showSymbol: false,
@@ -221,11 +251,17 @@ async function loadTrend() {
 }
 onMounted(loadDetails);
 watch(dimension, loadTrend, { immediate: true });
+watch(() => appStore.locale, refreshChart);
 </script>
 
 <template>
   <div class="token-page">
-    <NCard title="Token 概览" :bordered="false" size="small" class="summary-card card-wrapper">
+    <NCard
+      :title="$t('page.agentTokenUsage.summaryTitle')"
+      :bordered="false"
+      size="small"
+      class="summary-card card-wrapper"
+    >
       <NSpin :show="detailsLoading">
         <div class="metric-grid">
           <div
@@ -238,42 +274,54 @@ watch(dimension, loadTrend, { immediate: true });
               <div class="metric-icon"><SvgIcon :icon="metric.icon" /></div>
               <span class="metric-label">{{ metric.label }}</span>
             </div>
-            <div class="metric-value">{{ formatToken(metric.value) }}</div>
-            <div class="metric-unit">Token</div>
+            <div class="metric-value" :title="formatToken(metric.value)">
+              {{ formatCompactNumber(metric.value, appStore.locale) }}
+            </div>
+            <div class="metric-unit">{{ $t('page.agentTokenUsage.tokenUnit') }}</div>
           </div>
         </div>
       </NSpin>
     </NCard>
 
-    <NCard title="Token 消耗趋势" :bordered="false" size="small" class="chart-card card-wrapper">
+    <NCard
+      :title="$t('page.agentTokenUsage.trendTitle')"
+      :bordered="false"
+      size="small"
+      class="chart-card card-wrapper"
+    >
       <template #header-extra>
         <NRadioGroup v-model:value="dimension" size="small">
-          <NRadioButton value="day" label="按天" />
-          <NRadioButton value="month" label="按月" />
+          <NRadioButton value="day" :label="$t('page.agentTokenUsage.byDay')" />
+          <NRadioButton value="month" :label="$t('page.agentTokenUsage.byMonth')" />
         </NRadioGroup>
       </template>
       <div ref="domRef" class="chart-canvas"></div>
     </NCard>
 
-    <NCard title="用量明细" :bordered="false" size="small" class="details-card card-wrapper">
+    <NCard
+      :title="$t('page.agentTokenUsage.detailsTitle')"
+      :bordered="false"
+      size="small"
+      class="details-card card-wrapper"
+    >
       <template #header-extra>
         <NInputGroup class="account-search">
           <NInput
             v-model:value="accountKeyword"
             clearable
-            placeholder="输入用户名查询"
+            :placeholder="$t('page.agentTokenUsage.accountSearchPlaceholder')"
             @keyup.enter="searchAccounts"
             @clear="searchAccounts"
           >
             <template #prefix><SvgIcon icon="carbon:search" /></template>
           </NInput>
-          <NButton type="primary" @click="searchAccounts">查询</NButton>
+          <NButton type="primary" @click="searchAccounts">{{ $t('common.search') }}</NButton>
         </NInputGroup>
       </template>
-      <p class="details-tip">账号分页展示，展开账号后按需加载对话和 Turn</p>
+      <p class="details-tip">{{ $t('page.agentTokenUsage.detailsTip') }}</p>
 
       <NSpin :show="detailsLoading">
-        <NEmpty v-if="!accounts.length" description="暂无匹配的 Token 用量记录" class="empty-state" />
+        <NEmpty v-if="!accounts.length" :description="$t('page.agentTokenUsage.emptyRecords')" class="empty-state" />
         <NCollapse
           v-else
           :expanded-names="expandedAccountNames"
@@ -290,15 +338,15 @@ watch(dimension, loadTrend, { immediate: true });
                 </div>
                 <div class="account-stats">
                   <div>
-                    <span>对话</span>
+                    <span>{{ $t('page.agentTokenUsage.conversation') }}</span>
                     <b>{{ account.conversationCount }}</b>
                   </div>
                   <div>
-                    <span>Turn</span>
+                    <span>{{ $t('page.agentTokenUsage.turn') }}</span>
                     <b>{{ account.turnCount }}</b>
                   </div>
                   <div class="account-token">
-                    <span>总 Token</span>
+                    <span>{{ $t('page.agentTokenUsage.totalToken') }}</span>
                     <strong>{{ formatToken(account.totalTokens) }}</strong>
                   </div>
                 </div>
@@ -312,17 +360,23 @@ watch(dimension, loadTrend, { immediate: true });
                     v-model:value="conversationPages[account.userUuid].keyword"
                     clearable
                     size="small"
-                    placeholder="输入 Conversation ID 查询"
+                    :placeholder="$t('page.agentTokenUsage.conversationSearchPlaceholder')"
                     @keyup.enter="searchConversations(account.userUuid)"
                     @clear="searchConversations(account.userUuid)"
                   >
                     <template #prefix><SvgIcon icon="carbon:search" /></template>
                   </NInput>
                   <NButton size="small" secondary type="primary" @click="searchConversations(account.userUuid)">
-                    查询
+                    {{ $t('common.search') }}
                   </NButton>
                 </NInputGroup>
-                <span>共 {{ conversationPages[account.userUuid].total }} 个对话</span>
+                <span>
+                  {{
+                    $t('page.agentTokenUsage.conversationCount', {
+                      count: conversationPages[account.userUuid].total
+                    })
+                  }}
+                </span>
               </div>
 
               <NSpin :show="conversationPages[account.userUuid].loading">
@@ -331,7 +385,7 @@ watch(dimension, loadTrend, { immediate: true });
                     conversationPages[account.userUuid].loaded &&
                     !conversationPages[account.userUuid].conversations.length
                   "
-                  description="暂无匹配的对话"
+                  :description="$t('page.agentTokenUsage.emptyConversations')"
                   class="conversation-empty"
                 />
                 <NCollapse v-else accordion class="conversation-list">
@@ -346,16 +400,22 @@ watch(dimension, loadTrend, { immediate: true });
                           <div class="conversation-icon"><SvgIcon icon="carbon:chat" /></div>
                           <div class="conversation-info">
                             <code>{{ conversation.conversationId }}</code>
-                            <span>最近使用 {{ formatTime(conversation.lastUsedAt) }}</span>
+                            <span>
+                              {{
+                                $t('page.agentTokenUsage.lastUsed', {
+                                  time: formatTime(conversation.lastUsedAt)
+                                })
+                              }}
+                            </span>
                           </div>
                         </div>
                         <div class="conversation-stats">
                           <span>
                             <b>{{ conversation.turnCount }}</b>
-                            Turns
+                            {{ $t('page.agentTokenUsage.turns') }}
                           </span>
                           <div>
-                            <small>总 Token</small>
+                            <small>{{ $t('page.agentTokenUsage.totalToken') }}</small>
                             <strong>{{ formatToken(conversation.totalTokens) }}</strong>
                           </div>
                         </div>
@@ -365,15 +425,15 @@ watch(dimension, loadTrend, { immediate: true });
                       <NTable striped size="small" :single-line="false" class="turn-table">
                         <thead>
                           <tr>
-                            <th class="turn-id-col">Turn ID</th>
-                            <th class="time-col">时间</th>
-                            <th class="number">输入</th>
-                            <th class="number">缓存输入</th>
-                            <th class="number">缓存写入</th>
-                            <th class="number">输出</th>
-                            <th class="number">推理输出</th>
-                            <th class="number total-col">总 Token</th>
-                            <th class="number context-col">上下文窗口</th>
+                            <th class="turn-id-col">{{ $t('page.agentTokenUsage.turnId') }}</th>
+                            <th class="time-col">{{ $t('page.agentTokenUsage.time') }}</th>
+                            <th class="number">{{ $t('page.agentTokenUsage.input') }}</th>
+                            <th class="number">{{ $t('page.agentTokenUsage.cachedInput') }}</th>
+                            <th class="number">{{ $t('page.agentTokenUsage.cacheWrite') }}</th>
+                            <th class="number">{{ $t('page.agentTokenUsage.output') }}</th>
+                            <th class="number">{{ $t('page.agentTokenUsage.reasoningOutput') }}</th>
+                            <th class="number total-col">{{ $t('page.agentTokenUsage.totalToken') }}</th>
+                            <th class="number context-col">{{ $t('page.agentTokenUsage.contextWindow') }}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -406,7 +466,8 @@ watch(dimension, loadTrend, { immediate: true });
                     :page-size="conversationPages[account.userUuid].size"
                     :item-count="conversationPages[account.userUuid].total"
                     :page-sizes="[5, 10, 20, 50]"
-                    show-size-picker
+                    :page-slot="appStore.isMobile ? 3 : 9"
+                    :show-size-picker="!appStore.isMobile"
                     @update:page="loadConversations(account.userUuid)"
                     @update:page-size="size => changeConversationPageSize(account.userUuid, size)"
                   />
@@ -417,13 +478,14 @@ watch(dimension, loadTrend, { immediate: true });
         </NCollapse>
 
         <div v-if="accountTotal > 0" class="pagination-row account-pagination">
-          <span>共 {{ accountTotal }} 个账号</span>
+          <span>{{ $t('page.agentTokenUsage.accountCount', { count: accountTotal }) }}</span>
           <NPagination
             v-model:page="accountPage"
             :page-size="accountPageSize"
             :item-count="accountTotal"
             :page-sizes="[5, 10, 20, 50]"
-            show-size-picker
+            :page-slot="appStore.isMobile ? 3 : 9"
+            :show-size-picker="!appStore.isMobile"
             @update:page="loadDetails"
             @update:page-size="changeAccountPageSize"
           />
@@ -435,15 +497,23 @@ watch(dimension, loadTrend, { immediate: true });
 
 <style scoped>
 .token-page {
+  --token-surface: rgb(var(--container-bg-color));
+  --token-text: rgb(var(--base-text-color));
+  --token-text-secondary: color-mix(in srgb, var(--token-text) 76%, transparent);
+  --token-muted: color-mix(in srgb, var(--token-text) 52%, transparent);
+  --token-border: color-mix(in srgb, var(--token-text) 15%, transparent);
+  --token-divider: color-mix(in srgb, var(--token-text) 9%, transparent);
+  --token-soft: color-mix(in srgb, var(--token-text) 5%, var(--token-surface));
+  --token-primary: rgb(var(--primary-color));
+  --token-primary-soft: color-mix(in srgb, var(--token-primary) 11%, var(--token-surface));
+
   display: flex;
+  width: 100%;
+  min-width: 0;
   min-height: 100%;
+  overflow-x: hidden;
   flex-direction: column;
   gap: 16px;
-}
-
-.card-wrapper {
-  border: 1px solid rgb(232 235 240);
-  border-radius: 10px;
 }
 
 .summary-card :deep(.n-card__content),
@@ -464,9 +534,9 @@ watch(dimension, loadTrend, { immediate: true });
 .metric-card {
   min-width: 0;
   padding: 15px 16px 14px;
-  border: 1px solid rgb(229 231 235);
+  border: 1px solid var(--token-border);
   border-radius: 9px;
-  background: #fff;
+  background: var(--token-surface);
 }
 
 .metric-head {
@@ -486,7 +556,7 @@ watch(dimension, loadTrend, { immediate: true });
 }
 
 .metric-label {
-  color: rgb(100 116 139);
+  color: var(--token-text-secondary);
   font-size: 13px;
   font-weight: 600;
 }
@@ -494,7 +564,7 @@ watch(dimension, loadTrend, { immediate: true });
 .metric-value {
   overflow: hidden;
   margin-top: 13px;
-  color: rgb(31 41 55);
+  color: var(--token-text);
   font-size: clamp(18px, 1.55vw, 24px);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -504,40 +574,40 @@ watch(dimension, loadTrend, { immediate: true });
 
 .metric-unit {
   margin-top: 4px;
-  color: rgb(148 163 184);
+  color: var(--token-muted);
   font-size: 11px;
 }
 
 .metric-card--blue .metric-icon {
   color: #3478f6;
-  background: #edf4ff;
+  background: color-mix(in srgb, #3478f6 12%, var(--token-surface));
 }
 .metric-card--cyan .metric-icon {
   color: #0891b2;
-  background: #ecfeff;
+  background: color-mix(in srgb, #0891b2 12%, var(--token-surface));
 }
 .metric-card--orange .metric-icon {
   color: #e98221;
-  background: #fff7ed;
+  background: color-mix(in srgb, #e98221 12%, var(--token-surface));
 }
 .metric-card--green .metric-icon {
   color: #16a36a;
-  background: #ecfdf5;
+  background: color-mix(in srgb, #16a36a 12%, var(--token-surface));
 }
 .metric-card--violet .metric-icon {
   color: #7c5ce5;
-  background: #f3f0ff;
+  background: color-mix(in srgb, #7c5ce5 12%, var(--token-surface));
 }
 .metric-card--primary {
-  border-color: rgb(99 102 241 / 25%);
-  background: rgb(99 102 241 / 3%);
+  border-color: color-mix(in srgb, var(--token-primary) 30%, transparent);
+  background: color-mix(in srgb, var(--token-primary) 7%, var(--token-surface));
 }
 .metric-card--primary .metric-icon {
-  color: #6366f1;
-  background: #eeefff;
+  color: var(--token-primary);
+  background: var(--token-primary-soft);
 }
 .metric-card--primary .metric-value {
-  color: #6366f1;
+  color: var(--token-primary);
 }
 
 .chart-canvas {
@@ -551,7 +621,7 @@ watch(dimension, loadTrend, { immediate: true });
 
 .details-tip {
   margin: -4px 0 14px;
-  color: rgb(148 163 184);
+  color: var(--token-muted);
   font-size: 12px;
 }
 
@@ -565,32 +635,38 @@ watch(dimension, loadTrend, { immediate: true });
 
 .account-list :deep(> .n-collapse-item) {
   overflow: hidden;
+  margin-left: 0;
   margin-bottom: 10px;
-  border: 1px solid rgb(226 232 240);
+  border: 1px solid var(--token-border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--token-surface);
   transition:
     border-color 0.2s,
     box-shadow 0.2s;
 }
 
 .account-list :deep(> .n-collapse-item:hover) {
-  border-color: rgb(199 210 254);
+  border-color: color-mix(in srgb, var(--token-primary) 32%, transparent);
 }
 
 .account-list :deep(> .n-collapse-item.n-collapse-item--active) {
-  border-color: rgb(199 210 254);
-  box-shadow: 0 4px 16px rgb(15 23 42 / 5%);
+  border-color: color-mix(in srgb, var(--token-primary) 38%, transparent);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--token-text) 7%, transparent);
 }
 
 .account-list :deep(> .n-collapse-item > .n-collapse-item__header) {
   min-height: 76px;
   padding: 0 18px;
-  background: #fff;
+  background: var(--token-surface);
+}
+
+.account-list :deep(> .n-collapse-item > .n-collapse-item__header .n-collapse-item__header-main),
+.conversation-list :deep(> .n-collapse-item > .n-collapse-item__header .n-collapse-item__header-main) {
+  min-width: 0;
 }
 
 .account-list :deep(> .n-collapse-item > .n-collapse-item__header:hover) {
-  background: rgb(248 250 252);
+  background: var(--token-soft);
 }
 
 .account-list :deep(> .n-collapse-item > .n-collapse-item__content-wrapper > .n-collapse-item__content-inner) {
@@ -613,8 +689,8 @@ watch(dimension, loadTrend, { immediate: true });
   flex: 0 0 auto;
   place-items: center;
   border-radius: 9px;
-  color: #6366f1;
-  background: #eeefff;
+  color: var(--token-primary);
+  background: var(--token-primary-soft);
   font-size: 21px;
 }
 
@@ -628,7 +704,7 @@ watch(dimension, loadTrend, { immediate: true });
 
 .account-name strong {
   overflow: hidden;
-  color: rgb(30 41 59);
+  color: var(--token-text);
   font-size: 14px;
   font-weight: 650;
   text-overflow: ellipsis;
@@ -637,7 +713,7 @@ watch(dimension, loadTrend, { immediate: true });
 
 .account-name span {
   overflow: hidden;
-  color: rgb(148 163 184);
+  color: var(--token-muted);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -656,11 +732,11 @@ watch(dimension, loadTrend, { immediate: true });
   justify-content: center;
   flex-direction: column;
   padding: 0 18px;
-  border-left: 1px solid rgb(241 245 249);
+  border-left: 1px solid var(--token-divider);
 }
 
 .account-stats span {
-  color: rgb(148 163 184);
+  color: var(--token-muted);
   font-size: 11px;
   line-height: 1.2;
 }
@@ -668,21 +744,21 @@ watch(dimension, loadTrend, { immediate: true });
 .account-stats b,
 .account-stats strong {
   margin-top: 3px;
-  color: rgb(51 65 85);
+  color: var(--token-text-secondary);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
 }
 
 .account-stats .account-token strong {
-  color: #6366f1;
+  color: var(--token-primary);
   font-size: 14px;
 }
 
 .conversation-panel {
   padding: 14px 16px 16px;
-  border-top: 1px solid rgb(241 245 249);
-  background: rgb(248 250 252);
+  border-top: 1px solid var(--token-divider);
+  background: var(--token-soft);
 }
 
 .conversation-toolbar {
@@ -695,7 +771,7 @@ watch(dimension, loadTrend, { immediate: true });
 
 .conversation-toolbar > span {
   flex: 0 0 auto;
-  color: rgb(148 163 184);
+  color: var(--token-muted);
   font-size: 12px;
 }
 
@@ -709,14 +785,14 @@ watch(dimension, loadTrend, { immediate: true });
 
 .conversation-list {
   overflow: hidden;
-  border: 1px solid rgb(226 232 240);
+  border: 1px solid var(--token-border);
   border-radius: 9px;
-  background: #fff;
+  background: var(--token-surface);
 }
 
 .conversation-list :deep(> .n-collapse-item) {
   margin: 0;
-  border-top: 1px solid rgb(241 245 249);
+  border-top: 1px solid var(--token-divider);
 }
 
 .conversation-list :deep(> .n-collapse-item:first-child) {
@@ -726,17 +802,17 @@ watch(dimension, loadTrend, { immediate: true });
 .conversation-list :deep(> .n-collapse-item > .n-collapse-item__header) {
   min-height: 66px;
   padding: 0 16px;
-  background: #fff;
+  background: var(--token-surface);
 }
 
 .conversation-list :deep(> .n-collapse-item > .n-collapse-item__header:hover),
 .conversation-list :deep(> .n-collapse-item.n-collapse-item--active > .n-collapse-item__header) {
-  background: rgb(248 250 252);
+  background: var(--token-soft);
 }
 
 .conversation-list :deep(> .n-collapse-item > .n-collapse-item__content-wrapper > .n-collapse-item__content-inner) {
   padding: 0 12px 12px;
-  background: rgb(248 250 252);
+  background: var(--token-soft);
 }
 
 .conversation-header {
@@ -764,8 +840,8 @@ watch(dimension, loadTrend, { immediate: true });
   flex: 0 0 auto;
   place-items: center;
   border-radius: 7px;
-  color: rgb(100 116 139);
-  background: rgb(241 245 249);
+  color: var(--token-text-secondary);
+  background: var(--token-soft);
   font-size: 16px;
 }
 
@@ -782,7 +858,7 @@ code {
 
 .conversation-info code {
   overflow: hidden;
-  color: rgb(51 65 85);
+  color: var(--token-text-secondary);
   font-size: 12px;
   font-weight: 600;
   text-overflow: ellipsis;
@@ -790,7 +866,7 @@ code {
 }
 
 .conversation-info span {
-  color: rgb(148 163 184);
+  color: var(--token-muted);
   font-size: 11px;
 }
 
@@ -802,13 +878,13 @@ code {
 }
 
 .conversation-stats > span {
-  color: rgb(100 116 139);
+  color: var(--token-text-secondary);
   font-size: 12px;
   text-align: right;
 }
 
 .conversation-stats > span b {
-  color: rgb(51 65 85);
+  color: var(--token-text);
   font-variant-numeric: tabular-nums;
 }
 
@@ -818,26 +894,26 @@ code {
   flex-direction: column;
   margin-left: 16px;
   padding-left: 16px;
-  border-left: 1px solid rgb(226 232 240);
+  border-left: 1px solid var(--token-border);
 }
 
 .conversation-stats small {
-  color: rgb(148 163 184);
+  color: var(--token-muted);
   font-size: 10px;
 }
 
 .conversation-stats strong {
   margin-top: 2px;
-  color: #6366f1;
+  color: var(--token-primary);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
 .turn-table-wrap {
   overflow-x: auto;
-  border: 1px solid rgb(226 232 240);
+  border: 1px solid var(--token-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--token-surface);
 }
 
 .turn-table {
@@ -846,8 +922,8 @@ code {
 
 .turn-table :deep(th) {
   padding: 10px 12px;
-  color: rgb(100 116 139);
-  background: rgb(248 250 252);
+  color: var(--token-text-secondary);
+  background: var(--token-soft);
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
@@ -855,13 +931,13 @@ code {
 
 .turn-table :deep(td) {
   padding: 11px 12px;
-  color: rgb(71 85 105);
+  color: var(--token-text-secondary);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
 .turn-table :deep(tbody tr:hover td) {
-  background: rgb(248 250 252);
+  background: var(--token-soft);
 }
 
 .turn-id-col,
@@ -873,7 +949,7 @@ code {
 .turn-id-cell code {
   display: block;
   overflow: hidden;
-  color: rgb(71 85 105);
+  color: var(--token-text-secondary);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -903,7 +979,7 @@ code {
 }
 
 .total-cell {
-  color: #6366f1 !important;
+  color: var(--token-primary) !important;
   font-weight: 700;
 }
 
@@ -924,45 +1000,8 @@ code {
 }
 
 .account-pagination > span {
-  color: rgb(148 163 184);
+  color: var(--token-muted);
   font-size: 12px;
-}
-
-:global(.dark) .card-wrapper,
-:global(.dark) .metric-card,
-:global(.dark) .account-list :deep(> .n-collapse-item),
-:global(.dark) .account-list :deep(> .n-collapse-item > .n-collapse-item__header),
-:global(.dark) .conversation-list,
-:global(.dark) .conversation-list :deep(> .n-collapse-item > .n-collapse-item__header),
-:global(.dark) .turn-table-wrap {
-  border-color: rgb(55 65 81);
-  background: #18181c;
-}
-
-:global(.dark) .account-list :deep(> .n-collapse-item > .n-collapse-item__header:hover),
-:global(.dark) .conversation-panel,
-:global(.dark) .conversation-list :deep(> .n-collapse-item > .n-collapse-item__header:hover),
-:global(.dark) .conversation-list :deep(> .n-collapse-item.n-collapse-item--active > .n-collapse-item__header),
-:global(.dark)
-  .conversation-list
-  :deep(> .n-collapse-item > .n-collapse-item__content-wrapper > .n-collapse-item__content-inner),
-:global(.dark) .turn-table :deep(th),
-:global(.dark) .turn-table :deep(tbody tr:hover td) {
-  background: #202024;
-}
-
-:global(.dark) .account-name strong,
-:global(.dark) .account-stats b,
-:global(.dark) .conversation-info code,
-:global(.dark) .conversation-stats > span b,
-:global(.dark) .metric-value,
-:global(.dark) .turn-table :deep(td),
-:global(.dark) .turn-id-cell code {
-  color: rgb(226 232 240);
-}
-
-:global(.dark) .metric-card--primary {
-  background: rgb(99 102 241 / 8%);
 }
 
 @media (max-width: 1280px) {
@@ -978,6 +1017,33 @@ code {
 }
 
 @media (max-width: 800px) {
+  .chart-card :deep(.n-card-header),
+  .details-card :deep(.n-card-header) {
+    align-items: stretch;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .chart-card :deep(.n-card-header__main),
+  .details-card :deep(.n-card-header__main),
+  .chart-card :deep(.n-card-header__extra),
+  .details-card :deep(.n-card-header__extra) {
+    width: 100%;
+  }
+
+  .chart-card :deep(.n-card-header__extra),
+  .details-card :deep(.n-card-header__extra) {
+    margin-left: 0;
+  }
+
+  .chart-card :deep(.n-radio-group) {
+    display: flex;
+  }
+
+  .chart-card :deep(.n-radio-button) {
+    flex: 1;
+  }
+
   .account-search,
   .conversation-search {
     width: 100%;
@@ -1022,14 +1088,123 @@ code {
     flex-direction: column;
     gap: 10px;
   }
+
+  .pagination-row :deep(.n-pagination) {
+    max-width: 100%;
+  }
 }
 
 @media (max-width: 640px) {
+  .summary-card :deep(.n-card-header),
+  .chart-card :deep(.n-card-header),
+  .details-card :deep(.n-card-header) {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .summary-card :deep(.n-card__content),
+  .details-card :deep(.n-card__content) {
+    padding: 12px;
+  }
+
+  .chart-card :deep(.n-card__content) {
+    padding: 6px 8px 12px;
+  }
+
   .metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
   }
+
+  .metric-card {
+    padding: 12px;
+  }
+
+  .metric-head {
+    align-items: flex-start;
+  }
+
+  .metric-value {
+    margin-top: 10px;
+  }
+
   .chart-canvas {
-    height: 300px;
+    height: 270px;
+  }
+
+  .details-tip {
+    margin-top: 0;
+  }
+
+  .account-list :deep(> .n-collapse-item > .n-collapse-item__header) {
+    padding: 14px 12px 16px;
+  }
+
+  .conversation-list :deep(> .n-collapse-item > .n-collapse-item__header) {
+    padding: 12px 10px;
+  }
+
+  .account-list :deep(> .n-collapse-item > .n-collapse-item__header .n-collapse-item__header-main) {
+    align-items: flex-start;
+  }
+
+  .account-list :deep(> .n-collapse-item > .n-collapse-item__header .n-collapse-item-arrow) {
+    margin-top: 9px;
+  }
+
+  .account-header {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    padding-right: 0;
+  }
+
+  .account-name {
+    width: auto;
+    min-width: 0;
+  }
+
+  .account-stats {
+    grid-column: 1 / -1;
+    padding: 11px 12px;
+    border-radius: 8px;
+    background: var(--token-soft);
+  }
+
+  .account-stats > div {
+    min-width: 0;
+    min-height: 0;
+    padding: 0 8px;
+  }
+
+  .account-stats > div:first-child {
+    padding-left: 0;
+  }
+
+  .account-stats > div + div {
+    border-left: 1px solid var(--token-divider);
+  }
+
+  .account-stats b,
+  .account-stats strong {
+    overflow: hidden;
+    max-width: 100%;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .conversation-panel {
+    padding: 12px 10px;
+  }
+
+  .conversation-list :deep(> .n-collapse-item > .n-collapse-item__content-wrapper > .n-collapse-item__content-inner) {
+    padding: 0 8px 8px;
+  }
+
+  .conversation-stats > div {
+    margin-left: 8px;
+    padding-left: 8px;
   }
 }
 </style>

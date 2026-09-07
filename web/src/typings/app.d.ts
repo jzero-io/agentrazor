@@ -279,6 +279,127 @@ declare namespace App {
       invalid: string;
     };
 
+    type AgentConfigSchema = {
+      title: string;
+      lastRestart: string;
+      restartAgent: string;
+      noRestartRecord: string;
+      supplier: string;
+      model: string;
+      modelPlaceholder: string;
+      reasoningEffort: string;
+      defaultReasoningEffort: string;
+      saveAndRestart: string;
+      status: {
+        unknown: string;
+        restarting: string;
+        running: string;
+        stopped: string;
+        inUse: string;
+        configured: string;
+        pending: string;
+      };
+      effort: {
+        low: string;
+        medium: string;
+        high: string;
+        xhigh: string;
+        max: string;
+        ultra: string;
+      };
+      message: {
+        selectProviderModel: string;
+        providerApiKeyRequired: string;
+        applied: string;
+        restarted: string;
+        openAIApiKeyRequired: string;
+        openAIApiKeySaved: string;
+        chatGPTLoginSuccess: string;
+        openAILogoutSuccess: string;
+      };
+      openAI: {
+        title: string;
+        chatGPTAccount: string;
+        apiKey: string;
+        email: string;
+        planType: string;
+        logout: string;
+        logoutConfirm: string;
+        apiKeyConfigured: string;
+        clearApiKey: string;
+        clearApiKeyConfirm: string;
+        loginChatGPT: string;
+        useApiKey: string;
+        saveAndUse: string;
+        backToChatGPT: string;
+      };
+      external: {
+        title: string;
+        guide: string;
+        apiAddress: string;
+        replaceKey: string;
+        keyPlaceholder: string;
+      };
+      login: {
+        title: string;
+        guide: string;
+        expired: string;
+        openStep: string;
+        openPage: string;
+        codeStep: string;
+        copyCode: string;
+        copySuccess: string;
+        copyFailed: string;
+        expiresIn: string;
+        waiting: string;
+        retry: string;
+      };
+    };
+
+    type AgentSkillsSchema = {
+      title: string;
+      installed: string;
+      uploadZip: string;
+      searchPlaceholder: string;
+      deleteConfirm: string;
+      noMatch: string;
+      empty: string;
+      editorPlaceholder: string;
+      loading: string;
+      selectGuide: string;
+    };
+
+    type AgentTokenUsageSchema = {
+      summaryTitle: string;
+      trendTitle: string;
+      detailsTitle: string;
+      input: string;
+      cachedInput: string;
+      cacheWrite: string;
+      output: string;
+      reasoningOutput: string;
+      totalToken: string;
+      tokenUnit: string;
+      byDay: string;
+      byMonth: string;
+      accountSearchPlaceholder: string;
+      conversationSearchPlaceholder: string;
+      detailsTip: string;
+      emptyRecords: string;
+      unknownAccount: string;
+      conversation: string;
+      turn: string;
+      turns: string;
+      conversationCount: string;
+      emptyConversations: string;
+      lastUsed: string;
+      seriesName: string;
+      turnId: string;
+      time: string;
+      contextWindow: string;
+      accountCount: string;
+    };
+
     type Schema = {
       system: {
         title: string;
@@ -320,6 +441,7 @@ declare namespace App {
         pleaseCheckValue: string;
         refresh: string;
         reset: string;
+        save: string;
         search: string;
         switch: string;
         tip: string;
@@ -472,20 +594,21 @@ declare namespace App {
           };
         };
         home: {
-          branchDesc: string;
-          greeting: string;
-          weatherDesc: string;
-          projectNews: {
-            title: string;
-            moreNews: string;
-            desc1: string;
-            desc2: string;
-            desc3: string;
-            desc4: string;
-            desc5: string;
+          dashboard: {
+            welcome: string;
+            description: string;
+            agentOnline: string;
+            agentOffline: string;
+            unavailable: string;
+            agentStatus: string;
+            currentModel: string;
+            totalTokens: string;
+            installedSkills: string;
           };
-          creativity: string;
         };
+        agentConfig: AgentConfigSchema;
+        agentSkills: AgentSkillsSchema;
+        agentTokenUsage: AgentTokenUsageSchema;
         manage: {
           common: {
             status: {
@@ -521,7 +644,7 @@ declare namespace App {
             password: string;
             form: {
               username: string;
-                nickName: string;
+              nickName: string;
               userPhone: string;
               userEmail: string;
               userStatus: string;

@@ -144,9 +144,6 @@ func (r *CodexAppServerRuntime) readThread(ctx context.Context, threadID string,
 		return StoredThread{}, fmt.Errorf("Codex thread/read response did not contain thread %s", threadID)
 	}
 	thread := decodeStoredThread(raw, false)
-	if archived, known := archiveValue(raw); known {
-		thread.Archived = archived
-	}
 	if thread.ID == "" {
 		return StoredThread{}, errors.New("Codex thread/read response did not contain a thread id")
 	}
@@ -285,6 +282,9 @@ func (r *CodexAppServerRuntime) UnarchiveStoredThread(ctx context.Context, threa
 }
 
 func decodeStoredThread(raw map[string]any, archived bool) StoredThread {
+	if value, known := archiveValue(raw); known {
+		archived = value
+	}
 	preview := stringValue(raw["preview"])
 	thread := StoredThread{
 		ID:        stringValue(raw["id"]),
@@ -375,6 +375,13 @@ func archiveValue(raw map[string]any) (bool, bool) {
 			if err == nil {
 				return parsed, true
 			}
+		}
+	}
+	for _, segment := range strings.FieldsFunc(stringValue(raw["path"]), func(r rune) bool {
+		return r == '/' || r == '\\'
+	}) {
+		if segment == "archived_sessions" {
+			return true, true
 		}
 	}
 	return false, false
