@@ -100,7 +100,7 @@ func (r *CodexAppServerRuntime) ListStoredThreads(ctx context.Context, archived 
 }
 
 func (r *CodexAppServerRuntime) ReadStoredThread(ctx context.Context, threadID string, includeTurns bool) (StoredThread, error) {
-	thread, err := r.readThread(ctx, threadID, includeTurns)
+	thread, err := r.readThreadMetadata(ctx, threadID)
 	if err != nil {
 		// thread/read reads stored threads (including archived ones) without
 		// resuming. It only fails for threads not loaded in this process, so on
@@ -108,7 +108,7 @@ func (r *CodexAppServerRuntime) ReadStoredThread(ctx context.Context, threadID s
 		// called first: it fails for archived threads ("session is archived"),
 		// which read fine directly. See openai/codex#27395.
 		if _, resumeErr := r.ensureThread(ctx, threadID); resumeErr == nil {
-			thread, err = r.readThread(ctx, threadID, includeTurns)
+			thread, err = r.readThreadMetadata(ctx, threadID)
 		} else if threadMissingError(resumeErr) {
 			// 业务库有记录但 Codex thread 已不存在（resume 报 "no rollout
 			// found"）：按"会话不存在"处理，避免把原始 RPC 错误抛给前端。
@@ -118,27 +118,22 @@ func (r *CodexAppServerRuntime) ReadStoredThread(ctx context.Context, threadID s
 	if err != nil {
 		return StoredThread{}, fmt.Errorf("read Codex thread %s: %w", threadID, err)
 	}
+	if !includeTurns {
+		return thread, nil
+	}
+	turns, streamPosition, err := r.listThreadTurns(ctx, threadID)
+	if err != nil {
+		return StoredThread{}, fmt.Errorf("read Codex thread %s: %w", threadID, err)
+	}
+	thread.Turns = turns
+	thread.StreamPosition = streamPosition
 	return thread, nil
 }
 
-func (r *CodexAppServerRuntime) readThread(ctx context.Context, threadID string, includeTurns bool) (StoredThread, error) {
-	metadata, err := r.readThreadOnce(ctx, threadID, false)
-	if err != nil {
-		return StoredThread{}, err
-	}
-	// AgentRazor only starts turns from non-empty prompts, and Codex populates
-	// preview with the first prompt. An empty preview is therefore a draft with
-	// no turns, so there is no turn collection to hydrate.
-	if !includeTurns || metadata.Preview == "" {
-		return metadata, nil
-	}
-	return r.readThreadOnce(ctx, threadID, true)
-}
-
-func (r *CodexAppServerRuntime) readThreadOnce(ctx context.Context, threadID string, includeTurns bool) (StoredThread, error) {
+func (r *CodexAppServerRuntime) readThreadMetadata(ctx context.Context, threadID string) (StoredThread, error) {
 	result, streamPosition, err := r.requestWithPosition(ctx, "thread/read", map[string]any{
 		"threadId":     threadID,
-		"includeTurns": includeTurns,
+		"excludeTurns": true,
 	})
 	if err != nil {
 		return StoredThread{}, err
@@ -155,8 +150,41 @@ func (r *CodexAppServerRuntime) readThreadOnce(ctx context.Context, threadID str
 	return thread, nil
 }
 
+func (r *CodexAppServerRuntime) listThreadTurns(ctx context.Context, threadID string) ([]StoredTurn, string, error) {
+	var newestFirst []StoredTurn
+	var cursor string
+	var streamPosition string
+	for {
+		params := map[string]any{
+			"threadId":  threadID,
+			"limit":     100,
+			"itemsView": "full",
+		}
+		if cursor != "" {
+			params["cursor"] = cursor
+		}
+		result, position, err := r.requestWithPosition(ctx, "thread/turns/list", params)
+		if err != nil {
+			return nil, "", fmt.Errorf("list Codex thread turns: %w", err)
+		}
+		streamPosition = position
+		if values, ok := result["data"].([]any); ok {
+			page := decodeStoredThread(map[string]any{"turns": values}, false)
+			newestFirst = append(newestFirst, page.Turns...)
+		}
+		cursor = stringValue(result["nextCursor"])
+		if cursor == "" {
+			break
+		}
+	}
+	for left, right := 0, len(newestFirst)-1; left < right; left, right = left+1, right-1 {
+		newestFirst[left], newestFirst[right] = newestFirst[right], newestFirst[left]
+	}
+	return newestFirst, streamPosition, nil
+}
+
 // threadMissingError reports whether err is the app-server -32600 RPC error
-// raised while loading a missing thread. At this point readThread has already
+// raised while loading a missing thread. At this point thread/read has already
 // failed (so the thread is not simply archived — archived threads read fine),
 // and the remaining -32600 resume failure is "no rollout found".
 func threadMissingError(err error) bool {

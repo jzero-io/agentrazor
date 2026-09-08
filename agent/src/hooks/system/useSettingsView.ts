@@ -11,6 +11,7 @@ export function useSettingsView(options: {
   const navExpanded = ref(true);
   const archiveQuery = ref('');
   const returnPath = ref('/');
+  const enteringSettings = ref(false);
 
   const section = computed<SettingsSection>({
     get() {
@@ -49,7 +50,7 @@ export function useSettingsView(options: {
   function syncConversationUrl(id: string) {
     const path = id ? `/conversation/${encodeURIComponent(id)}` : '/';
     returnPath.value = path;
-    if (!visible.value) void router.replace(path);
+    if (!visible.value && !enteringSettings.value) void router.replace(path);
   }
 
   function restoreFromPath() {
@@ -57,14 +58,24 @@ export function useSettingsView(options: {
     return visible.value;
   }
 
-  function openAppearance(currentPath = route.fullPath) {
+  async function openAppearance(currentPath = route.fullPath) {
     rememberReturnPath(currentPath);
     navExpanded.value = true;
-    void router.push('/settings/appearance');
+    enteringSettings.value = true;
+    try {
+      await router.push('/settings/appearance');
+    } finally {
+      enteringSettings.value = false;
+    }
   }
 
-  function openArchives() {
-    void router.push('/settings/archives');
+  async function openArchives() {
+    enteringSettings.value = true;
+    try {
+      await router.push('/settings/archives');
+    } finally {
+      enteringSettings.value = false;
+    }
   }
 
   function close() {

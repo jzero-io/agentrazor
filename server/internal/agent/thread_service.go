@@ -184,7 +184,24 @@ func (s *ThreadService) Get(ctx context.Context, threadID string) (StoredThread,
 	if err != nil {
 		return StoredThread{}, err
 	}
-	return runtime.ReadStoredThread(ctx, threadID, true)
+	stored, err := runtime.ReadStoredThread(ctx, threadID, true)
+	if err != nil {
+		return StoredThread{}, err
+	}
+	if len(stored.Turns) == 0 {
+		return StoredThread{}, ErrThreadNotFound
+	}
+	archived, err := runtime.ListStoredThreads(ctx, true)
+	if err != nil {
+		return StoredThread{}, err
+	}
+	for _, thread := range archived {
+		if thread.ID == threadID {
+			stored.Archived = true
+			break
+		}
+	}
+	return stored, nil
 }
 
 func (s *ThreadService) ActiveTurn(threadID string) (ActiveTurn, bool) {

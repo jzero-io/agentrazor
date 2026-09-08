@@ -629,24 +629,7 @@ async function selectInitialConversation() {
     return;
   }
 
-  const target = await resolveRequestedConversation(requestedId);
-  const fallback = target || visibleConversations.value[0];
-  if (fallback) await selectConversation(fallback.id);
-  else syncConversationUrl('');
-}
-
-async function resolveRequestedConversation(id: string) {
-  const listed = conversations.value.find(item => item.id === id);
-  if (listed) return listed;
-
-  try {
-    const snapshot = await conversationApi.get(id);
-    if (!snapshot?.conversation) return undefined;
-    upsertConversationListItem(snapshot.conversation);
-    return snapshot.conversation;
-  } catch {
-    return undefined;
-  }
+  await selectConversation(requestedId);
 }
 
 function showDraftConversation(groupId = '') {
@@ -985,6 +968,10 @@ async function toggleConversationPinned(item: Conversation) {
 
 async function toggleArchived() {
   if (!activeConversation.value) return;
+  if (activeConversation.value.status === 'archived') {
+    await restoreArchived(activeConversation.value);
+    return;
+  }
   await archiveConversation(activeConversation.value);
 }
 
@@ -1096,7 +1083,7 @@ function logout() {
 function openSettings() {
   closeMobileSidebar();
   userMenuVisible.value = false;
-  openSettingsView(location.pathname);
+  void openSettingsView(route.fullPath);
 }
 
 function openArchiveSettings() {
@@ -1105,7 +1092,12 @@ function openArchiveSettings() {
 
 async function restoreArchived(item: Conversation) {
   try {
-    await conversationApi.update(item.id, { archived: false });
+    const updated = await conversationApi.update(item.id, { archived: false });
+    const restored: Conversation = { ...item, ...updated, status: 'active' };
+    replaceConversation(restored);
+    if (detail.value?.conversation.id === item.id) {
+      detail.value.conversation = { ...detail.value.conversation, ...restored };
+    }
     await loadConversations();
     toast.success('对话已恢复');
   } catch (error) {
