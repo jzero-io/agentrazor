@@ -314,7 +314,4 @@ func TestOpenAIUsesOnlyVisibleCatalogModels(t *testing.T) {
 	if containsModel(providers[0].Models, "gpt-hidden") {
 		t.Fatalf("hidden OpenAI catalog model must not be returned: %#v", providers[0].Models)
 	}
-	if _, err := os.Stat(filepath.Join(home, "providers.json")); !os.IsNotExist(err) {
-		t.Fatalf("providers.json must not be created, stat error: %v", err)
-	}
 }

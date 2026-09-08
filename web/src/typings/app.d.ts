@@ -390,7 +390,6 @@ declare namespace App {
       unknownAccount: string;
       conversation: string;
       turn: string;
-      turns: string;
       conversationCount: string;
       emptyConversations: string;
       lastUsed: string;

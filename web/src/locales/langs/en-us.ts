@@ -377,7 +377,6 @@ const local: App.I18n.Schema = {
       unknownAccount: 'Unknown account',
       conversation: 'Conversations',
       turn: 'Turns',
-      turns: 'Turns',
       conversationCount: '{count} conversations',
       emptyConversations: 'No matching conversations',
       lastUsed: 'Last used {time}',

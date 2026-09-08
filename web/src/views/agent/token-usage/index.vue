@@ -96,7 +96,7 @@ function formatToken(value: number) {
   return value.toLocaleString(appStore.locale);
 }
 function formatDetailToken(value: number) {
-  return appStore.isMobile ? formatCompactNumber(value, appStore.locale) : formatToken(value);
+  return formatCompactNumber(value, appStore.locale);
 }
 function formatCompactToken(value: number) {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -415,11 +415,11 @@ watch(() => appStore.locale, refreshChart);
                           </div>
                         </div>
                         <div class="conversation-stats">
-                          <span>
-                            <b>{{ conversation.turnCount }}</b>
-                            {{ $t('page.agentTokenUsage.turns') }}
-                          </span>
                           <div>
+                            <small>{{ $t('page.agentTokenUsage.turn') }}</small>
+                            <strong>{{ conversation.turnCount.toLocaleString(appStore.locale) }}</strong>
+                          </div>
+                          <div class="conversation-token">
                             <small>{{ $t('page.agentTokenUsage.totalToken') }}</small>
                             <strong :title="formatToken(conversation.totalTokens)">
                               {{ formatDetailToken(conversation.totalTokens) }}
@@ -886,36 +886,34 @@ code {
   align-items: center;
 }
 
-.conversation-stats > span {
-  color: var(--token-text-secondary);
-  font-size: 12px;
-  text-align: right;
-}
-
-.conversation-stats > span b {
-  color: var(--token-text);
-  font-variant-numeric: tabular-nums;
-}
-
 .conversation-stats > div {
   display: flex;
   align-items: flex-end;
   flex-direction: column;
-  margin-left: 16px;
-  padding-left: 16px;
+  min-width: 0;
+  padding: 0 16px;
+}
+
+.conversation-stats > div + div {
   border-left: 1px solid var(--token-border);
 }
 
 .conversation-stats small {
   color: var(--token-muted);
   font-size: 10px;
+  white-space: nowrap;
 }
 
 .conversation-stats strong {
   margin-top: 2px;
-  color: var(--token-primary);
+  color: var(--token-text-secondary);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.conversation-token strong {
+  color: var(--token-primary);
 }
 
 .turn-table-wrap {
@@ -1082,14 +1080,7 @@ code {
 
   .conversation-stats {
     width: 100%;
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .conversation-stats > span {
-    text-align: left;
-  }
-  .conversation-stats > div {
-    align-items: flex-start;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .account-pagination {
@@ -1238,13 +1229,22 @@ code {
 
   .conversation-stats {
     margin-top: 12px;
-    padding-top: 10px;
-    border-top: 1px solid var(--token-divider);
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--token-soft);
   }
 
   .conversation-stats > div {
-    margin-left: 8px;
-    padding-left: 8px;
+    align-items: flex-start;
+    padding: 0 12px;
+  }
+
+  .conversation-stats > div:first-child {
+    padding-left: 0;
+  }
+
+  .conversation-stats > div:last-child {
+    padding-right: 0;
   }
 }
 </style>
