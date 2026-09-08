@@ -79,8 +79,6 @@ services:
       timeout: 3s
       retries: 20
       start_period: 10s
-    ports:
-      - "5432:5432"
   redis:
     image: redis:latest
     restart: always
@@ -91,5 +89,3 @@ services:
       timeout: 3s
       retries: 20
       start_period: 5s
-    ports:
-      - "6379:6379"

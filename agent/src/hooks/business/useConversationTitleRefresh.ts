@@ -47,7 +47,7 @@ export function useConversationTitleRefresh(options: UseConversationTitleRefresh
       stopConversationTitleRefresh(id);
       return;
     }
-    job.timer = window.setTimeout(() => void refreshConversationTitle(id, job), 1500);
+    job.timer = window.setTimeout(() => void refreshConversationTitle(id, job), 1000);
   }
 
   function scheduleConversationTitleRefresh(id: string, item?: Pick<Conversation, 'title'> | null) {

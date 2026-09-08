@@ -73,7 +73,7 @@ func (l *Update) Update(req *types.UpdateRequest) (resp *types.Conversation, err
 			return nil, err
 		}
 	}
-	updated, err := l.svcCtx.AgentThreads.Get(l.ctx, req.ConversationId)
+	updated, err := l.svcCtx.AgentThreads.Metadata(l.ctx, req.ConversationId)
 	if err != nil {
 		return nil, err
 	}

@@ -29,28 +29,26 @@ RUN --mount=type=cache,target=/go/pkg CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARC
 FROM alpine:latest
 
 ARG TARGETARCH
-ARG CODEX_VERSION=0.147.0
+ARG CODEX_VERSION=0.153.4
 
 RUN set -o pipefail \
-    && apk add --no-cache bubblewrap ca-certificates curl python3 tar tzdata \
+    && apk add --no-cache ca-certificates curl python3 tar tzdata \
     && case "$TARGETARCH" in \
          amd64) codex_arch="x86_64" ;; \
          arm64) codex_arch="aarch64" ;; \
          *) echo "unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
        esac \
-    && curl -fsSL "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/codex-${codex_arch}-unknown-linux-musl.tar.gz" \
-       | tar -xzf - -C /usr/local/bin \
-    && curl -fsSL "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/codex-code-mode-host-${codex_arch}-unknown-linux-musl.tar.gz" \
-       | tar -xzf - -C /usr/local/bin \
-    && mv "/usr/local/bin/codex-${codex_arch}-unknown-linux-musl" /usr/local/bin/codex \
-    && mv "/usr/local/bin/codex-code-mode-host-${codex_arch}-unknown-linux-musl" /usr/local/bin/codex-code-mode-host \
-    && chmod +x /usr/local/bin/codex /usr/local/bin/codex-code-mode-host \
-    && test -x /usr/local/bin/codex \
-    && test -x /usr/local/bin/codex-code-mode-host
+    && mkdir -p /opt/codex \
+    && curl -fsSL "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/codex-app-server-package-${codex_arch}-unknown-linux-musl.tar.gz" \
+       | tar -xzf - -C /opt/codex \
+    && test -x /opt/codex/bin/codex-app-server \
+    && test -x /opt/codex/bin/codex-code-mode-host \
+    && test -x /opt/codex/codex-resources/bwrap \
+    && test -x /opt/codex/codex-path/rg
 
 WORKDIR /dist
 
-ENV PATH="/dist:${PATH}"
+ENV PATH="/dist:/opt/codex/bin:/opt/codex/codex-path:${PATH}"
 
 COPY --from=builder /dist .
 

@@ -339,6 +339,7 @@ const local: App.I18n.Schema = {
         copyCode: '复制',
         copySuccess: '验证码已复制',
         copyFailed: '复制失败，请手动复制',
+        expiredLabel: '已过期',
         expiresIn: '有效期 {time}',
         waiting: '正在等待验证完成…',
         retry: '重新获取验证码'
@@ -376,7 +377,7 @@ const local: App.I18n.Schema = {
       unknownAccount: '未知账号',
       conversation: '对话',
       turn: 'Turn',
-      turns: 'Turns',
+      turns: '轮次',
       conversationCount: '共 {count} 个对话',
       emptyConversations: '暂无匹配的对话',
       lastUsed: '最近使用 {time}',

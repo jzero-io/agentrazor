@@ -275,6 +275,7 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
       || item.type === 'agentMessage' && Boolean(item.text)
     );
     const hasLiveProcess = processDisplays.some(display => display.live);
+    const processMode = hasProcessShell ? 'processing' : hasResult ? 'none' : 'thinking';
 
     return {
       renderKey: turnRenderKey(turn),
@@ -282,7 +283,7 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
       userItems,
       resultItems,
       processDisplays,
-      processMode: hasProcessShell ? 'processing' : 'thinking',
+      processMode,
       processSummary: hasProcessShell ? streamingProcessSummary(turn, currentTurnElapsedMs.value) : '',
       showTailThinking: hasProcessShell && processDisplays.length > 0 && !hasResult && !hasLiveProcess,
       streaming: true

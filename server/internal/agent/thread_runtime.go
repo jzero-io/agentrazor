@@ -61,6 +61,9 @@ func (r *CodexAppServerRuntime) ListStoredThreads(ctx context.Context, archived 
 			"archived":      archived,
 			"sortKey":       "updated_at",
 			"sortDirection": "desc",
+			// An empty list explicitly disables app-server's implicit
+			// current-provider filter and returns threads from all providers.
+			"modelProviders": []string{},
 			// Omitting sourceKinds only returns interactive CLI/VS Code
 			// threads. Include every stable source kind because app-server
 			// versions differ in how service-created threads are classified.
@@ -119,23 +122,24 @@ func (r *CodexAppServerRuntime) ReadStoredThread(ctx context.Context, threadID s
 }
 
 func (r *CodexAppServerRuntime) readThread(ctx context.Context, threadID string, includeTurns bool) (StoredThread, error) {
+	metadata, err := r.readThreadOnce(ctx, threadID, false)
+	if err != nil {
+		return StoredThread{}, err
+	}
+	// AgentRazor only starts turns from non-empty prompts, and Codex populates
+	// preview with the first prompt. An empty preview is therefore a draft with
+	// no turns, so there is no turn collection to hydrate.
+	if !includeTurns || metadata.Preview == "" {
+		return metadata, nil
+	}
+	return r.readThreadOnce(ctx, threadID, true)
+}
+
+func (r *CodexAppServerRuntime) readThreadOnce(ctx context.Context, threadID string, includeTurns bool) (StoredThread, error) {
 	result, streamPosition, err := r.requestWithPosition(ctx, "thread/read", map[string]any{
 		"threadId":     threadID,
 		"includeTurns": includeTurns,
 	})
-	if includeTurns && threadNotMaterializedError(err) {
-		// app-server cannot include turns before the first user message. Read the
-		// draft's metadata explicitly, but retain the rejected response position:
-		// events after that boundary may contain the first turn and must be applied.
-		var metadataPosition string
-		result, metadataPosition, err = r.requestWithPosition(ctx, "thread/read", map[string]any{
-			"threadId":     threadID,
-			"includeTurns": false,
-		})
-		if streamPosition == "" {
-			streamPosition = metadataPosition
-		}
-	}
 	if err != nil {
 		return StoredThread{}, err
 	}
@@ -158,14 +162,6 @@ func (r *CodexAppServerRuntime) readThread(ctx context.Context, threadID string,
 func threadMissingError(err error) bool {
 	var rpcErr *RPCError
 	return errors.As(err, &rpcErr) && rpcErr.Code == -32600
-}
-
-func threadNotMaterializedError(err error) bool {
-	var rpcErr *RPCError
-	return errors.As(err, &rpcErr) &&
-		rpcErr.Code == -32600 &&
-		strings.Contains(rpcErr.Message, "is not materialized yet") &&
-		strings.Contains(rpcErr.Message, "includeTurns is unavailable before first user message")
 }
 
 func (r *CodexAppServerRuntime) SetThreadName(ctx context.Context, threadID, name string) error {
@@ -375,13 +371,6 @@ func archiveValue(raw map[string]any) (bool, bool) {
 			if err == nil {
 				return parsed, true
 			}
-		}
-	}
-	for _, segment := range strings.FieldsFunc(stringValue(raw["path"]), func(r rune) bool {
-		return r == '/' || r == '\\'
-	}) {
-		if segment == "archived_sessions" {
-			return true, true
 		}
 	}
 	return false, false

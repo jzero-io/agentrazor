@@ -55,7 +55,7 @@ func (l *ArchiveConversations) ArchiveConversations(req *types.PathRequest) (res
 	}
 	for _, conv := range convs {
 		// 线程已不存在（孤儿数据）：无需归档，跳过
-		if _, err := l.svcCtx.AgentThreads.Get(l.ctx, conv.Id); err != nil {
+		if _, err := l.svcCtx.AgentThreads.Metadata(l.ctx, conv.Id); err != nil {
 			if errors.Is(err, agentdomain.ErrThreadNotFound) {
 				continue
 			}

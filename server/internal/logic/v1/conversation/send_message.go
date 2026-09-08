@@ -47,7 +47,7 @@ func sendMessage(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 	if _, err := requireOwner(ctx, svcCtx, conversationID); err != nil {
 		return nil, err
 	}
-	thread, err := svcCtx.AgentThreads.Get(ctx, conversationID)
+	thread, err := svcCtx.AgentThreads.Metadata(ctx, conversationID)
 	if err != nil {
 		return nil, err
 	}

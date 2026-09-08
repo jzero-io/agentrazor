@@ -86,33 +86,21 @@ func (l *List) listOwnedThreads(owned []*conversationmodel.Conversation) ([]agen
 	if err != nil {
 		return nil, err
 	}
+	return filterOwnedThreads(listed, owned), nil
+}
+
+func filterOwnedThreads(listed []agentdomain.StoredThread, owned []*conversationmodel.Conversation) []agentdomain.StoredThread {
 	ownedSet := make(map[string]struct{}, len(owned))
 	for _, row := range owned {
 		ownedSet[row.Id] = struct{}{}
 	}
-	byID := make(map[string]agentdomain.StoredThread, len(listed))
+	threads := make([]agentdomain.StoredThread, 0, len(listed))
 	for _, thread := range listed {
 		if _, ok := ownedSet[thread.ID]; ok {
-			byID[thread.ID] = thread
+			threads = append(threads, thread)
 		}
 	}
-	threads := make([]agentdomain.StoredThread, 0, len(owned))
-	for _, row := range owned {
-		id := row.Id
-		thread, ok := byID[id]
-		if !ok {
-			var err error
-			thread, err = l.svcCtx.AgentThreads.Metadata(l.ctx, id)
-			if errors.Is(err, agentdomain.ErrThreadNotFound) {
-				continue
-			}
-			if err != nil {
-				return nil, err
-			}
-		}
-		threads = append(threads, thread)
-	}
-	return threads, nil
+	return threads
 }
 
 func conversationUser(ctx context.Context, svcCtx *svc.ServiceContext, conversationID string) (string, bool, error) {

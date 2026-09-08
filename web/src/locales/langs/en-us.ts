@@ -339,6 +339,7 @@ const local: App.I18n.Schema = {
         copyCode: 'Copy',
         copySuccess: 'Verification code copied',
         copyFailed: 'Copy failed. Please copy the code manually.',
+        expiredLabel: 'Expired',
         expiresIn: 'Expires in {time}',
         waiting: 'Waiting for verification…',
         retry: 'Get a new code'

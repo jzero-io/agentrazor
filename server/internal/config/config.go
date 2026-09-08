@@ -8,10 +8,8 @@ type Config struct {
 }
 
 type AgentConf struct {
-	BinaryPath          string   `json:",default=codex"`
 	CodexHome           string   `json:",default=data/codex-home"`
 	AgentrazorHome      string   `json:",default=data/agentrazor-home"`
-	DisableApps         bool     `json:",default=true"`
 	DisabledMCPServers  []string `json:",optional"`
 	StartTimeoutSeconds int      `json:",default=15"`
 	ModelProvider       string   `json:",optional"`

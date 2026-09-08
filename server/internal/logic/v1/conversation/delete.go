@@ -39,7 +39,7 @@ func (l *Delete) Delete(req *types.PathRequest) (resp *types.DeleteResponse, err
 	if l.svcCtx.AgentThreads == nil {
 		return nil, errors.New("agent runtime is disabled")
 	}
-	_, err = l.svcCtx.AgentThreads.Get(l.ctx, req.ConversationId)
+	_, err = l.svcCtx.AgentThreads.Metadata(l.ctx, req.ConversationId)
 	threadGone := errors.Is(err, agentdomain.ErrThreadNotFound)
 	if err != nil && !threadGone {
 		return nil, err

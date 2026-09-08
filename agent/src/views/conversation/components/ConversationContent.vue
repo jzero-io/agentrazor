@@ -168,9 +168,11 @@ function emitError(message: string) {
               </div>
             </article>
 
-            <div v-if="view.processMode === 'thinking'" class="turn-live-status">
-              <span class="status-pulse">正在思考</span>
-            </div>
+            <article v-if="view.processMode === 'thinking'" class="message assistant turn-live-status">
+              <div class="message-content">
+                <span class="status-pulse">正在思考</span>
+              </div>
+            </article>
 
             <div v-else-if="view.processMode === 'processing'" class="turn-process">
               <div class="turn-process-summary">

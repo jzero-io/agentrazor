@@ -54,7 +54,7 @@ func (l *DeleteArchivedConversations) DeleteArchivedConversations(req *types.Pat
 		return nil, err
 	}
 	for _, conv := range convs {
-		thread, err := l.svcCtx.AgentThreads.Get(l.ctx, conv.Id)
+		thread, err := l.svcCtx.AgentThreads.Metadata(l.ctx, conv.Id)
 		if err != nil {
 			// 线程已不存在（孤儿数据）：跳过 thread 侧，直接清理业务库记录
 			if errors.Is(err, agentdomain.ErrThreadNotFound) {

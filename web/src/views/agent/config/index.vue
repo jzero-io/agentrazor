@@ -584,7 +584,13 @@ onBeforeUnmount(stopLoginPolling);
                 </div>
                 <div class="device-login-expiry" :class="{ 'device-login-expiry--expired': deviceLoginExpired }">
                   <SvgIcon icon="carbon:time" />
-                  <span>{{ $t('page.agentConfig.login.expiresIn', { time: deviceLoginRemainingText }) }}</span>
+                  <span>
+                    {{
+                      deviceLoginExpired
+                        ? $t('page.agentConfig.login.expiredLabel')
+                        : $t('page.agentConfig.login.expiresIn', { time: deviceLoginRemainingText })
+                    }}
+                  </span>
                 </div>
               </div>
             </div>

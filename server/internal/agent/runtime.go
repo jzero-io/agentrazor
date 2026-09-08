@@ -30,11 +30,9 @@ var (
 type EventHandler func(map[string]any, string)
 
 type CodexAppServerOptions struct {
-	Binary             string
 	CodexHome          string
 	PluginsRoot        string
 	AgentrazorHome     string
-	DisableApps        bool
 	DisabledMCPServers []string
 	StartTimeout       time.Duration
 	ModelProvider      string
@@ -114,9 +112,6 @@ type appServerTurn struct {
 }
 
 func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRuntime, error) {
-	if options.Binary == "" {
-		options.Binary = "codex"
-	}
 	if options.StartTimeout <= 0 {
 		options.StartTimeout = 15 * time.Second
 	}
@@ -148,10 +143,7 @@ func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRun
 	}
 	options.AgentrazorHome = agentrazorHome
 
-	args := []string{"app-server", "--listen", "stdio://"}
-	if options.DisableApps {
-		args = append(args, "--disable", "apps")
-	}
+	args := []string{"--listen", "stdio://"}
 	for _, server := range options.DisabledMCPServers {
 		server = strings.TrimSpace(server)
 		if server == "" {
@@ -160,7 +152,7 @@ func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRun
 		args = append(args, "-c", fmt.Sprintf("mcp_servers.%s.enabled=false", server))
 	}
 
-	cmd := exec.Command(options.Binary, args...)
+	cmd := exec.Command("codex-app-server", args...)
 	if options.CodexHome != "" {
 		cmd.Env = isolatedCodexEnvironment(os.Environ(), options.CodexHome)
 	}

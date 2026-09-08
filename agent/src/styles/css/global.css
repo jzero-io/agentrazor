@@ -1740,12 +1740,7 @@ body.is-dragging {
 }
 
 .turn-live-status {
-  display: flex;
-  align-items: center;
-  min-height: 28px;
-  margin: -12px 0 20px;
   color: #777b7e;
-  font-size: 18px;
 }
 
 .turn-live-status .status-pulse {

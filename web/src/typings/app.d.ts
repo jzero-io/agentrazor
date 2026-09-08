@@ -350,6 +350,7 @@ declare namespace App {
         copyCode: string;
         copySuccess: string;
         copyFailed: string;
+        expiredLabel: string;
         expiresIn: string;
         waiting: string;
         retry: string;

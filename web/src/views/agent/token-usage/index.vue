@@ -55,6 +55,12 @@ let requestSequence = 0;
 
 const tokenMetrics = computed(() => [
   {
+    label: $t('page.agentTokenUsage.totalToken'),
+    value: tokenSummary.value.totalTokens,
+    icon: 'carbon:meter',
+    tone: 'primary'
+  },
+  {
     label: $t('page.agentTokenUsage.input'),
     value: tokenSummary.value.inputTokens,
     icon: 'carbon:download',
@@ -83,17 +89,14 @@ const tokenMetrics = computed(() => [
     value: tokenSummary.value.reasoningOutputTokens,
     icon: 'carbon:idea',
     tone: 'violet'
-  },
-  {
-    label: $t('page.agentTokenUsage.totalToken'),
-    value: tokenSummary.value.totalTokens,
-    icon: 'carbon:meter',
-    tone: 'primary'
   }
 ]);
 
 function formatToken(value: number) {
   return value.toLocaleString(appStore.locale);
+}
+function formatDetailToken(value: number) {
+  return appStore.isMobile ? formatCompactNumber(value, appStore.locale) : formatToken(value);
 }
 function formatCompactToken(value: number) {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -347,7 +350,9 @@ watch(() => appStore.locale, refreshChart);
                   </div>
                   <div class="account-token">
                     <span>{{ $t('page.agentTokenUsage.totalToken') }}</span>
-                    <strong>{{ formatToken(account.totalTokens) }}</strong>
+                    <strong :title="formatToken(account.totalTokens)">
+                      {{ formatDetailToken(account.totalTokens) }}
+                    </strong>
                   </div>
                 </div>
               </div>
@@ -416,7 +421,9 @@ watch(() => appStore.locale, refreshChart);
                           </span>
                           <div>
                             <small>{{ $t('page.agentTokenUsage.totalToken') }}</small>
-                            <strong>{{ formatToken(conversation.totalTokens) }}</strong>
+                            <strong :title="formatToken(conversation.totalTokens)">
+                              {{ formatDetailToken(conversation.totalTokens) }}
+                            </strong>
                           </div>
                         </div>
                       </div>
@@ -847,7 +854,9 @@ watch(() => appStore.locale, refreshChart);
 
 .conversation-info {
   display: flex;
+  width: 0;
   min-width: 0;
+  flex: 1;
   flex-direction: column;
   gap: 4px;
 }
@@ -1095,6 +1104,10 @@ code {
 }
 
 @media (max-width: 640px) {
+  .token-page {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom));
+  }
+
   .summary-card :deep(.n-card-header),
   .chart-card :deep(.n-card-header),
   .details-card :deep(.n-card-header) {
@@ -1188,9 +1201,7 @@ code {
 
   .account-stats b,
   .account-stats strong {
-    overflow: hidden;
     max-width: 100%;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -1200,6 +1211,35 @@ code {
 
   .conversation-list :deep(> .n-collapse-item > .n-collapse-item__content-wrapper > .n-collapse-item__content-inner) {
     padding: 0 8px 8px;
+  }
+
+  .conversation-list :deep(> .n-collapse-item > .n-collapse-item__header .n-collapse-item__header-main) {
+    width: 0;
+  }
+
+  .conversation-header,
+  .conversation-main {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .conversation-main {
+    align-items: flex-start;
+  }
+
+  .conversation-info code,
+  .conversation-info span {
+    display: block;
+    overflow: hidden;
+    max-width: 100%;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .conversation-stats {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--token-divider);
   }
 
   .conversation-stats > div {
