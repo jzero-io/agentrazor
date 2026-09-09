@@ -18,7 +18,7 @@ on:
         type: choice
         options:
           - standard
-          - plugins
+          - standard with plugins
       build_server:
         description: Build the server base image
         required: true
@@ -35,7 +35,7 @@ on:
         default: true
         type: boolean
       plugins:
-        description: Comma-separated public owner/repo@branch-or-tag (empty for none)
+        description: 'AgentRazor plugin GitHub repositories and versions, comma-separated (example: owner/repo@v0.1.0)'
         required: false
         default: ''
         type: string
@@ -83,8 +83,8 @@ jobs:
             echo "plugins must be empty for a standard release" >&2
             exit 1
           fi
-          if [ "${release_type}" = "plugins" ] && [ -z "${PLUGINS}" ]; then
-            echo "at least one plugin is required for a plugins release" >&2
+          if [ "${release_type}" = "standard with plugins" ] && [ -z "${PLUGINS}" ]; then
+            echo "at least one plugin is required for a standard with plugins release" >&2
             exit 1
           fi
 
@@ -130,10 +130,13 @@ jobs:
             plugin_name="${repository##*/}"
             plugin_tag="${plugin_name//_/-}"
             plugin_tag="${plugin_tag,,}"
+            if [ -n "${plugin_suffix}" ]; then
+              plugin_tag="${plugin_tag#agentrazor-}"
+            fi
             plugin_suffix="${plugin_suffix}-${plugin_tag}"
           done
-          if [ "${release_type}" = "plugins" ] && [ -z "${plugin_suffix}" ]; then
-            echo "at least one valid plugin is required for a plugins release" >&2
+          if [ "${release_type}" = "standard with plugins" ] && [ -z "${plugin_suffix}" ]; then
+            echo "at least one valid plugin is required for a standard with plugins release" >&2
             exit 1
           fi
           if (( ${#version} + ${#plugin_suffix} > 127 )); then
