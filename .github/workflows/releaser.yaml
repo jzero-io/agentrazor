@@ -14,7 +14,7 @@ on:
       release_type:
         description: Release type
         required: true
-        default: standard
+        default: standard with plugins
         type: choice
         options:
           - standard
