@@ -147,14 +147,14 @@ textarea {
     opacity 180ms ease,
     box-shadow 260ms ease,
     visibility 0s linear 260ms;
-  will-change: transform;
+  will-change: auto;
 }
 
 .app-shell:not(.sidebar-collapsed) .sidebar,
 .sidebar-collapsed.sidebar-hover-open .sidebar,
 .sidebar.mobile-open {
   visibility: visible;
-  transform: translateX(0);
+  transform: none;
   opacity: 1;
   transition-delay: 0s;
 }
