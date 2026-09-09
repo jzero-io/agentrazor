@@ -2,7 +2,7 @@
 import { computed, h, type ComponentPublicInstance } from 'vue';
 import { Icon } from '@iconify/vue';
 import { NButton, NDropdown, NScrollbar, NSpin, NTooltip } from 'naive-ui';
-import type { Conversation, UserInfo } from '../../../service/api';
+import type { Conversation, TokenQuotaStatus, UserInfo } from '../../../service/api';
 import ScrollingTitle from '../scrolling-title/index.vue';
 
 defineOptions({
@@ -20,6 +20,7 @@ const props = defineProps<{
   sidebarExpanded: boolean;
   sidebarCollapsed: boolean;
   currentUser: UserInfo | null;
+  tokenQuota: TokenQuotaStatus | null;
   userInitial: string;
   userMenuVisible: boolean;
   pinnedExpanded: boolean;
@@ -53,6 +54,7 @@ const props = defineProps<{
   toggleConversationPinned: (item: Conversation) => void;
   archiveConversation: (item: Conversation) => void;
   openSettings: () => void;
+  openUsage: () => void;
   logout: () => void;
   openLogin: () => void;
   startSidebarResize: (event: PointerEvent) => void;
@@ -81,6 +83,16 @@ const conversationsExpanded = computed({
   get: () => props.conversationsExpanded,
   set: value => emit('update:conversationsExpanded', value)
 });
+const menuQuota = computed(() => {
+  if (!props.tokenQuota?.enabled) return null;
+
+  const useFiveHour = props.tokenQuota.fiveHour.limited;
+  const quotaWindow = useFiveHour ? props.tokenQuota.fiveHour : props.tokenQuota.sevenDay;
+
+  return {
+    remainingPercent: Math.min(100, Math.max(0, quotaWindow.remainingPercent))
+  };
+});
 
 const renderIcon = (icon: string) => () => h(Icon, { icon });
 
@@ -105,7 +117,7 @@ function selectGroupAction(group: SidebarGroup, key: string | number) {
         </div>
 
         <n-button class="new-chat" secondary @click="createConversation">
-          <template #icon><Icon icon="solar:pen-new-square-outline" /></template>
+          <template #icon><Icon icon="lucide:square-pen" class="new-chat-icon" /></template>
           <span v-if="sidebarExpanded">新对话</span>
         </n-button>
 
@@ -353,9 +365,15 @@ function selectGroupAction(group: SidebarGroup, key: string | number) {
                   <span class="user-avatar">{{ userInitial }}</span>
                   <div>
                     <strong>{{ currentUser.username }}</strong>
-                    <span>当前登录账号</span>
                   </div>
                 </div>
+                <button type="button" role="menuitem" class="usage-menu-item" @click="openUsage">
+                  <Icon icon="solar:graph-up-linear" />
+                  <span class="usage-menu-label">使用情况</span>
+                  <span v-if="tokenQuota && !tokenQuota.enabled" class="usage-menu-disabled">已禁用</span>
+                  <span v-else-if="menuQuota" class="usage-menu-quota">剩余 {{ menuQuota.remainingPercent }}%</span>
+                  <span v-else class="usage-menu-muted">读取中</span>
+                </button>
                 <button type="button" role="menuitem" @click="openSettings">
                   <Icon icon="solar:settings-linear" />
                   <span>设置</span>
@@ -392,3 +410,78 @@ function selectGroupAction(group: SidebarGroup, key: string | number) {
 
 
 </template>
+
+<style scoped>
+.grouped-conversation .conversation-item {
+  padding-left: 38px;
+}
+.conversation-list-group .conversation-row .conversation-item {
+  padding-left: 38px;
+}
+
+.conversation-list-group {
+  margin-top: 24px !important;
+}
+
+.group-section-heading + .custom-group {
+  margin-top: 8px;
+}
+
+.group-section-heading,
+.conversation-list-heading {
+  box-shadow: none !important;
+}
+.group-section-heading:hover,
+.group-section-heading:focus-within,
+.conversation-list-heading:hover,
+.conversation-list-heading:focus-within {
+  background: transparent !important;
+}
+
+.custom-group-heading {
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.custom-group-heading:hover,
+.custom-group-heading:focus-within {
+  background: var(--sidebar-hover-bg) !important;
+  box-shadow: 0 5px 14px rgb(28 62 79 / 12%);
+}
+
+:global(:root[data-theme="dark"]) .custom-group-heading:hover,
+:global(:root[data-theme="dark"]) .custom-group-heading:focus-within {
+  box-shadow: 0 5px 16px rgb(0 0 0 / 28%);
+}
+
+
+
+.usage-menu-label {
+  min-width: 0;
+  flex: 1 1 auto;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+.usage-menu-quota,
+.usage-menu-disabled,
+.usage-menu-muted {
+  flex: 0 0 auto;
+  margin-left: auto;
+  white-space: nowrap;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.usage-menu-quota {
+  color: #8a8f98;
+  font-weight: 400;
+}
+
+
+:global(:root[data-theme="dark"]) .usage-menu-quota {
+  color: #a8adb5;
+}
+</style>

@@ -2,7 +2,6 @@ package i18n
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -68,14 +67,6 @@ func (l *Translator) AddLanguageSupport(lang language.Tag) {
 	l.localizer[lang] = i18n.NewLocalizer(l.bundle, lang.String())
 }
 
-// AddBundleFromEmbeddedFS adds new bundle into translator from embedded file system
-func (l *Translator) AddBundleFromEmbeddedFS(file embed.FS, path string) error {
-	if _, err := l.bundle.LoadMessageFileFS(file, path); err != nil {
-		return err
-	}
-	return nil
-}
-
 // AddBundleFromFile adds new bundle into translator from file path.
 func (l *Translator) AddBundleFromFile(path string) error {
 	if _, err := l.bundle.LoadMessageFile(path); err != nil {
@@ -84,59 +75,35 @@ func (l *Translator) AddBundleFromFile(path string) error {
 	return nil
 }
 
-func NewTranslator(conf I18nConf, efs embed.FS) *Translator {
-	trans := &Translator{}
-	trans.localizer = make(map[language.Tag]*i18n.Localizer)
+func NewTranslator(conf I18nConf) *Translator {
+	trans := &Translator{localizer: make(map[language.Tag]*i18n.Localizer)}
 	bundle := i18n.NewBundle(language.Chinese)
 	bundle.RegisterUnmarshalFunc("json", json.Unmarshal)
 	trans.bundle = bundle
+	trans.AddLanguageSupport(language.Chinese)
+
+	if strings.TrimSpace(conf.Dir) == "" {
+		return trans
+	}
 
 	var files []string
-	if conf.Dir == "" {
-		if err := fs.WalkDir(efs, ".", func(path string, d fs.DirEntry, err error) error {
-			if d == nil {
-				logx.Must(fmt.Errorf("wrong directory path: %s", conf.Dir))
-			}
-			if !d.IsDir() {
-				files = append(files, path)
-			}
-
+	if err := filepath.WalkDir(conf.Dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
 			return err
-		}); err != nil {
-			logx.Must(fmt.Errorf("failed to get any files in dir: %s, error: %v", conf.Dir, err))
 		}
-
-		for _, v := range files {
-			languageName := strings.TrimSuffix(filepath.Base(v), ".json")
-			trans.AddLanguageSupport(ParseTags(languageName)[0])
-			err := trans.AddBundleFromEmbeddedFS(efs, v)
-			if err != nil {
-				logx.Must(fmt.Errorf("failed to load files from %s for i18n, please check the "+
-					"configuration, error: %s", v, err.Error()))
-			}
+		if !d.IsDir() && strings.EqualFold(filepath.Ext(path), ".json") {
+			files = append(files, path)
 		}
-	} else {
-		if err := filepath.WalkDir(conf.Dir, func(path string, d fs.DirEntry, err error) error {
-			if d == nil {
-				logx.Must(fmt.Errorf("wrong directory path: %s", conf.Dir))
-			}
-			if !d.IsDir() {
-				files = append(files, path)
-			}
+		return nil
+	}); err != nil {
+		logx.Must(fmt.Errorf("failed to read i18n directory %s: %w", conf.Dir, err))
+	}
 
-			return err
-		}); err != nil {
-			logx.Must(fmt.Errorf("failed to get any files in dir: %s, error: %v", conf.Dir, err))
-		}
-
-		for _, v := range files {
-			languageName := strings.TrimSuffix(filepath.Base(v), ".json")
-			trans.AddLanguageSupport(ParseTags(languageName)[0])
-			err := trans.AddBundleFromFile(v)
-			if err != nil {
-				logx.Must(fmt.Errorf("failed to load files from %s for i18n, please check the "+
-					"configuration, error: %s", filepath.Join(conf.Dir, v), err.Error()))
-			}
+	for _, path := range files {
+		languageName := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		trans.AddLanguageSupport(ParseTags(languageName)[0])
+		if err := trans.AddBundleFromFile(path); err != nil {
+			logx.Must(fmt.Errorf("failed to load i18n file %s: %w", path, err))
 		}
 	}
 

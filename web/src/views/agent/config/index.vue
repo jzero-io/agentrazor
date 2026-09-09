@@ -12,9 +12,17 @@ import {
   SaveAgentSelection,
   StartAgentChatGPTLogin
 } from '@/service/api';
+import { useAuth } from '@/hooks/business/auth';
 import { $t } from '@/locales';
 import { useAppStore } from '@/store/modules/app';
 const appStore = useAppStore();
+const { hasAuth } = useAuth();
+
+const canSaveSelection = computed(() => hasAuth('v1:manage:agent:saveSelection'));
+const canLoginApiKey = computed(() => hasAuth('v1:manage:agent:loginApiKey'));
+const canStartChatGPTLogin = computed(() => hasAuth('v1:manage:agent:startChatGPTLogin'));
+const canLogout = computed(() => hasAuth('v1:manage:agent:logout'));
+const canRestartRuntime = computed(() => hasAuth('v1:manage:agent:restartRuntime'));
 
 const savingSelection = ref(false);
 const restarting = ref(false);
@@ -129,6 +137,7 @@ function changeModel() {
 }
 
 async function saveSelection() {
+  if (!canSaveSelection.value) return;
   if (!providerId.value || !model.value.trim()) {
     window.$message?.warning($t('page.agentConfig.message.selectProviderModel'));
     return;
@@ -168,6 +177,7 @@ async function saveSelection() {
 }
 
 async function restartRuntime() {
+  if (!canRestartRuntime.value) return;
   restarting.value = true;
   const { error } = await RestartAgentRuntime();
   restarting.value = false;
@@ -178,6 +188,7 @@ async function restartRuntime() {
 }
 
 async function loginApiKey() {
+  if (!canLoginApiKey.value) return;
   if (!apiKey.value.trim()) {
     window.$message?.warning($t('page.agentConfig.message.openAIApiKeyRequired'));
     return;
@@ -193,6 +204,7 @@ async function loginApiKey() {
 }
 
 async function startChatGPTLogin() {
+  if (!canStartChatGPTLogin.value) return;
   chatGPTLoading.value = true;
   const { data, error } = await StartAgentChatGPTLogin();
   chatGPTLoading.value = false;
@@ -253,6 +265,7 @@ function copyDeviceLoginCode() {
 }
 
 async function logout() {
+  if (!canLogout.value) return;
   const { error } = await LogoutAgentAccount();
   if (!error) {
     openAIAuthView.value = 'chatgpt';
@@ -369,7 +382,7 @@ onBeforeUnmount(stopLoginPolling);
               </div>
             </div>
             <div class="auth-action-row">
-              <NPopconfirm @positive-click="logout">
+              <NPopconfirm v-if="canLogout" @positive-click="logout">
                 <template #trigger>
                   <NButton tertiary type="error">{{ $t('page.agentConfig.openAI.logout') }}</NButton>
                 </template>
@@ -384,7 +397,7 @@ onBeforeUnmount(stopLoginPolling);
               <span>{{ $t('page.agentConfig.openAI.apiKeyConfigured') }}</span>
             </div>
             <div class="auth-action-row">
-              <NPopconfirm @positive-click="logout">
+              <NPopconfirm v-if="canLogout" @positive-click="logout">
                 <template #trigger>
                   <NButton tertiary type="error">{{ $t('page.agentConfig.openAI.clearApiKey') }}</NButton>
                 </template>
@@ -395,11 +408,11 @@ onBeforeUnmount(stopLoginPolling);
 
           <template v-else-if="openAIAuthView === 'chatgpt'">
             <div class="auth-action-row">
-              <NButton size="large" type="primary" :loading="chatGPTLoading" @click="startChatGPTLogin">
+              <NButton v-if="canStartChatGPTLogin" size="large" type="primary" :loading="chatGPTLoading" @click="startChatGPTLogin">
                 <template #icon><SvgIcon icon="carbon:login" /></template>
                 {{ $t('page.agentConfig.openAI.loginChatGPT') }}
               </NButton>
-              <NButton size="large" quaternary type="primary" @click="openAIAuthView = 'apikey'">
+              <NButton v-if="canLoginApiKey" size="large" quaternary type="primary" @click="openAIAuthView = 'apikey'">
                 {{ $t('page.agentConfig.openAI.useApiKey') }}
               </NButton>
             </div>
@@ -423,7 +436,7 @@ onBeforeUnmount(stopLoginPolling);
                 >
                   <template #prefix><SvgIcon icon="carbon:password" /></template>
                 </NInput>
-                <NButton size="large" type="primary" :loading="apiKeyLoading" @click="loginApiKey">
+                <NButton v-if="canLoginApiKey" size="large" type="primary" :loading="apiKeyLoading" @click="loginApiKey">
                   {{ $t('page.agentConfig.openAI.saveAndUse') }}
                 </NButton>
               </div>
@@ -514,9 +527,9 @@ onBeforeUnmount(stopLoginPolling);
           </div>
         </div>
       </section>
-
       <div class="form-actions">
         <NButton
+          v-if="canSaveSelection"
           type="primary"
           size="large"
           :loading="savingSelection"
@@ -526,7 +539,7 @@ onBeforeUnmount(stopLoginPolling);
           <template #icon><SvgIcon icon="carbon:checkmark" /></template>
           {{ $t('page.agentConfig.saveAndRestart') }}
         </NButton>
-        <NButton secondary size="large" :loading="restarting" @click="restartRuntime">
+        <NButton v-if="canRestartRuntime" secondary size="large" :loading="restarting" @click="restartRuntime">
           <template #icon><SvgIcon icon="carbon:restart" /></template>
           {{ $t('page.agentConfig.restartAgent') }}
         </NButton>
@@ -598,7 +611,7 @@ onBeforeUnmount(stopLoginPolling);
         </div>
 
         <div class="device-login-footer">
-          <NButton v-if="deviceLoginExpired" type="primary" :loading="chatGPTLoading" @click="startChatGPTLogin">
+          <NButton v-if="deviceLoginExpired && canStartChatGPTLogin" type="primary" :loading="chatGPTLoading" @click="startChatGPTLogin">
             {{ $t('page.agentConfig.login.retry') }}
           </NButton>
           <span v-else>{{ $t('page.agentConfig.login.waiting') }}</span>
@@ -1176,6 +1189,254 @@ onBeforeUnmount(stopLoginPolling);
 
   .device-login-code .n-button {
     width: 100%;
+  }
+}
+
+/* Visual refresh: turn the flat form into a focused control surface. */
+.config-page {
+  position: relative;
+  isolation: isolate;
+}
+
+.config-page::before {
+  position: absolute;
+  z-index: -1;
+  top: -40px;
+  right: 4%;
+  width: 360px;
+  height: 240px;
+  border-radius: 50%;
+  background: color-mix(in srgb, rgb(var(--primary-color)) 8%, transparent);
+  filter: blur(70px);
+  content: "";
+  pointer-events: none;
+}
+
+.hero-card {
+  border: 1px solid var(--config-divider);
+  border-radius: 18px;
+  background: var(--config-surface);
+  box-shadow: 0 18px 50px color-mix(in srgb, var(--config-text) 7%, transparent);
+}
+
+.hero-card :deep(.n-card__content) {
+  padding: 0 28px 28px;
+}
+
+.hero-top {
+  position: relative;
+  overflow: hidden;
+  margin: 0 -28px;
+  padding: 30px 32px;
+  border-bottom: 1px solid color-mix(in srgb, rgb(var(--primary-color)) 13%, transparent);
+  background:
+    radial-gradient(circle at 84% 12%, color-mix(in srgb, rgb(var(--primary-color)) 18%, transparent), transparent 34%),
+    linear-gradient(120deg, color-mix(in srgb, rgb(var(--primary-color)) 9%, var(--config-surface)), var(--config-surface) 62%);
+}
+
+.hero-top::after {
+  position: absolute;
+  top: -72px;
+  right: 20%;
+  width: 170px;
+  height: 170px;
+  border: 1px solid color-mix(in srgb, rgb(var(--primary-color)) 14%, transparent);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 30px color-mix(in srgb, rgb(var(--primary-color)) 4%, transparent),
+    0 0 0 62px color-mix(in srgb, rgb(var(--primary-color)) 3%, transparent);
+  content: "";
+  pointer-events: none;
+}
+
+.hero-heading,
+.hero-actions {
+  position: relative;
+  z-index: 1;
+}
+
+.hero-icon {
+  width: 48px;
+  height: 48px;
+  border: 1px solid color-mix(in srgb, rgb(var(--primary-color)) 18%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, rgb(var(--primary-color)) 13%, var(--config-surface));
+  box-shadow: 0 8px 22px color-mix(in srgb, rgb(var(--primary-color)) 14%, transparent);
+  font-size: 24px;
+}
+
+.hero-heading h2 {
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+
+.hero-actions {
+  padding: 10px 14px;
+  border: 1px solid var(--config-divider);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--config-surface) 84%, transparent);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--config-text) 5%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.configuration-form,
+.provider-section {
+  position: relative;
+  margin-top: 22px;
+  padding: 24px;
+  border: 1px solid var(--config-divider);
+  border-radius: 14px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--config-text) 2.4%, var(--config-surface)), var(--config-surface));
+  box-shadow: 0 5px 18px color-mix(in srgb, var(--config-text) 3.5%, transparent);
+}
+
+.configuration-form {
+  display: block;
+  border-top: 1px solid var(--config-divider);
+}
+
+.configuration-form::before {
+  display: block;
+  width: 38px;
+  height: 4px;
+  margin-bottom: 20px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgb(var(--primary-color)), color-mix(in srgb, rgb(var(--primary-color)) 20%, transparent));
+  content: "";
+}
+
+.model-form-grid :deep(.n-form-item-label) {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.model-form-grid :deep(.n-base-selection) {
+  --n-border-radius: 9px !important;
+}
+
+.model-form-grid :deep(.n-base-selection-label) {
+  min-height: 42px;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--config-text) 4%, transparent);
+}
+
+.provider-heading {
+  justify-content: space-between;
+}
+
+.provider-name {
+  position: relative;
+  padding-left: 15px;
+}
+
+.provider-name::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 5px;
+  height: 20px;
+  border-radius: 4px;
+  background: rgb(var(--primary-color));
+  content: "";
+  transform: translateY(-50%);
+}
+
+.provider-status {
+  font-weight: 650;
+}
+
+.auth-panel {
+  padding: 22px;
+  border-color: color-mix(in srgb, rgb(var(--primary-color)) 10%, var(--config-divider));
+  border-radius: 12px;
+  background: color-mix(in srgb, rgb(var(--primary-color)) 2.5%, var(--config-surface));
+}
+
+.auth-option-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--config-text) 5%, transparent);
+}
+
+.account-summary {
+  max-width: none;
+}
+
+.account-detail-card {
+  min-height: 70px;
+  justify-content: center;
+  border-radius: 11px;
+  box-shadow: 0 5px 16px color-mix(in srgb, var(--config-text) 4%, transparent);
+}
+
+.account-detail-card strong {
+  font-size: 15px;
+}
+
+.form-actions {
+  justify-content: flex-end;
+  margin-top: 22px;
+  padding: 18px 20px;
+  border: 1px solid var(--config-divider);
+  border-radius: 14px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--config-text) 2%, var(--config-surface)), var(--config-surface));
+}
+
+.form-actions :deep(.n-button) {
+  min-width: 150px;
+  border-radius: 9px;
+}
+
+.form-actions :deep(.n-button--primary-type) {
+  box-shadow: 0 8px 18px color-mix(in srgb, rgb(var(--primary-color)) 20%, transparent);
+}
+
+@media (max-width: 760px) {
+  .hero-card :deep(.n-card__content) {
+    padding: 0 18px 18px;
+  }
+
+  .hero-top {
+    margin: 0 -18px;
+    padding: 24px 20px;
+  }
+
+  .hero-actions {
+    width: auto;
+  }
+
+  .configuration-form,
+  .provider-section {
+    padding: 18px;
+  }
+}
+
+@media (max-width: 560px) {
+  .hero-card :deep(.n-card__content) {
+    padding: 0 12px 12px;
+  }
+
+  .hero-top {
+    margin: 0 -12px;
+    padding: 20px 16px;
+  }
+
+  .hero-actions {
+    padding: 9px 11px;
+  }
+
+  .configuration-form,
+  .provider-section {
+    margin-top: 12px;
+    padding: 15px;
+  }
+
+  .form-actions {
+    padding: 14px;
+  }
+
+  .form-actions :deep(.n-button) {
+    min-width: 0;
   }
 }
 </style>

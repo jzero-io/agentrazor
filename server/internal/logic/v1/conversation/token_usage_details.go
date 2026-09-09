@@ -26,7 +26,7 @@ func NewTokenUsageDetails(ctx context.Context, svcCtx *svc.ServiceContext, r *ht
 	}
 }
 
-func (l *TokenUsageDetails) TokenUsageDetails(req *types.TokenUsageDetailsRequest) (*types.TokenUsageDetailsResponse, error) {
+func (l *TokenUsageDetails) TokenUsageDetails(req *types.TokenUsageDetailsRequest) (resp *types.TokenUsageDetailsResponse, err error) {
 	userUUID, err := currentUserUUID(l.ctx)
 	if err != nil {
 		return nil, err

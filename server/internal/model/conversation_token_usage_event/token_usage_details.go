@@ -80,17 +80,36 @@ FROM deltas`
 const tokenUsageAccountsQuery = tokenUsageDeltaCTE + `
 , account_usage AS (
     SELECT d.user_uuid,
-           COALESCE(u.username, '') AS username,
-           COALESCE(u.nickname, '') AS nickname,
            SUM(d.total_delta)::bigint AS total_tokens,
            COUNT(DISTINCT d.conversation_id)::bigint AS conversation_count,
            COUNT(DISTINCT (d.conversation_id, d.turn_id))::bigint AS turn_count
     FROM deltas d
-    LEFT JOIN manage_user u ON u.uuid = d.user_uuid
-    GROUP BY d.user_uuid, u.username, u.nickname
+    GROUP BY d.user_uuid
+), all_accounts AS (
+    SELECT u.uuid AS user_uuid,
+           u.username,
+           u.nickname,
+           COALESCE(a.total_tokens, 0)::bigint AS total_tokens,
+           COALESCE(a.conversation_count, 0)::bigint AS conversation_count,
+           COALESCE(a.turn_count, 0)::bigint AS turn_count
+    FROM manage_user u
+    LEFT JOIN account_usage a ON a.user_uuid = u.uuid
+    WHERE NOT $1::boolean OR u.uuid = $2
+
+    UNION ALL
+
+    SELECT a.user_uuid,
+           '' AS username,
+           '' AS nickname,
+           a.total_tokens,
+           a.conversation_count,
+           a.turn_count
+    FROM account_usage a
+    LEFT JOIN manage_user u ON u.uuid = a.user_uuid
+    WHERE u.uuid IS NULL
 ), filtered AS (
     SELECT *, COUNT(*) OVER()::bigint AS page_total
-    FROM account_usage
+    FROM all_accounts
     WHERE $3 = '' OR username ILIKE '%' || $3 || '%' OR nickname ILIKE '%' || $3 || '%'
 )
 SELECT user_uuid, username, nickname, total_tokens, conversation_count, turn_count, page_total

@@ -53,6 +53,8 @@ const local: App.I18n.Schema = {
     }
   },
   request: {
+    unauthorized: 'Your session has expired. Please sign in again.',
+    forbidden: 'You do not have permission to perform this action.',
     logout: 'Logout user after request failed',
     logoutMsg: 'User status is invalid, please log in again',
     logoutWithModal: 'Pop up modal after request failed and then log out user',
@@ -257,10 +259,9 @@ const local: App.I18n.Schema = {
     },
     home: {
       dashboard: {
-        welcome: 'Welcome back, {username}',
-        description: 'Monitor agent health, the current model, and resource usage in one place.',
-        agentOnline: 'Agent is running',
-        agentOffline: 'Agent is stopped',
+        welcome: 'Welcome back {username}',
+        agentOnline: 'Running',
+        agentOffline: 'Stopped',
         unavailable: 'Unavailable',
         agentStatus: 'Agent status',
         currentModel: 'Current model',
@@ -348,7 +349,7 @@ const local: App.I18n.Schema = {
     agentSkills: {
       title: 'Skills',
       installed: 'Installed Skills',
-      uploadZip: 'Upload ZIP',
+      uploadArchive: 'Upload',
       searchPlaceholder: 'Search by name',
       deleteConfirm: 'Delete {name}?',
       noMatch: 'No matching Skill',
@@ -384,7 +385,13 @@ const local: App.I18n.Schema = {
       turnId: 'Turn ID',
       time: 'Time',
       contextWindow: 'Context window',
-      accountCount: '{count} accounts'
+      accountCount: '{count} accounts',
+      quotaTitle: 'Quota settings',
+      globalDefault: 'Global defaults',
+      fiveHourQuota: '5-hour usage limit',
+      sevenDayQuota: 'Weekly usage limit',
+      inputQuota: 'Enter token quota',
+      quotaPositive: 'Both quotas must be greater than 0'
     },
     manage: {
       common: {

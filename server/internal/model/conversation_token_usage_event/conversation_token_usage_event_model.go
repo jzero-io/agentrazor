@@ -2,6 +2,7 @@ package conversation_token_usage_event
 
 import (
 	"context"
+	"time"
 
 	"github.com/eddieowens/opts"
 	"github.com/jzero-io/jzero/core/stores/modelx"
@@ -19,6 +20,7 @@ type (
 		TokenUsageSummary(ctx context.Context, userUUID string) (*TokenUsageSummaryRow, error)
 		TokenUsageAccounts(ctx context.Context, userUUID, username string, current, size int) ([]TokenUsageAccountRow, error)
 		TokenUsageConversations(ctx context.Context, userUUID, conversationID string, current, size int) ([]TokenUsageConversationRow, error)
+		TokenQuotaWindowUsage(ctx context.Context, userUUID string, fiveHourStart, sevenDayStart time.Time) (*TokenQuotaWindowUsageRow, error)
 	}
 
 	customConversationTokenUsageEventModel struct {

@@ -23,6 +23,13 @@ type DeleteSkillRequest struct {
 type DeleteSkillResponse struct {
 }
 
+type DeleteUserTokenQuotaRequest struct {
+	UserUuid string `path:"user_uuid" validate:"required"`
+}
+
+type DeleteUserTokenQuotaResponse struct {
+}
+
 type GetAccountStatusRequest struct {
 }
 
@@ -40,6 +47,21 @@ type GetSettingsResponse struct {
 	Providers       []ModelProvider `json:"providers"`
 	Account         AccountStatus   `json:"account"`
 	Runtime         RuntimeStatus   `json:"runtime"`
+}
+
+type GetTokenQuotaGlobalRequest struct {
+}
+
+type GetTokenQuotaGlobalResponse struct {
+	Quota TokenQuotaGlobal `json:"quota"`
+}
+
+type GetUserTokenQuotaRequest struct {
+	UserUuid string `path:"user_uuid" validate:"required"`
+}
+
+type GetUserTokenQuotaResponse struct {
+	Quota TokenQuotaUser `json:"quota"`
 }
 
 type HomeOverviewRequest struct {
@@ -91,6 +113,13 @@ type ProviderModel struct {
 	ReasoningEfforts       []string `json:"reasoningEfforts"`
 }
 
+type ResetUserTokenQuotaRequest struct {
+	UserUuid string `path:"user_uuid" validate:"required"`
+}
+
+type ResetUserTokenQuotaResponse struct {
+}
+
 type RestartRuntimeRequest struct {
 }
 
@@ -119,6 +148,25 @@ type SaveSelectionRequest struct {
 
 type SaveSelectionResponse struct {
 	Runtime RuntimeStatus `json:"runtime"`
+}
+
+type SaveTokenQuotaGlobalRequest struct {
+	FiveHourLimitTokens int64 `json:"fiveHourLimitTokens" validate:"required,gt=0"`
+	SevenDayLimitTokens int64 `json:"sevenDayLimitTokens" validate:"required,gt=0"`
+}
+
+type SaveTokenQuotaGlobalResponse struct {
+}
+
+type SaveUserTokenQuotaRequest struct {
+	UserUuid            string `path:"user_uuid" validate:"required"`
+	Enabled             bool   `json:"enabled"`
+	FiveHourDisabled    bool   `json:"fiveHourDisabled"`
+	FiveHourLimitTokens *int64 `json:"fiveHourLimitTokens,optional" validate:"omitempty,gt=0"`
+	SevenDayLimitTokens *int64 `json:"sevenDayLimitTokens,optional" validate:"omitempty,gt=0"`
+}
+
+type SaveUserTokenQuotaResponse struct {
 }
 
 type Skill struct {
@@ -152,6 +200,27 @@ type StartChatGPTLoginResponse struct {
 	VerificationUrl string `json:"verificationUrl"`
 	UserCode        string `json:"userCode"`
 	ExpiresIn       int64  `json:"expiresIn,optional"`
+}
+
+type TokenQuotaGlobal struct {
+	FiveHourLimitTokens int64 `json:"fiveHourLimitTokens"`
+	SevenDayLimitTokens int64 `json:"sevenDayLimitTokens"`
+}
+
+type TokenQuotaUser struct {
+	UserUuid               string  `json:"userUuid"`
+	Configured             bool    `json:"configured"`
+	Enabled                bool    `json:"enabled"`
+	FiveHourDisabled       bool    `json:"fiveHourDisabled"`
+	FiveHourLimitTokens    *int64  `json:"fiveHourLimitTokens,omitempty"`
+	SevenDayLimitTokens    *int64  `json:"sevenDayLimitTokens,omitempty"`
+	EffectiveFiveHourLimit *int64  `json:"effectiveFiveHourLimit,omitempty"`
+	EffectiveSevenDayLimit int64   `json:"effectiveSevenDayLimit"`
+	FiveHourUsedTokens     int64   `json:"fiveHourUsedTokens"`
+	SevenDayUsedTokens     int64   `json:"sevenDayUsedTokens"`
+	FiveHourResetAt        *string `json:"fiveHourResetAt,omitempty"`
+	SevenDayResetAt        *string `json:"sevenDayResetAt,omitempty"`
+	QuotaResetAt           *string `json:"quotaResetAt,omitempty"`
 }
 
 type UpdateSkillFileRequest struct {

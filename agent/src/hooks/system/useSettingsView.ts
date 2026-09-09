@@ -1,7 +1,7 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-export type SettingsSection = 'appearance' | 'api-keys' | 'archives';
+export type SettingsSection = 'usage' | 'appearance' | 'api-keys' | 'archives';
 
 export function useSettingsView(options: {
   onOpen?: () => void;
@@ -15,12 +15,14 @@ export function useSettingsView(options: {
 
   const section = computed<SettingsSection>({
     get() {
+      if (route.path === '/settings/usage') return 'usage';
       if (route.path === '/settings/api-keys') return 'api-keys';
       if (route.path === '/settings/archives') return 'archives';
       return 'appearance';
     },
     set(value) {
       const paths: Record<SettingsSection, string> = {
+        usage: '/settings/usage',
         appearance: '/settings/appearance',
         'api-keys': '/settings/api-keys',
         archives: '/settings/archives'
@@ -31,7 +33,10 @@ export function useSettingsView(options: {
 
   const visible = computed<boolean>({
     get() {
-      return route.path === '/settings/appearance' || route.path === '/settings/api-keys' || route.path === '/settings/archives';
+      return route.path === '/settings/usage'
+        || route.path === '/settings/appearance'
+        || route.path === '/settings/api-keys'
+        || route.path === '/settings/archives';
     },
     set(value) {
       if (value) openAppearance();
@@ -78,6 +83,17 @@ export function useSettingsView(options: {
     }
   }
 
+  async function openUsage(currentPath = route.fullPath) {
+    rememberReturnPath(currentPath);
+    navExpanded.value = true;
+    enteringSettings.value = true;
+    try {
+      await router.push('/settings/usage');
+    } finally {
+      enteringSettings.value = false;
+    }
+  }
+
   function close() {
     void router.push(returnPath.value || '/');
   }
@@ -100,6 +116,7 @@ export function useSettingsView(options: {
     syncConversationUrl,
     restoreFromPath,
     openAppearance,
+    openUsage,
     openArchives,
     close
   };

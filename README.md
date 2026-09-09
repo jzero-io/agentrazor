@@ -68,6 +68,14 @@ cd deploy/docker-compose
 docker compose up -d --build
 ```
 
+发布 `v*` Git 标签后，GitHub Actions 会构建并推送 server、agent 和 web 的
+`linux/amd64`、`linux/arm64` 镜像到 GHCR。生产 Compose 固定使用发布版本：
+
+```shell
+cd deploy/docker-compose
+docker compose -f docker-compose-production.yaml up -d
+```
+
 常用单服务部署命令：
 
 ```shell

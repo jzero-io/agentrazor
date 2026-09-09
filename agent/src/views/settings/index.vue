@@ -5,11 +5,11 @@ defineOptions({
 });
 
 import { Icon } from '@iconify/vue';
-import { NButton, NInput, NModal, NSpin } from 'naive-ui';
-import { ref, watch } from 'vue';
+import { NButton, NInput, NModal, NSelect, NSpin } from 'naive-ui';
+import { computed, ref, watch } from 'vue';
 import { useConfirmDialog } from '../../hooks/system/useConfirmDialog';
 import { apiKeyApi } from '../../service/api';
-import type { AgentApiKey, Conversation } from '../../service/api';
+import type { AgentApiKey, Conversation, TokenQuotaStatus } from '../../service/api';
 import { writeClipboardText } from '../../utils/clipboard';
 
 interface AppearanceOption {
@@ -24,14 +24,25 @@ interface ArchiveSection {
   items: Conversation[];
 }
 
+interface ConversationGroupOption {
+  id: string;
+  name: string;
+}
+
+const allArchiveGroups = '__all__';
+const ungroupedArchiveGroup = '__ungrouped__';
+
 const props = defineProps<{
   visible: boolean;
   navExpanded: boolean;
-  section: 'appearance' | 'api-keys' | 'archives';
+  section: 'usage' | 'appearance' | 'api-keys' | 'archives';
+  tokenQuota: TokenQuotaStatus | null;
+  quotaLoading: boolean;
   appearance: 'system' | 'light' | 'dark';
   appearanceOptions: AppearanceOption[];
   archivedConversations: Conversation[];
   archivedSections: ArchiveSection[];
+  conversationGroups: ConversationGroupOption[];
   archiveQuery: string;
   loadingList: boolean;
   displayConversationTitle: (item: Conversation) => string;
@@ -41,7 +52,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:visible': [value: boolean];
   'update:navExpanded': [value: boolean];
-  'update:section': [value: 'appearance' | 'api-keys' | 'archives'];
+  'update:section': [value: 'usage' | 'appearance' | 'api-keys' | 'archives'];
   'update:archiveQuery': [value: string];
   setAppearance: [value: 'system' | 'light' | 'dark'];
   deleteAllArchived: [];
@@ -64,6 +75,19 @@ const keyConfirmTitle = keyConfirmDialog.title;
 const keyConfirmContent = keyConfirmDialog.content;
 const keyConfirmPositiveText = keyConfirmDialog.positiveText;
 const keyConfirmLoading = keyConfirmDialog.loading;
+const archiveGroup = ref(allArchiveGroups);
+const archiveGroupOptions = computed(() => [
+  { label: '所有分组', value: allArchiveGroups },
+  { label: '未分组', value: ungroupedArchiveGroup },
+  ...props.conversationGroups.map(group => ({ label: group.name, value: group.id }))
+]);
+const visibleArchiveSections = computed(() => {
+  if (archiveGroup.value === allArchiveGroups) return props.archivedSections;
+  if (archiveGroup.value === ungroupedArchiveGroup) {
+    return props.archivedSections.filter(section => !section.groupId);
+  }
+  return props.archivedSections.filter(section => section.groupId === archiveGroup.value);
+});
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : '操作失败，请稍后重试';
@@ -135,6 +159,15 @@ function openArchives() {
   emit('update:section', 'archives');
 }
 
+function percentWidth(value: number) {
+  return `${Math.max(0, Math.min(100, value))}%`;
+}
+
+function formatResetTime(value?: string) {
+  if (!value) return '暂无';
+  return new Date(value).toLocaleString('zh-CN', { hour12: false });
+}
+
 watch(
   () => [props.visible, props.section] as const,
   ([visible, section]) => {
@@ -157,6 +190,10 @@ watch(
           <Icon icon="solar:sun-2-linear" />
           <span>外观</span>
         </button>
+        <button :class="{ active: section === 'usage' }" @click="emit('update:section', 'usage')">
+          <Icon icon="solar:graph-up-linear" />
+          <span>使用情况</span>
+        </button>
         <button :class="{ active: section === 'api-keys' }" @click="emit('update:section', 'api-keys')">
           <Icon icon="solar:key-minimalistic-square-linear" />
           <span>密钥管理</span>
@@ -175,7 +212,90 @@ watch(
     />
 
     <main class="settings-content">
-      <section v-if="section === 'appearance'" class="settings-content-inner appearance-page">
+      <section v-if="section === 'usage'" class="settings-content-inner usage-page">
+        <header class="settings-page-header">
+          <button
+            class="settings-menu-button"
+            type="button"
+            aria-label="打开设置菜单"
+            @click="emit('update:navExpanded', true)"
+          >
+            <Icon icon="lucide:panel-left" />
+          </button>
+          <div>
+            <h1>使用情况</h1>
+          </div>
+        </header>
+
+        <n-spin :show="quotaLoading">
+          <div v-if="tokenQuota && !tokenQuota.enabled" class="quota-disabled-banner">
+            <Icon icon="solar:danger-triangle-linear" />
+            <div>
+              <strong>Agent 使用已禁用</strong>
+              <span>当前账户不能发起新的 Turn，如需恢复请联系管理员。</span>
+            </div>
+          </div>
+
+          <div
+            v-if="tokenQuota"
+            class="quota-window-grid"
+            :class="{ 'quota-window-grid--single': !tokenQuota.fiveHour.limited }"
+          >
+            <article v-if="tokenQuota.fiveHour.limited" class="quota-window-card">
+              <header>
+                <div>
+                  <span class="quota-window-icon"><Icon icon="solar:clock-circle-linear" /></span>
+                  <div>
+                    <strong>5 小时使用限额</strong>
+                  </div>
+                </div>
+                <b><span>剩余</span>{{ tokenQuota.fiveHour.remainingPercent }}%</b>
+              </header>
+              <div class="quota-progress" aria-hidden="true">
+                <span :style="{ width: percentWidth(tokenQuota.fiveHour.remainingPercent) }" />
+              </div>
+              <div class="quota-reset-time">
+                <Icon icon="solar:restart-linear" />
+                <span>重置时间</span>
+                <time v-if="tokenQuota.fiveHour.resetAt" :datetime="tokenQuota.fiveHour.resetAt">
+                  {{ formatResetTime(tokenQuota.fiveHour.resetAt) }}
+                </time>
+                <strong v-else>暂无</strong>
+              </div>
+            </article>
+
+            <article class="quota-window-card">
+              <header>
+                <div>
+                  <span class="quota-window-icon"><Icon icon="solar:calendar-linear" /></span>
+                  <div>
+                    <strong>每周使用限额</strong>
+                  </div>
+                </div>
+                <b><span>剩余</span>{{ tokenQuota.sevenDay.remainingPercent }}%</b>
+              </header>
+              <div class="quota-progress" aria-hidden="true">
+                <span :style="{ width: percentWidth(tokenQuota.sevenDay.remainingPercent) }" />
+              </div>
+              <div class="quota-reset-time">
+                <Icon icon="solar:restart-linear" />
+                <span>重置时间</span>
+                <time v-if="tokenQuota.sevenDay.resetAt" :datetime="tokenQuota.sevenDay.resetAt">
+                  {{ formatResetTime(tokenQuota.sevenDay.resetAt) }}
+                </time>
+                <strong v-else>暂无</strong>
+              </div>
+            </article>
+          </div>
+
+          <div v-if="!tokenQuota && !quotaLoading" class="quota-empty">
+            <Icon icon="solar:graph-up-linear" />
+            <span>暂时无法读取额度信息，请稍后再试。</span>
+          </div>
+        </n-spin>
+      </section>
+
+      <section v-else-if="section === 'appearance'" class="settings-content-inner appearance-page">
         <header class="settings-page-header">
           <button
             class="settings-menu-button"
@@ -218,44 +338,92 @@ watch(
           </button>
           <div>
             <h1>已归档的对话</h1>
-            <p>归档对话不能查看内容，恢复后才会重新出现在主页面。</p>
           </div>
-          <n-button v-if="archivedConversations.length" tertiary type="error" @click="emit('deleteAllArchived')">
+          <n-button
+            v-if="archivedConversations.length"
+            tertiary
+            type="error"
+            class="archive-delete-all"
+            @click="emit('deleteAllArchived')"
+          >
+            <template #icon><Icon icon="solar:trash-bin-trash-linear" /></template>
             全部删除
           </n-button>
         </header>
-        <n-input :value="archiveQuery" size="large" clearable placeholder="搜索已归档对话" class="archive-search" @update:value="value => emit('update:archiveQuery', value)">
-          <template #prefix><Icon icon="solar:magnifer-linear" /></template>
-        </n-input>
+
+        <div class="archive-toolbar">
+          <n-input
+            :value="archiveQuery"
+            size="large"
+            clearable
+            placeholder="搜索已归档对话"
+            class="archive-search"
+            @update:value="value => emit('update:archiveQuery', value)"
+          >
+            <template #prefix><Icon icon="solar:magnifer-linear" /></template>
+          </n-input>
+          <n-select
+            v-model:value="archiveGroup"
+            size="large"
+            :options="archiveGroupOptions"
+            class="archive-group-filter"
+          />
+        </div>
+
         <n-spin :show="loadingList">
-          <div v-if="archivedSections.length" class="archive-list archive-page-list">
-            <template v-for="archiveSection in archivedSections" :key="archiveSection.title">
+          <div v-if="visibleArchiveSections.length" class="archive-list archive-page-list">
+            <section
+              v-for="archiveSection in visibleArchiveSections"
+              :key="archiveSection.groupId || ungroupedArchiveGroup"
+              class="archive-section"
+            >
               <div class="archive-section-head">
-                <h2 class="archive-section-title">{{ archiveSection.title }}</h2>
-                <n-button
-                  v-if="archiveSection.groupId"
-                  text
-                  type="error"
-                  size="small"
-                  @click="emit('deleteGroupArchived', archiveSection)"
-                >
-                  全部删除
-                </n-button>
-              </div>
-              <div v-for="item in archiveSection.items" :key="item.id" class="archive-item">
-                <div class="archive-item-copy">
-                  <strong>{{ displayConversationTitle(item) }}</strong>
-                  <span>{{ formatConversationDate(item.updatedAt) }}</span>
+                <h2 class="archive-section-title">
+                  <Icon icon="solar:folder-linear" />
+                  {{ archiveSection.title }}
+                </h2>
+                <div class="archive-section-meta">
+                  <span>{{ archiveSection.items.length }} 个对话</span>
+                  <n-button
+                    v-if="archiveSection.groupId"
+                    text
+                    type="error"
+                    size="small"
+                    @click="emit('deleteGroupArchived', archiveSection)"
+                  >
+                    删除本组
+                  </n-button>
                 </div>
-                <n-button quaternary circle type="error" aria-label="删除" @click="emit('deleteArchived', item)">
-                  <template #icon><Icon icon="solar:trash-bin-trash-linear" /></template>
-                </n-button>
-                <n-button secondary @click="emit('restoreArchived', item)">取消归档</n-button>
               </div>
-            </template>
+
+              <div class="archive-section-list">
+                <div v-for="item in archiveSection.items" :key="item.id" class="archive-item">
+                  <div class="archive-item-copy">
+                    <strong>{{ displayConversationTitle(item) }}</strong>
+                    <span>{{ formatConversationDate(item.updatedAt) }}</span>
+                  </div>
+                  <n-button
+                    quaternary
+                    circle
+                    class="archive-delete-button"
+                    aria-label="删除"
+                    @click="emit('deleteArchived', item)"
+                  >
+                    <template #icon><Icon icon="solar:trash-bin-trash-linear" /></template>
+                  </n-button>
+                  <n-button
+                    secondary
+                    class="archive-restore-button"
+                    @click="emit('restoreArchived', item)"
+                  >
+                    取消归档
+                  </n-button>
+                </div>
+              </div>
+            </section>
           </div>
-          <div v-if="!archivedSections.length" class="archive-empty">
-            {{ archiveQuery.trim() ? '没有匹配的归档对话' : '暂无已归档对话' }}
+          <div v-else class="archive-empty">
+            {{ archiveQuery.trim() || archiveGroup !== allArchiveGroups ? '没有匹配的归档对话' : '暂无已归档对话' }}
           </div>
         </n-spin>
       </section>
@@ -347,3 +515,423 @@ watch(
     </n-modal>
   </section>
 </template>
+
+<style scoped>
+.usage-page {
+  width: min(920px, calc(100% - 64px));
+}
+
+.quota-disabled-banner {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 16px;
+  padding: 15px 17px;
+  border: 1px solid #f0c8c4;
+  border-radius: 14px;
+  color: #8f3934;
+  background: #fff4f2;
+}
+
+.quota-disabled-banner > svg {
+  flex: 0 0 auto;
+  font-size: 24px;
+}
+
+.quota-disabled-banner > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.quota-disabled-banner span {
+  color: #aa5b55;
+  font-size: 13px;
+}
+
+.quota-window-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.quota-window-grid--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.quota-window-card {
+  padding: 21px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel-bg);
+  box-shadow: var(--shadow-panel);
+}
+
+.quota-window-card > header,
+.quota-window-card > header > div {
+  display: flex;
+  align-items: center;
+}
+
+.quota-window-card > header {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.quota-window-card > header > div {
+  min-width: 0;
+  gap: 11px;
+}
+
+.quota-window-card > header > div > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.quota-window-card header strong {
+  color: var(--text-strong);
+  font-size: 16px;
+}
+
+.quota-window-card header b {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  color: var(--accent);
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+}
+
+.quota-window-card header b span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.quota-window-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 11px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 20px;
+}
+
+.quota-progress {
+  overflow: hidden;
+  height: 8px;
+  margin-top: 20px;
+  border-radius: 999px;
+  background: var(--border-soft);
+}
+
+.quota-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #4ca2d2, #2b82bc);
+  transition: width 220ms ease;
+}
+
+.quota-reset-time {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 17px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.quota-reset-time svg {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-size: 18px;
+}
+
+.quota-reset-time time,
+.quota-reset-time strong {
+  margin-left: auto;
+  color: var(--text-strong);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.quota-empty {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  border: 1px dashed #dce4e7;
+  border-radius: 15px;
+  color: #8b989d;
+}
+
+.quota-empty svg {
+  font-size: 28px;
+}
+
+:global(:root[data-theme="dark"]) .quota-window-card {
+  border-color: #383838;
+  background: #222;
+  box-shadow: none;
+}
+
+:global(:root[data-theme="dark"]) .quota-window-card header strong,
+:global(:root[data-theme="dark"]) .quota-reset-time time,
+:global(:root[data-theme="dark"]) .quota-reset-time strong {
+  color: #ededed;
+}
+
+:global(:root[data-theme="dark"]) .quota-window-card header b span,
+:global(:root[data-theme="dark"]) .quota-reset-time {
+  color: #a1a1a1;
+}
+
+:global(:root[data-theme="dark"]) .quota-window-icon {
+  color: #83c0eb;
+  background: #293942;
+}
+
+:global(:root[data-theme="dark"]) .quota-progress {
+  background: #3a3a3a;
+}
+
+:global(:root[data-theme="dark"]) .quota-reset-time {
+  border-top-color: #3d3d3d;
+}
+
+:global(:root[data-theme="dark"]) .quota-disabled-banner {
+  border-color: #67423e;
+  color: #ffb4ab;
+  background: #382421;
+}
+
+:global(:root[data-theme="dark"]) .quota-disabled-banner span {
+  color: #d9948d;
+}
+
+:global(:root[data-theme="dark"]) .quota-empty {
+  border-color: #414141;
+  color: #999;
+}
+
+@media (max-width: 860px) {
+  .quota-window-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .usage-page {
+    width: calc(100% - 28px);
+    padding: 12px 0 48px;
+  }
+
+  .quota-window-card {
+    padding: 18px;
+  }
+
+  .quota-window-card header b {
+    font-size: 22px;
+  }
+}
+
+.archives-page {
+  width: min(1120px, calc(100% - 64px));
+}
+
+.archive-page-header {
+  align-items: center;
+  margin-bottom: 52px;
+}
+
+.archive-page-header h1 {
+  margin-bottom: 0;
+  font-size: 30px;
+  font-weight: 600;
+}
+
+.archive-delete-all {
+  border-radius: 12px;
+  background: #fff1f1;
+}
+
+.archive-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 250px;
+  gap: 14px;
+  margin-bottom: 44px;
+}
+
+.archive-toolbar .archive-search {
+  margin-bottom: 0;
+}
+
+.archive-search :deep(.n-input),
+.archive-group-filter :deep(.n-base-selection) {
+  border-radius: 14px;
+}
+
+.archive-list.archive-page-list {
+  display: block;
+  overflow: visible;
+}
+
+.archive-section + .archive-section {
+  margin-top: 34px;
+}
+
+.archive-section-head {
+  min-height: 28px;
+  margin: 0 4px 14px;
+}
+
+.archive-section-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #30383c;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.archive-section-title svg {
+  flex: 0 0 auto;
+  font-size: 18px;
+}
+
+.archive-section-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #899399;
+  font-size: 13px;
+}
+
+.archive-section-list {
+  overflow: hidden;
+  border: 1px solid #e5e9eb;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.archive-page-list .archive-item {
+  min-height: 82px;
+  gap: 12px;
+  padding: 14px 18px 14px 22px;
+  border: 0;
+  border-bottom: 1px solid #edf0f1;
+  border-radius: 0;
+  background: transparent;
+}
+
+.archive-page-list .archive-item:last-child {
+  border-bottom: 0;
+}
+
+.archive-item-copy {
+  gap: 5px;
+}
+
+.archive-item-copy strong {
+  color: #202729;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.archive-item-copy span {
+  font-size: 13px;
+}
+
+.archive-delete-button {
+  color: #98a1a5;
+}
+
+.archive-restore-button {
+  min-width: 96px;
+  height: 40px;
+  border-radius: 12px;
+}
+
+.archive-restore-button :deep(.n-button__border) {
+  border: 0;
+}
+
+.archive-empty {
+  min-height: 180px;
+  border-radius: 16px;
+  font-size: 14px;
+}
+
+:global(:root[data-theme="dark"]) .archive-delete-all {
+  background: rgb(239 104 104 / 12%);
+}
+
+:global(:root[data-theme="dark"]) .archive-section-title {
+  color: #edf1f2;
+}
+
+:global(:root[data-theme="dark"]) .archive-section-list {
+  border-color: #3d3d3d;
+  background: #222;
+}
+
+:global(:root[data-theme="dark"]) .archive-page-list .archive-item {
+  border-bottom-color: #353535;
+  background: transparent;
+}
+
+:global(:root[data-theme="dark"]) .archive-delete-button {
+  color: #989898;
+}
+
+@media (max-width: 720px) {
+  .archives-page {
+    width: calc(100% - 28px);
+  }
+
+  .archive-page-header {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 28px;
+  }
+
+  .archive-page-header > div {
+    flex: 1;
+  }
+
+  .archive-page-header h1 {
+    font-size: 24px;
+  }
+
+  .archive-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+
+  .archive-page-list .archive-item {
+    min-height: 76px;
+    padding: 12px 12px 12px 16px;
+  }
+
+  .archive-restore-button {
+    min-width: auto;
+  }
+
+  .archive-section-meta > span {
+    display: none;
+  }
+}
+</style>

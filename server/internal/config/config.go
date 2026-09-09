@@ -8,11 +8,6 @@ type Config struct {
 }
 
 type AgentConf struct {
-	CodexHome           string   `json:",default=data/codex-home"`
-	AgentrazorHome      string   `json:",default=data/agentrazor-home"`
-	DisabledMCPServers  []string `json:",optional"`
-	StartTimeoutSeconds int      `json:",default=15"`
-	ModelProvider       string   `json:",optional"`
-	Model               string   `json:",optional"`
-	ReasoningEffort     string   `json:",optional"`
+	CodexHome      string `json:",default=data/codex-home"`
+	AgentrazorHome string `json:",default=data/agentrazor-home"`
 }

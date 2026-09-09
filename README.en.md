@@ -68,6 +68,15 @@ cd deploy/docker-compose
 docker compose up -d --build
 ```
 
+Pushing a `v*` Git tag builds and publishes multi-platform (`linux/amd64` and
+`linux/arm64`) server, agent, and web images to GHCR. The production Compose file
+pins all three images to the release version:
+
+```shell
+cd deploy/docker-compose
+docker compose -f docker-compose-production.yaml up -d
+```
+
 Common service-only deployment commands:
 
 ```shell

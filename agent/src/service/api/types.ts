@@ -96,6 +96,23 @@ export interface StartedTurn {
   startedAt: string;
 }
 
+export interface TokenQuotaWindow {
+  limited: boolean;
+  usedTokens: number;
+  limitTokens: number;
+  remainingTokens: number;
+  remainingPercent: number;
+  source: 'global' | 'user' | 'disabled';
+  resetAt?: string;
+}
+
+export interface TokenQuotaStatus {
+  enabled: boolean;
+  fiveHour: TokenQuotaWindow;
+  sevenDay: TokenQuotaWindow;
+  quotaResetAt?: string;
+}
+
 export interface WorkspaceEntry {
   name: string;
   path: string;

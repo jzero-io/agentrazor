@@ -43,7 +43,7 @@ export function useConversationList(options: {
       if (items?.length) sections.push({ title: group.name, groupId: group.id, items });
     }
     const ungrouped = byGroup.get(undefined);
-    if (ungrouped?.length) sections.push({ title: '对话', items: ungrouped });
+    if (ungrouped?.length) sections.push({ title: '未分组', items: ungrouped });
     return sections;
   });
   const activeConversation = computed(() =>

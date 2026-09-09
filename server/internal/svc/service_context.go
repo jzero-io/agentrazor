@@ -10,6 +10,7 @@ import (
 	"github.com/jzero-io/agentrazor/server/internal/agent"
 	"github.com/jzero-io/agentrazor/server/internal/config"
 	"github.com/jzero-io/agentrazor/server/internal/model"
+	"github.com/jzero-io/agentrazor/server/internal/quota"
 )
 
 type ServiceContext struct {
@@ -17,6 +18,7 @@ type ServiceContext struct {
 	ConfigCenter configcenter.ConfigCenter[config.Config]
 	Model        model.Model
 	AgentThreads *agent.ThreadService
+	TokenQuota   *quota.Service
 	Middleware
 }
 
@@ -28,8 +30,13 @@ func NewServiceContext(cc configcenter.ConfigCenter[config.Config], route2code f
 
 	svcCtx.ServiceContext = svc.NewServiceContext(svcCtx.ConfigCenter.MustGetConfig().Config, route2code)
 	svcCtx.Model = model.NewModel(svcCtx.SqlxConn, modelx.WithCachedConn(modelx.NewConnWithCache(svcCtx.SqlxConn, svcCtx.Cache)))
+	svcCtx.TokenQuota = quota.NewService(svcCtx.Model.AgentTokenQuota, svcCtx.Model.ConversationTokenUsageEvent)
 	runtimeFactory := func() (agent.ThreadRuntime, error) {
-		return agent.NewCodexAppServerRuntime(svcCtx.AgentOptionsFromConfig(cc.MustGetConfig().Agent))
+		agentConfig := cc.MustGetConfig().Agent
+		return agent.NewCodexAppServerRuntime(agent.CodexAppServerOptions{
+			CodexHome:      agentConfig.CodexHome,
+			AgentrazorHome: agentConfig.AgentrazorHome,
+		})
 	}
 	runtime, err := runtimeFactory()
 	if err != nil {

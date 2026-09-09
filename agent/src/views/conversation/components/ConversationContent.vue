@@ -39,6 +39,7 @@ interface ParsedAgentMessage {
 defineProps<{
   selectedConversationId: string;
   isNewChat: boolean;
+  newChatGroupName: string;
   currentUser: unknown;
   isArchivedActive: boolean;
   loadingCurrentDetail: boolean;
@@ -97,8 +98,8 @@ function emitError(message: string) {
     <section class="chat-empty">
       <div class="welcome">
         <div class="welcome-icon"><img src="/agentrazor-icon.png" alt="" /></div>
-        <h1>今天想完成什么？</h1>
-        <p>输入目标，AgentRazor 会在当前对话中持续处理。</p>
+        <h1 v-if="newChatGroupName">我们应该在{{ newChatGroupName }}中做些什么？</h1>
+        <h1 v-else>我们要构建什么？</h1>
       </div>
     </section>
     <ComposerBox
@@ -136,7 +137,13 @@ function emitError(message: string) {
       </button>
     </nav>
     <section :key="selectedConversationId" :ref="setMessagePane" class="message-pane" @scroll="handleMessageScroll">
-      <n-spin class="message-spin" :show="loadingCurrentDetail">
+      <n-spin
+        class="message-spin"
+        :show="loadingCurrentDetail"
+        :size="22"
+        :stroke-width="14"
+        stroke="var(--muted-strong)"
+      >
         <div class="message-column">
           <section v-for="view in renderedTurnViews" :key="view.renderKey" class="turn" :data-status="view.turn.status">
             <article

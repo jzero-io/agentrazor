@@ -5,10 +5,13 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/jzero-io/jzero/core/status"
 	"github.com/pkg/errors"
 	"github.com/zeromicro/go-zero/core/logx"
 
 	agentdomain "github.com/jzero-io/agentrazor/server/internal/agent"
+	"github.com/jzero-io/agentrazor/server/internal/errcodes"
+	"github.com/jzero-io/agentrazor/server/internal/quota"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/conversation"
 )
@@ -44,7 +47,8 @@ func sendMessage(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 	}
 
 	conversationID = strings.TrimSpace(conversationID)
-	if _, err := requireOwner(ctx, svcCtx, conversationID); err != nil {
+	userUUID, err := requireOwner(ctx, svcCtx, conversationID)
+	if err != nil {
 		return nil, err
 	}
 	thread, err := svcCtx.AgentThreads.Metadata(ctx, conversationID)
@@ -53,6 +57,18 @@ func sendMessage(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 	}
 	if thread.Archived {
 		return nil, agentdomain.ErrThreadArchived
+	}
+	if err := svcCtx.TokenQuota.Check(ctx, userUUID); err != nil {
+		switch {
+		case errors.Is(err, quota.ErrAgentDisabled):
+			return nil, status.Wrap(errcodes.AgentDisabledCode, err)
+		case errors.Is(err, quota.ErrFiveHourQuotaExceeded):
+			return nil, status.Wrap(errcodes.FiveHourQuotaExceededCode, err)
+		case errors.Is(err, quota.ErrSevenDayQuotaExceeded):
+			return nil, status.Wrap(errcodes.SevenDayQuotaExceededCode, err)
+		default:
+			return nil, err
+		}
 	}
 
 	turn, err := svcCtx.AgentThreads.Send(thread.ID, content)

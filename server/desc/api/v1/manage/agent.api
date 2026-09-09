@@ -4,6 +4,70 @@ info (
 	go_package: "v1/manage/agent"
 )
 
+type TokenQuotaGlobal {
+	FiveHourLimitTokens int64 `json:"fiveHourLimitTokens"`
+	SevenDayLimitTokens int64 `json:"sevenDayLimitTokens"`
+}
+
+type GetTokenQuotaGlobalRequest {}
+
+type GetTokenQuotaGlobalResponse {
+	Quota TokenQuotaGlobal `json:"quota"`
+}
+
+type SaveTokenQuotaGlobalRequest {
+	FiveHourLimitTokens int64 `json:"fiveHourLimitTokens" validate:"required,gt=0"`
+	SevenDayLimitTokens int64 `json:"sevenDayLimitTokens" validate:"required,gt=0"`
+}
+
+type SaveTokenQuotaGlobalResponse {}
+
+type TokenQuotaUser {
+	UserUuid               string  `json:"userUuid"`
+	Configured             bool    `json:"configured"`
+	Enabled                bool    `json:"enabled"`
+	FiveHourDisabled       bool    `json:"fiveHourDisabled"`
+	FiveHourLimitTokens    *int64  `json:"fiveHourLimitTokens,omitempty"`
+	SevenDayLimitTokens    *int64  `json:"sevenDayLimitTokens,omitempty"`
+	EffectiveFiveHourLimit *int64  `json:"effectiveFiveHourLimit,omitempty"`
+	EffectiveSevenDayLimit int64   `json:"effectiveSevenDayLimit"`
+	FiveHourUsedTokens     int64   `json:"fiveHourUsedTokens"`
+	SevenDayUsedTokens     int64   `json:"sevenDayUsedTokens"`
+	FiveHourResetAt        *string `json:"fiveHourResetAt,omitempty"`
+	SevenDayResetAt        *string `json:"sevenDayResetAt,omitempty"`
+	QuotaResetAt           *string `json:"quotaResetAt,omitempty"`
+}
+
+type GetUserTokenQuotaRequest {
+	UserUuid string `path:"user_uuid" validate:"required"`
+}
+
+type GetUserTokenQuotaResponse {
+	Quota TokenQuotaUser `json:"quota"`
+}
+
+type SaveUserTokenQuotaRequest {
+	UserUuid            string `path:"user_uuid" validate:"required"`
+	Enabled             bool   `json:"enabled"`
+	FiveHourDisabled    bool   `json:"fiveHourDisabled"`
+	FiveHourLimitTokens *int64 `json:"fiveHourLimitTokens,optional" validate:"omitempty,gt=0"`
+	SevenDayLimitTokens *int64 `json:"sevenDayLimitTokens,optional" validate:"omitempty,gt=0"`
+}
+
+type SaveUserTokenQuotaResponse {}
+
+type DeleteUserTokenQuotaRequest {
+	UserUuid string `path:"user_uuid" validate:"required"`
+}
+
+type DeleteUserTokenQuotaResponse {}
+
+type ResetUserTokenQuotaRequest {
+	UserUuid string `path:"user_uuid" validate:"required"`
+}
+
+type ResetUserTokenQuotaResponse {}
+
 type Skill {
 	Name string `json:"name"`
 }
@@ -200,6 +264,24 @@ service server {
 
 	@handler RestartRuntime
 	post /manage/agent/runtime/restart (RestartRuntimeRequest) returns (RuntimeStatus)
+
+	@handler GetTokenQuotaGlobal
+	get /manage/agent/token-quota/global (GetTokenQuotaGlobalRequest) returns (GetTokenQuotaGlobalResponse)
+
+	@handler SaveTokenQuotaGlobal
+	post /manage/agent/token-quota/global (SaveTokenQuotaGlobalRequest) returns (SaveTokenQuotaGlobalResponse)
+
+	@handler GetUserTokenQuota
+	get /manage/agent/token-quota/users/:user_uuid (GetUserTokenQuotaRequest) returns (GetUserTokenQuotaResponse)
+
+	@handler SaveUserTokenQuota
+	post /manage/agent/token-quota/users/:user_uuid (SaveUserTokenQuotaRequest) returns (SaveUserTokenQuotaResponse)
+
+	@handler DeleteUserTokenQuota
+	delete /manage/agent/token-quota/users/:user_uuid (DeleteUserTokenQuotaRequest) returns (DeleteUserTokenQuotaResponse)
+
+	@handler ResetUserTokenQuota
+	post /manage/agent/token-quota/users/:user_uuid/reset (ResetUserTokenQuotaRequest) returns (ResetUserTokenQuotaResponse)
 }
 
 @server (

@@ -32,7 +32,8 @@ ARG TARGETARCH
 ARG CODEX_VERSION=0.153.4
 
 RUN set -o pipefail \
-    && apk add --no-cache ca-certificates curl python3 tar tzdata \
+    && apk add --no-cache ca-certificates curl jq py3-pycryptodome python3 tar tzdata \
+    && python3 -c "import Crypto" \
     && case "$TARGETARCH" in \
          amd64) codex_arch="x86_64" ;; \
          arm64) codex_arch="aarch64" ;; \

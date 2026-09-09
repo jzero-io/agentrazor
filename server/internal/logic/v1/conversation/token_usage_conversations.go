@@ -27,7 +27,7 @@ func NewTokenUsageConversations(ctx context.Context, svcCtx *svc.ServiceContext,
 	}
 }
 
-func (l *TokenUsageConversations) TokenUsageConversations(req *types.TokenUsageConversationsRequest) (*types.TokenUsageConversationsResponse, error) {
+func (l *TokenUsageConversations) TokenUsageConversations(req *types.TokenUsageConversationsRequest) (resp *types.TokenUsageConversationsResponse, err error) {
 	currentUserUUID, err := currentUserUUID(l.ctx)
 	if err != nil {
 		return nil, err

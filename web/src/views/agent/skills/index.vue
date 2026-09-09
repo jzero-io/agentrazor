@@ -1,7 +1,9 @@
 <script setup lang="tsx">
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { NButton, NCard, NEmpty, NInput, NPopconfirm, NTree, NUpload } from 'naive-ui';
-import type { TreeOption, UploadCustomRequestOptions } from 'naive-ui';
+import type { TreeOption, TreeOverrideNodeClickBehavior, UploadCustomRequestOptions } from 'naive-ui';
+import Vditor from 'vditor';
+import 'vditor/dist/index.css';
 import {
   DeleteAgentSkill,
   GetAgentSkillDetail,
@@ -9,9 +11,17 @@ import {
   UpdateAgentSkillFile,
   UploadAgentSkill
 } from '@/service/api';
+import { useAuth } from '@/hooks/business/auth';
 import { $t } from '@/locales';
+import { useThemeStore } from '@/store/modules/theme';
 
-const loading = ref(false);
+const themeStore = useThemeStore();
+
+const { hasAuth } = useAuth();
+const canUploadSkill = computed(() => hasAuth('v1:manage:agent:uploadSkill'));
+const canEditSkill = computed(() => hasAuth('v1:manage:agent:updateSkillFile'));
+const canDeleteSkill = computed(() => hasAuth('v1:manage:agent:deleteSkill'));
+
 const detailLoading = ref(false);
 const uploading = ref(false);
 const deletingName = ref('');
@@ -22,12 +32,14 @@ const searchKeyword = ref('');
 const selectedName = ref('');
 const selectedFile = ref('');
 const expandedKeys = ref<string[]>([]);
+const markdownPreview = ref<HTMLDivElement | null>(null);
 const skills = ref<Api.Manage.AgentSkill[]>([]);
 const selectedDetail = ref<Api.Manage.SkillDetailResponse | null>(null);
 
 const selectedSkill = computed(() => skills.value.find(item => item.name === selectedName.value));
 const visibleContent = computed(() => selectedDetail.value?.content || '');
 const currentFile = computed(() => selectedDetail.value?.currentFile || selectedFile.value || 'SKILL.md');
+const isMarkdown = computed(() => /\.md$/i.test(currentFile.value));
 const filteredSkills = computed(() => {
   const keyword = searchKeyword.value.trim().toLowerCase();
   if (!keyword) return skills.value;
@@ -53,8 +65,8 @@ function buildTreeOptions(files: Api.Manage.AgentSkillFile[]): TreeOption[] {
   return files.map(item => ({
     key: item.path,
     label: item.name,
+    type: item.type,
     isLeaf: item.type === 'file',
-    disabled: item.type === 'directory',
     prefix: () =>
       item.type === 'directory' ? (
         <icon-mdi-folder-outline class="text-icon text-gray-400" />
@@ -64,6 +76,9 @@ function buildTreeOptions(files: Api.Manage.AgentSkillFile[]): TreeOption[] {
     children: item.children?.length ? buildTreeOptions(item.children) : undefined
   }));
 }
+
+const handleTreeNodeClick: TreeOverrideNodeClickBehavior = ({ option }) =>
+  option.type === 'directory' ? 'toggleExpand' : 'toggleSelect';
 
 function directoryKeys(files: Api.Manage.AgentSkillFile[]) {
   const result: string[] = [];
@@ -80,9 +95,7 @@ function directoryKeys(files: Api.Manage.AgentSkillFile[]) {
 }
 
 async function getData() {
-  loading.value = true;
   const { data, error } = await GetAgentSkills();
-  loading.value = false;
   if (error) return;
 
   skills.value = data.skills;
@@ -120,6 +133,10 @@ async function selectFile(keys: Array<string | number>) {
 }
 
 async function uploadSkill(options: UploadCustomRequestOptions) {
+  if (!canUploadSkill.value) {
+    options.onError();
+    return;
+  }
   const file = options.file.file;
   if (!file) return;
 
@@ -140,6 +157,7 @@ async function uploadSkill(options: UploadCustomRequestOptions) {
 }
 
 async function deleteSkill(skill: Api.Manage.AgentSkill) {
+  if (!canDeleteSkill.value) return;
   deletingName.value = skill.name;
   const { error } = await DeleteAgentSkill(skill.name);
   deletingName.value = '';
@@ -154,6 +172,7 @@ async function deleteSkill(skill: Api.Manage.AgentSkill) {
 }
 
 function startEdit() {
+  if (!canEditSkill.value) return;
   editContent.value = visibleContent.value;
   editing.value = true;
 }
@@ -164,6 +183,7 @@ function cancelEdit() {
 }
 
 async function saveFile() {
+  if (!canEditSkill.value) return;
   if (!selectedSkill.value || !currentFile.value) return;
 
   saving.value = true;
@@ -174,6 +194,39 @@ async function saveFile() {
   editing.value = false;
   await selectSkill(selectedSkill.value, currentFile.value);
 }
+
+async function renderMarkdown() {
+  if (editing.value || detailLoading.value || !isMarkdown.value) return;
+  await nextTick();
+  if (!markdownPreview.value) return;
+
+  try {
+    await Vditor.preview(markdownPreview.value, visibleContent.value, {
+      mode: themeStore.darkMode ? 'dark' : 'light',
+      lang: 'zh_CN',
+      anchor: 1,
+      theme: { current: themeStore.darkMode ? 'dark' : 'light' },
+      hljs: {
+        style: themeStore.darkMode ? 'native' : 'github',
+        renderMenu(codeElement, menuElement) {
+          const languageClass = [...codeElement.classList].find(className => className.startsWith('language-'));
+          const label = document.createElement('div');
+          label.className = 'skill-code-language';
+          label.textContent = languageClass ? languageClass.slice('language-'.length) : 'text';
+          menuElement.appendChild(label);
+        }
+      }
+    });
+  } catch {
+    markdownPreview.value.textContent = visibleContent.value;
+  }
+}
+
+watch(
+  [visibleContent, currentFile, editing, detailLoading, () => themeStore.darkMode],
+  renderMarkdown,
+  { flush: 'post' }
+);
 
 onMounted(getData);
 </script>
@@ -190,20 +243,13 @@ onMounted(getData);
         <section
           class="min-h-0 flex flex-col overflow-hidden border border-gray-100 rounded-6px bg-white p-16px dark:border-gray-700 dark:bg-#18181c"
         >
-          <div class="mb-12px flex items-center justify-between gap-12px">
-            <div class="font-medium">{{ $t('page.agentSkills.installed') }}</div>
-            <div class="flex shrink-0 items-center gap-8px">
-              <NUpload :show-file-list="false" accept=".zip" :custom-request="uploadSkill">
-                <NButton type="primary" size="small" :loading="uploading">
-                  <template #icon><icon-ic-round-plus class="text-icon" /></template>
-                  {{ $t('page.agentSkills.uploadZip') }}
-                </NButton>
-              </NUpload>
-              <NButton :loading="loading" size="small" secondary @click="getData">
-                <template #icon><icon-mdi-refresh class="text-icon" /></template>
-                {{ $t('common.refresh') }}
+          <div class="mb-12px flex items-center">
+            <NUpload v-if="canUploadSkill" :show-file-list="false" accept=".zip,.tar.gz" :custom-request="uploadSkill">
+              <NButton type="primary" size="small" :loading="uploading">
+                <template #icon><icon-ic-round-plus class="text-icon" /></template>
+                {{ $t('page.agentSkills.uploadArchive') }}
               </NButton>
-            </div>
+            </NUpload>
           </div>
 
           <NInput v-model:value="searchKeyword" clearable :placeholder="$t('page.agentSkills.searchPlaceholder')">
@@ -226,7 +272,7 @@ onMounted(getData);
               <div class="flex items-center justify-between gap-8px">
                 <span class="truncate text-14px font-medium">{{ item.name }}</span>
                 <div class="flex shrink-0 items-center gap-6px">
-                  <NPopconfirm @positive-click="deleteSkill(item)">
+                  <NPopconfirm v-if="canDeleteSkill" @positive-click="deleteSkill(item)">
                     <template #trigger>
                       <NButton size="tiny" quaternary type="error" :loading="deletingName === item.name" @click.stop>
                         <template #icon><icon-material-symbols-delete-outline class="text-icon" /></template>
@@ -257,14 +303,14 @@ onMounted(getData);
             >
               <div class="mb-12px shrink-0 truncate text-15px font-semibold">{{ selectedSkill.name }}</div>
               <div
-                class="skill-file-tree-scroll min-h-0 flex-1 overflow-auto rounded-6px bg-gray-50 p-8px lt-lg:h-280px dark:bg-#141418"
+                class="skill-file-tree-scroll min-h-0 flex-1 overflow-auto rounded-6px py-8px lt-lg:h-280px"
               >
                 <NTree
                   class="skill-file-tree"
                   :data="treeData"
                   :selected-keys="selectedFile ? [selectedFile] : []"
                   :expanded-keys="expandedKeys"
-                  block-line
+                  :override-default-node-click-behavior="handleTreeNodeClick"
                   selectable
                   @update:selected-keys="selectFile"
                   @update:expanded-keys="keys => (expandedKeys = keys as string[])"
@@ -278,11 +324,11 @@ onMounted(getData);
                   <div class="truncate text-15px font-semibold">{{ currentFile }}</div>
                 </div>
                 <div class="flex shrink-0 items-center gap-8px">
-                  <NButton v-if="!editing" size="small" secondary @click="startEdit">
+                  <NButton v-if="!editing && canEditSkill" size="small" secondary @click="startEdit">
                     <template #icon><icon-material-symbols-edit-outline class="text-icon" /></template>
                     {{ $t('common.edit') }}
                   </NButton>
-                  <template v-else>
+                  <template v-if="editing">
                     <NButton size="small" secondary @click="cancelEdit">{{ $t('common.cancel') }}</NButton>
                     <NButton size="small" type="primary" :loading="saving" @click="saveFile">
                       <template #icon><icon-material-symbols-save-outline class="text-icon" /></template>
@@ -303,6 +349,11 @@ onMounted(getData);
                   class="skill-editor min-h-0 flex-1"
                   :placeholder="$t('page.agentSkills.editorPlaceholder')"
                 />
+                <div
+                  v-else-if="!detailLoading && isMarkdown"
+                  ref="markdownPreview"
+                  class="skill-markdown-preview min-h-0 flex-1 overflow-auto bg-white p-20px dark:bg-#141418"
+                ></div>
                 <pre
                   v-else-if="!detailLoading"
                   class="m-0 min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words bg-white p-16px text-13px text-gray-800 leading-6 dark:bg-#141418 dark:text-gray-200"
@@ -352,7 +403,30 @@ onMounted(getData);
   line-height: 1.5;
 }
 
+.skill-markdown-preview :deep(.vditor-copy) {
+  display: block;
+}
+
+.skill-markdown-preview :deep(pre > code) {
+  padding-top: 2.4em;
+}
+
+.skill-markdown-preview :deep(.skill-code-language) {
+  position: absolute;
+  top: 0.55em;
+  left: 0.75em;
+  color: currentcolor;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .skill-file-tree {
+  --n-node-border-radius: 8px !important;
+  margin-left: -12px;
   min-width: max-content;
 }
 

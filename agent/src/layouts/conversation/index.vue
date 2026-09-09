@@ -15,7 +15,7 @@ import {
   dateZhCN
 } from 'naive-ui';
 import { conversationApi, conversationGroupApi } from '../../service/api';
-import type { Conversation, ConversationDetail, ConversationMetadata, StreamEvent, ThreadItem, Turn } from '../../service/api';
+import type { Conversation, ConversationDetail, ConversationMetadata, StreamEvent, ThreadItem, TokenQuotaStatus, Turn } from '../../service/api';
 import { activityIcon, activityTitle } from '../../utils/processDisplay';
 import { useAppearance } from '../../hooks/system/useAppearance';
 import { useConfirmDialog } from '../../hooks/system/useConfirmDialog';
@@ -141,7 +141,8 @@ const {
   syncConversationUrl,
   restoreFromPath: restoreSettingsFromPath,
   openAppearance: openSettingsView,
-  openArchives: openArchiveSettingsView
+  openArchives: openArchiveSettingsView,
+  openUsage: openUsageSettingsView
 } = settingsView;
 const conversationGroupsState = useConversationGroups({
   initialCollapsedGroups: savedSidebarView.collapsedGroups,
@@ -190,17 +191,20 @@ const loginModalOffsetX = computed(() => {
 const { appearance, appearanceOptions, isDarkAppearance, activeTheme, setAppearance } = useAppearance();
 let conversationSelectionToken = 0;
 const draftConversationGroupId = ref('');
+const draftConversationGroupName = computed(
+  () => conversationGroups.value.find(group => group.id === draftConversationGroupId.value)?.name || ''
+);
 
 const themeOverrides = {
   common: {
     fontSize: '16px',
     fontSizeMedium: '16px',
     fontSizeSmall: '14px',
-    primaryColor: '#3186c7',
-    primaryColorHover: '#2476b5',
-    primaryColorPressed: '#1d6399',
-    primaryColorSuppl: '#3186c7',
-    borderRadius: '10px'
+    primaryColor: '#2563eb',
+    primaryColorHover: '#1d4ed8',
+    primaryColorPressed: '#1e40af',
+    primaryColorSuppl: '#2563eb',
+    borderRadius: '12px'
   },
   Tooltip: {
     boxShadow: 'none'
@@ -410,6 +414,21 @@ const {
   clearSession,
   finishAuthChecking
 } = authSession;
+const tokenQuota = ref<TokenQuotaStatus | null>(null);
+const tokenQuotaLoading = ref(false);
+let tokenQuotaRefreshTimer: number | undefined;
+
+async function loadTokenQuota(reportError = false) {
+  if (!currentUser.value || tokenQuotaLoading.value) return;
+  tokenQuotaLoading.value = true;
+  try {
+    tokenQuota.value = await conversationApi.tokenQuota();
+  } catch (error) {
+    if (reportError) showError(error);
+  } finally {
+    tokenQuotaLoading.value = false;
+  }
+}
 
 const messageActions = useMessageActions({
   parseAgentMarkdown: content => parseAgentMessage(content, false).markdown,
@@ -1044,6 +1063,7 @@ function resetApplicationState() {
   clearAllActiveTurns();
   stopAllConversationTitleRefresh();
   closeAllConversationStreams();
+  tokenQuota.value = null;
 }
 
 function finishBootScreen() {
@@ -1060,7 +1080,7 @@ async function bootstrap() {
     finishBootScreen();
     return;
   }
-  await Promise.all([loadConversationGroups(), loadConversations(!restoredSettings)]);
+  await Promise.all([loadConversationGroups(), loadConversations(!restoredSettings), loadTokenQuota()]);
   finishBootScreen();
 }
 
@@ -1068,7 +1088,7 @@ async function submitLogin() {
   const user = await submitLoginSession();
   if (!user) return;
   await loadConversationGroups();
-  await loadConversations(!settingsVisible.value);
+  await Promise.all([loadConversations(!settingsVisible.value), loadTokenQuota()]);
 }
 
 function logout() {
@@ -1084,6 +1104,13 @@ function openSettings() {
   closeMobileSidebar();
   userMenuVisible.value = false;
   void openSettingsView(route.fullPath);
+}
+
+function openUsage() {
+  closeMobileSidebar();
+  userMenuVisible.value = false;
+  void loadTokenQuota();
+  void openUsageSettingsView(route.fullPath);
 }
 
 function openArchiveSettings() {
@@ -1181,6 +1208,7 @@ onMounted(() => {
       finishBootScreen();
     }
   }, 10000);
+  tokenQuotaRefreshTimer = window.setInterval(() => void loadTokenQuota(), 60_000);
 });
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleDocumentPointerDown);
@@ -1188,6 +1216,7 @@ onBeforeUnmount(() => {
   stopAllTurnTimers();
   stopAllConversationTitleRefresh();
   clearCopiedMessageTimer();
+  if (tokenQuotaRefreshTimer !== undefined) window.clearInterval(tokenQuotaRefreshTimer);
 });
 watch(
   () => route.path,
@@ -1219,6 +1248,12 @@ watch(isDarkAppearance, value => {
   document.documentElement.dataset.theme = value ? 'dark' : 'light';
   toastProviderProps.theme = activeTheme.value;
 }, { immediate: true });
+watch(sending, (value, previous) => {
+  if (previous && !value) void loadTokenQuota();
+});
+watch(settingsSection, section => {
+  if (section === 'usage') void loadTokenQuota();
+});
 </script>
 
 <template>
@@ -1233,6 +1268,7 @@ watch(isDarkAppearance, value => {
         :sidebar-expanded="currentUser ? sidebarExpanded : true"
         :sidebar-collapsed="currentUser ? sidebarCollapsed : false"
         :current-user="currentUser"
+        :token-quota="tokenQuota"
         :user-initial="userInitial"
         :loading-list="Boolean(currentUser) && loadingList"
         :pinned-conversations="currentUser ? pinnedConversations : []"
@@ -1262,6 +1298,7 @@ watch(isDarkAppearance, value => {
         :toggle-conversation-pinned="toggleConversationPinned"
         :archive-conversation="archiveConversation"
         :open-settings="openSettings"
+        :open-usage="openUsage"
         :logout="logout"
         :open-login="openLogin"
         :start-sidebar-resize="startSidebarResize"
@@ -1299,7 +1336,7 @@ watch(isDarkAppearance, value => {
         }"
         :style="workspacePanelStyle"
       >
-        <header class="topbar">
+        <header class="topbar" :class="{ 'borderless-topbar': isNewChat || !currentUser }">
           <n-button quaternary circle class="mobile-menu-button" aria-label="打开左侧边栏" title="打开左侧边栏" @click="openMobileSidebar">
             <template #icon><Icon icon="lucide:panel-left" /></template>
           </n-button>
@@ -1386,6 +1423,7 @@ watch(isDarkAppearance, value => {
             v-model:archive-query="archiveQuery"
             :selected-conversation-id="selectedConversationId"
             :is-new-chat="isNewChat"
+            :new-chat-group-name="draftConversationGroupName"
             :current-user="currentUser"
             :is-archived-active="isArchivedActive"
             :loading-current-detail="loadingCurrentDetail"
@@ -1416,9 +1454,12 @@ watch(isDarkAppearance, value => {
             :activity-title="activityTitle"
             :open-login="openLogin"
             :appearance="appearance"
+            :token-quota="tokenQuota"
+            :quota-loading="tokenQuotaLoading"
             :appearance-options="appearanceOptions"
             :archived-conversations="archivedConversations"
             :archived-sections="archivedConversationSections"
+            :conversation-groups="conversationGroups"
             :loading-list="loadingList"
             :display-conversation-title="displayConversationTitle"
             :format-conversation-date="formatConversationDate"

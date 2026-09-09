@@ -99,7 +99,9 @@ export const request = createFlatRequest<App.Service.Response, RequestInstanceSt
       let message = error.message;
       let backendErrorCode = '';
 
-      if (error.status === 401) {
+      const httpStatus = error.response?.status ?? error.status;
+
+      if (httpStatus === 401) {
         const authStore = useAuthStore();
         authStore.resetStore();
       }
@@ -108,6 +110,12 @@ export const request = createFlatRequest<App.Service.Response, RequestInstanceSt
       if (error.code === BACKEND_ERROR_CODE) {
         message = error.response?.data?.msg || message;
         backendErrorCode = String(error.response?.data?.code || '');
+      }
+
+      if (httpStatus === 401) {
+        message = $t('request.unauthorized');
+      } else if (httpStatus === 403) {
+        message = $t('request.forbidden');
       }
 
       // the error message is displayed in the modal

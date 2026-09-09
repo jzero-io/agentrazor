@@ -23,6 +23,7 @@ gen:
   model-datasource-url: "postgres://root:123456@127.0.0.1:5432/agentrazor?sslmode=disable"
   model-datasource-table:
     - agent_api_key
+    - agent_token_quota
     - conversation
     - conversation_group
     - conversation_token_usage_event

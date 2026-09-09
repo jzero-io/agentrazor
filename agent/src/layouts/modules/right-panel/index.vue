@@ -232,7 +232,8 @@ function dropTab(event: DragEvent, tabId: string) {
 </script>
 
 <template>
-  <aside ref="panelElement" v-if="visible && contentReady" class="workspace-panel" :class="{ 'is-expanded': expanded, 'is-file-preview': !workspace }">
+  <Transition name="workspace-drawer">
+    <aside ref="panelElement" v-if="visible && contentReady" class="workspace-panel" :class="{ 'is-expanded': expanded, 'is-file-preview': !workspace }">
     <div class="workspace-resizer" aria-hidden="true" @pointerdown="emit('resizeStart', $event)" />
     <header class="workspace-panel-header">
       <div v-if="workspaceTabs.length || fileTabs.length" class="file-preview-tabs">
@@ -526,5 +527,6 @@ function dropTab(event: DragEvent, tabId: string) {
         </div>
       </section>
     </div>
-  </aside>
+    </aside>
+  </Transition>
 </template>

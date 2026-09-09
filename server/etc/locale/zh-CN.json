@@ -1,0 +1,21 @@
+{
+  "manage": {
+    "menu": {
+      "existSubMenu": "存在子菜单，请先删除子菜单"
+    },
+    "agent": {
+      "skill": {
+        "archiveRequired": "请选择要上传的 Skill 压缩包",
+        "archiveEmpty": "Skill 压缩包为空",
+        "archiveTooLarge": "Skill 压缩包不能超过 100 MiB",
+        "archiveUnsupportedFormat": "不支持该压缩包格式，请使用 .zip 或 .tar.gz",
+        "archiveInvalid": "Skill 压缩包已损坏或格式无效",
+        "archiveTooManyEntries": "Skill 压缩包内的文件数量过多",
+        "archiveExpandedTooLarge": "Skill 解压后的总大小不能超过 128 MiB",
+        "archiveUnsafeEntry": "Skill 压缩包包含不安全的文件路径或文件类型",
+        "nameInvalid": "无法从压缩包中确定有效的 Skill 名称",
+        "manifestMissing": "Skill 压缩包中必须包含 SKILL.md 文件"
+      }
+    }
+  }
+}

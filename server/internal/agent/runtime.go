@@ -17,9 +17,13 @@ import (
 	"time"
 )
 
-// Codex device-code authentication expires after 15 minutes. The app-server
-// response does not currently expose this timeout, so keep it centralized here.
-const chatGPTDeviceLoginExpiresIn = 15 * time.Minute
+const (
+	appServerStartTimeout = 15 * time.Second
+
+	// Codex device-code authentication expires after 15 minutes. The app-server
+	// response does not currently expose this timeout, so keep it centralized here.
+	chatGPTDeviceLoginExpiresIn = 15 * time.Minute
+)
 
 var (
 	ErrRuntimeClosed       = errors.New("agent runtime is closed")
@@ -30,14 +34,8 @@ var (
 type EventHandler func(map[string]any, string)
 
 type CodexAppServerOptions struct {
-	CodexHome          string
-	PluginsRoot        string
-	AgentrazorHome     string
-	DisabledMCPServers []string
-	StartTimeout       time.Duration
-	ModelProvider      string
-	Model              string
-	ReasoningEffort    string
+	CodexHome      string
+	AgentrazorHome string
 }
 
 // CodexAppServerRuntime owns one long-running Codex app-server process. Business
@@ -112,12 +110,6 @@ type appServerTurn struct {
 }
 
 func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRuntime, error) {
-	if options.StartTimeout <= 0 {
-		options.StartTimeout = 15 * time.Second
-	}
-	options.ModelProvider = strings.TrimSpace(options.ModelProvider)
-	options.Model = strings.TrimSpace(options.Model)
-	options.ReasoningEffort = strings.TrimSpace(options.ReasoningEffort)
 	if options.CodexHome != "" {
 		codexHome, err := filepath.Abs(options.CodexHome)
 		if err != nil {
@@ -127,12 +119,9 @@ func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRun
 			return nil, err
 		}
 		options.CodexHome = codexHome
-		if err := syncPluginSkills(options.PluginsRoot, options.CodexHome); err != nil {
+		if err := syncPluginSkills(options.CodexHome); err != nil {
 			return nil, fmt.Errorf("sync plugin skills: %w", err)
 		}
-	}
-	if options.AgentrazorHome == "" {
-		options.AgentrazorHome = "data/agentrazor-home"
 	}
 	agentrazorHome, err := filepath.Abs(options.AgentrazorHome)
 	if err != nil {
@@ -143,16 +132,7 @@ func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRun
 	}
 	options.AgentrazorHome = agentrazorHome
 
-	args := []string{"--listen", "stdio://"}
-	for _, server := range options.DisabledMCPServers {
-		server = strings.TrimSpace(server)
-		if server == "" {
-			continue
-		}
-		args = append(args, "-c", fmt.Sprintf("mcp_servers.%s.enabled=false", server))
-	}
-
-	cmd := exec.Command("codex-app-server", args...)
+	cmd := exec.Command("codex-app-server", "--listen", "stdio://")
 	if options.CodexHome != "" {
 		cmd.Env = isolatedCodexEnvironment(os.Environ(), options.CodexHome)
 	}
@@ -187,7 +167,7 @@ func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRun
 	go runtime.readLoop(stdout)
 	go runtime.waitProcess()
 
-	startCtx, cancel := context.WithTimeout(context.Background(), options.StartTimeout)
+	startCtx, cancel := context.WithTimeout(context.Background(), appServerStartTimeout)
 	defer cancel()
 	if _, err := runtime.request(startCtx, "initialize", map[string]any{
 		"clientInfo": map[string]any{
@@ -446,15 +426,6 @@ func (r *CodexAppServerRuntime) startTurn(ctx context.Context, threadID, prompt 
 			"type": "text",
 			"text": prompt,
 		}},
-	}
-	if r.options.ModelProvider != "" {
-		params["modelProvider"] = r.options.ModelProvider
-	}
-	if r.options.Model != "" {
-		params["model"] = r.options.Model
-	}
-	if r.options.ReasoningEffort != "" {
-		params["reasoningEffort"] = r.options.ReasoningEffort
 	}
 	result, err := r.request(ctx, "turn/start", params)
 	if err != nil {

@@ -1,5 +1,5 @@
 import { apiBase, expireSession, getToken, isEnvelope, refreshAccessToken, request, withAuthHeaders } from './request';
-import type { Conversation, ConversationDetail, ConversationMetadata, Envelope, EventsResponse, StartedTurn, StreamEvent, WorkspaceEntry, WorkspaceFileBlob, WorkspaceFileContent } from './types';
+import type { Conversation, ConversationDetail, ConversationMetadata, Envelope, EventsResponse, StartedTurn, StreamEvent, TokenQuotaStatus, WorkspaceEntry, WorkspaceFileBlob, WorkspaceFileContent } from './types';
 
 export const conversationApi = {
   async list(): Promise<Conversation[]> {
@@ -32,6 +32,9 @@ export const conversationApi = {
       method: 'POST',
       body: JSON.stringify({ content })
     });
+  },
+  tokenQuota() {
+    return request<TokenQuotaStatus>('/api/v1/conversation/token-quota');
   },
   cancelTurn(id: string) {
     return request<null>(`/api/v1/conversation/${encodeURIComponent(id)}/turn/cancel`, { method: 'POST' });

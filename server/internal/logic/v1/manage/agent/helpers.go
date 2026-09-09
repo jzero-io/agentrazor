@@ -54,15 +54,28 @@ func listSkills(codexHome string) ([]managetypes.Skill, error) {
 
 func installSkillZip(codexHome, explicitName string, file multipart.File, size int64) (managetypes.UploadSkillResponse, error) {
 	if size <= 0 {
-		return managetypes.UploadSkillResponse{}, errors.New("skill zip is empty")
+		return managetypes.UploadSkillResponse{}, errSkillArchiveEmpty
 	}
-	data, err := io.ReadAll(io.LimitReader(file, 64<<20))
+	data, err := io.ReadAll(io.LimitReader(file, maxSkillArchiveSize))
 	if err != nil {
 		return managetypes.UploadSkillResponse{}, err
 	}
 	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
-		return managetypes.UploadSkillResponse{}, err
+		return managetypes.UploadSkillResponse{}, fmt.Errorf("%w: %v", errSkillArchiveInvalid, err)
+	}
+	if len(reader.File) > maxSkillArchiveEntries {
+		return managetypes.UploadSkillResponse{}, errSkillArchiveTooManyEntries
+	}
+	var extractedSize uint64
+	for _, entry := range reader.File {
+		if entry.FileInfo().IsDir() {
+			continue
+		}
+		if entry.UncompressedSize64 > uint64(maxSkillExtractedSize)-extractedSize {
+			return managetypes.UploadSkillResponse{}, errSkillArchiveExpandedTooLarge
+		}
+		extractedSize += entry.UncompressedSize64
 	}
 	name := strings.TrimSpace(explicitName)
 	if name == "" {
@@ -70,28 +83,39 @@ func installSkillZip(codexHome, explicitName string, file multipart.File, size i
 	}
 	name = safeSkillName(name)
 	if name == "" {
-		return managetypes.UploadSkillResponse{}, errors.New("cannot infer skill name")
+		return managetypes.UploadSkillResponse{}, errSkillNameInvalid
 	}
 	root, err := skillsRoot(codexHome)
 	if err != nil {
 		return managetypes.UploadSkillResponse{}, err
 	}
-	dest := filepath.Join(root, name)
-	if err := os.MkdirAll(dest, 0o755); err != nil {
+	if err := os.MkdirAll(root, 0o755); err != nil {
 		return managetypes.UploadSkillResponse{}, err
 	}
+	dest, err := os.MkdirTemp(root, "."+name+"-upload-")
+	if err != nil {
+		return managetypes.UploadSkillResponse{}, err
+	}
+	defer os.RemoveAll(dest)
 	for _, entry := range reader.File {
 		entryName := strings.TrimPrefix(filepath.Clean(entry.Name), string(filepath.Separator))
 		parts := strings.Split(entryName, string(filepath.Separator))
 		if len(parts) > 1 && safeSkillName(parts[0]) == name {
 			entryName = filepath.Join(parts[1:]...)
 		}
+		if entry.FileInfo().IsDir() && entryName == name {
+			continue
+		}
 		if entryName == "." || strings.HasPrefix(entryName, "..") || filepath.IsAbs(entryName) {
-			return managetypes.UploadSkillResponse{}, fmt.Errorf("unsafe zip entry %q", entry.Name)
+			return managetypes.UploadSkillResponse{}, fmt.Errorf("%w: %q", errSkillArchiveUnsafeEntry, entry.Name)
 		}
 		path := filepath.Join(dest, entryName)
 		if rel, err := filepath.Rel(dest, path); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return managetypes.UploadSkillResponse{}, fmt.Errorf("unsafe zip entry %q", entry.Name)
+			return managetypes.UploadSkillResponse{}, fmt.Errorf("%w: %q", errSkillArchiveUnsafeEntry, entry.Name)
+		}
+		mode := entry.Mode()
+		if mode&os.ModeSymlink != 0 || (!entry.FileInfo().IsDir() && !mode.IsRegular()) {
+			return managetypes.UploadSkillResponse{}, fmt.Errorf("%w: unsupported entry %q", errSkillArchiveInvalid, entry.Name)
 		}
 		if entry.FileInfo().IsDir() {
 			if err := os.MkdirAll(path, 0o755); err != nil {
@@ -117,8 +141,11 @@ func installSkillZip(codexHome, explicitName string, file multipart.File, size i
 			return managetypes.UploadSkillResponse{}, errors.Join(copyErr, closeErr)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(dest, "SKILL.md")); err != nil {
-		return managetypes.UploadSkillResponse{}, errors.New("skill zip must contain SKILL.md")
+	if info, err := os.Stat(filepath.Join(dest, "SKILL.md")); err != nil || !info.Mode().IsRegular() {
+		return managetypes.UploadSkillResponse{}, errSkillManifestMissing
+	}
+	if err := commitSkillDirectory(root, name, dest); err != nil {
+		return managetypes.UploadSkillResponse{}, err
 	}
 	return managetypes.UploadSkillResponse{Name: name}, nil
 }
@@ -134,9 +161,16 @@ func inferSkillName(files []*zip.File) string {
 	return ""
 }
 
-// safeSkillName turns a zip filename or top-level zip folder into a single safe directory name.
+// safeSkillName turns an archive filename or top-level folder into a single safe directory name.
 func safeSkillName(name string) string {
-	name = strings.TrimSpace(strings.TrimSuffix(filepath.Base(name), ".zip"))
+	name = strings.TrimSpace(filepath.Base(name))
+	lowerName := strings.ToLower(name)
+	switch {
+	case strings.HasSuffix(lowerName, ".tar.gz"):
+		name = name[:len(name)-len(".tar.gz")]
+	case strings.HasSuffix(lowerName, ".zip"):
+		name = name[:len(name)-len(".zip")]
+	}
 	name = strings.Map(func(r rune) rune {
 		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.' {
 			return r

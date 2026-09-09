@@ -173,6 +173,21 @@ type (
 	CreateRequest {
 		GroupId *string `json:"groupId,optional"`
 	}
+	TokenQuotaWindow {
+		Limited          bool    `json:"limited"`
+		UsedTokens       int64   `json:"usedTokens"`
+		LimitTokens      int64   `json:"limitTokens"`
+		RemainingTokens  int64   `json:"remainingTokens"`
+		RemainingPercent float64 `json:"remainingPercent"`
+		Source           string  `json:"source"`
+		ResetAt          *string `json:"resetAt,omitempty"`
+	}
+	TokenQuotaStatusResponse {
+		Enabled      bool             `json:"enabled"`
+		FiveHour     TokenQuotaWindow `json:"fiveHour"`
+		SevenDay     TokenQuotaWindow `json:"sevenDay"`
+		QuotaResetAt *string          `json:"quotaResetAt,omitempty"`
+	}
 	SendMessageRequest {
 		ConversationId string `path:"conversation_id" validate:"required"`
 		Content        string `json:"content" validate:"required"`
@@ -209,6 +224,10 @@ service server {
 	@doc "分页获取账号下的对话和 Turn Token 消耗明细"
 	@handler TokenUsageConversations
 	get /conversation/token-usage-conversations (TokenUsageConversationsRequest) returns (TokenUsageConversationsResponse)
+
+	@doc "获取当前用户 Token 额度状态"
+	@handler TokenQuotaStatus
+	get /conversation/token-quota returns (TokenQuotaStatusResponse)
 
 	@doc "创建会话"
 	@handler Create

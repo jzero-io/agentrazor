@@ -68,6 +68,34 @@ export interface TokenUsageConversationsParams {
   conversationId?: string;
 }
 
+export interface TokenQuotaGlobal {
+  fiveHourLimitTokens: number;
+  sevenDayLimitTokens: number;
+}
+
+export interface TokenQuotaUser {
+  userUuid: string;
+  configured: boolean;
+  enabled: boolean;
+  fiveHourDisabled: boolean;
+  fiveHourLimitTokens?: number;
+  sevenDayLimitTokens?: number;
+  effectiveFiveHourLimit?: number;
+  effectiveSevenDayLimit: number;
+  fiveHourUsedTokens: number;
+  sevenDayUsedTokens: number;
+  fiveHourResetAt?: string;
+  sevenDayResetAt?: string;
+  quotaResetAt?: string;
+}
+
+export interface SaveTokenQuotaUserRequest {
+  enabled: boolean;
+  fiveHourDisabled: boolean;
+  fiveHourLimitTokens?: number;
+  sevenDayLimitTokens?: number;
+}
+
 export function GetTokenUsageDetails(params: TokenUsageDetailsParams) {
   return request<TokenUsageDetails>({
     url: '/api/v1/conversation/token-usage-details',
@@ -81,5 +109,49 @@ export function GetTokenUsageConversations(params: TokenUsageConversationsParams
     url: '/api/v1/conversation/token-usage-conversations',
     method: 'get',
     params
+  });
+}
+
+export function GetTokenQuotaGlobal() {
+  return request<{ quota: TokenQuotaGlobal }>({
+    url: '/api/v1/manage/agent/token-quota/global',
+    method: 'get'
+  });
+}
+
+export function SaveTokenQuotaGlobal(data: TokenQuotaGlobal) {
+  return request<Record<string, never>>({
+    url: '/api/v1/manage/agent/token-quota/global',
+    method: 'post',
+    data
+  });
+}
+
+export function GetUserTokenQuota(userUuid: string) {
+  return request<{ quota: TokenQuotaUser }>({
+    url: `/api/v1/manage/agent/token-quota/users/${encodeURIComponent(userUuid)}`,
+    method: 'get'
+  });
+}
+
+export function SaveUserTokenQuota(userUuid: string, data: SaveTokenQuotaUserRequest) {
+  return request<Record<string, never>>({
+    url: `/api/v1/manage/agent/token-quota/users/${encodeURIComponent(userUuid)}`,
+    method: 'post',
+    data
+  });
+}
+
+export function DeleteUserTokenQuota(userUuid: string) {
+  return request<Record<string, never>>({
+    url: `/api/v1/manage/agent/token-quota/users/${encodeURIComponent(userUuid)}`,
+    method: 'delete'
+  });
+}
+
+export function ResetUserTokenQuota(userUuid: string) {
+  return request<Record<string, never>>({
+    url: `/api/v1/manage/agent/token-quota/users/${encodeURIComponent(userUuid)}/reset`,
+    method: 'post'
   });
 }

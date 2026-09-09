@@ -12,8 +12,8 @@ export interface SidebarViewState {
 }
 
 const SIDEBAR_VIEW_KEY = 'agentrazor_sidebar_view';
-const DEFAULT_SIDEBAR_WIDTH = 320;
-const MIN_SIDEBAR_WIDTH = 280;
+const DEFAULT_SIDEBAR_WIDTH = 296;
+const MIN_SIDEBAR_WIDTH = 264;
 
 export function loadSidebarViewState(): SidebarViewState {
   try {

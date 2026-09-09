@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 import {
+  GetTokenQuotaGlobal,
   GetTokenUsageConversations,
   GetTokenUsageDetails,
   GetTokenUsageTrend,
+  GetUserTokenQuota,
+  SaveTokenQuotaGlobal,
+  type TokenQuotaUser,
   type TokenUsageAccount,
   type TokenUsageConversation,
   type TokenUsageDimension,
@@ -11,10 +15,12 @@ import {
   type TokenUsageTrendPoint
 } from '@/service/api';
 import { useEcharts } from '@/hooks/common/echarts';
+import { useAuth } from '@/hooks/business/auth';
 import { $t } from '@/locales';
 import { useAppStore } from '@/store/modules/app';
 import { useThemeStore } from '@/store/modules/theme';
 import { formatCompactNumber } from '@/utils/common';
+import UserTokenQuotaModal from '@/views/manage/user/modules/user-token-quota-drawer.vue';
 
 defineOptions({ name: 'AgentTokenUsage' });
 
@@ -39,6 +45,7 @@ const emptySummary = (): TokenUsageSummary => ({
 
 const themeStore = useThemeStore();
 const appStore = useAppStore();
+const { hasAuth } = useAuth();
 const dimension = ref<TokenUsageDimension>('day');
 const trendLoading = ref(false);
 const detailsLoading = ref(false);
@@ -52,6 +59,72 @@ const accountTotal = ref(0);
 const expandedAccountNames = ref<string[]>([]);
 const conversationPages = ref<Record<string, ConversationPageState>>({});
 let requestSequence = 0;
+const quotaLoading = ref(false);
+const quotaSaving = ref(false);
+const quotaForm = reactive({
+  fiveHourLimitTokens: null as number | null,
+  sevenDayLimitTokens: null as number | null
+});
+type QuotaUnit = 'TOKEN' | 'K' | 'M' | 'B';
+const quotaUnitMultipliers: Record<QuotaUnit, number> = {
+  TOKEN: 1,
+  K: 1_000,
+  M: 1_000_000,
+  B: 1_000_000_000
+};
+const quotaUnitOptions = [
+  { label: 'Token（个）', value: 'TOKEN' },
+  { label: 'K（千）', value: 'K' },
+  { label: 'M（百万）', value: 'M' },
+  { label: 'B（十亿）', value: 'B' }
+] satisfies Array<{ label: string; value: QuotaUnit }>;
+const globalFiveHourUnit = ref<QuotaUnit>('M');
+const globalSevenDayUnit = ref<QuotaUnit>('M');
+
+function quotaUnitFor(value: number | null) {
+  if (!value) return 'M' as QuotaUnit;
+  if (value >= quotaUnitMultipliers.B) return 'B' as QuotaUnit;
+  if (value >= quotaUnitMultipliers.M) return 'M' as QuotaUnit;
+  if (value >= quotaUnitMultipliers.K) return 'K' as QuotaUnit;
+  return 'TOKEN' as QuotaUnit;
+}
+
+function quotaValue(tokens: number | null, unit: QuotaUnit) {
+  return tokens === null ? null : tokens / quotaUnitMultipliers[unit];
+}
+
+const globalFiveHourQuotaValue = computed({
+  get: () => quotaValue(quotaForm.fiveHourLimitTokens, globalFiveHourUnit.value),
+  set: (value: number | null) => {
+    quotaForm.fiveHourLimitTokens =
+      value === null ? null : Math.round(value * quotaUnitMultipliers[globalFiveHourUnit.value]);
+  }
+});
+const globalSevenDayQuotaValue = computed({
+  get: () => quotaValue(quotaForm.sevenDayLimitTokens, globalSevenDayUnit.value),
+  set: (value: number | null) => {
+    quotaForm.sevenDayLimitTokens =
+      value === null ? null : Math.round(value * quotaUnitMultipliers[globalSevenDayUnit.value]);
+  }
+});
+const globalQuotaVisible = ref(false);
+const canViewGlobalQuota = computed(() =>
+  hasAuth(['v1:manage:agent:getTokenQuotaGlobal', 'v1:manage:agent:saveTokenQuotaGlobal'])
+);
+const canSaveGlobalQuota = computed(() => hasAuth('v1:manage:agent:saveTokenQuotaGlobal'));
+const canViewUserQuota = computed(() =>
+  hasAuth([
+    'v1:manage:agent:getUserTokenQuota',
+    'v1:manage:agent:saveUserTokenQuota',
+    'v1:manage:agent:deleteUserTokenQuota',
+    'v1:manage:agent:resetUserTokenQuota'
+  ])
+);
+const quotaVisible = ref(false);
+const quotaUser = ref<{ uuid: string } | null>(null);
+const quotaPreviews = ref<Record<string, TokenQuotaUser>>({});
+const quotaPreviewLoading = ref<Record<string, boolean>>({});
+const quotaPreviewFailed = ref<Record<string, boolean>>({});
 
 const tokenMetrics = computed(() => [
   {
@@ -106,11 +179,46 @@ function formatCompactToken(value: number) {
 function formatTime(value: string) {
   return new Date(value).toLocaleString(appStore.locale, { hour12: false });
 }
+function quotaResetText(value: string | undefined, windowLabel: string) {
+  return value ? `最早释放：${formatTime(value)}` : `产生用量后 ${windowLabel}滚动释放`;
+}
 function accountName(account: TokenUsageAccount) {
   return account.username || $t('page.agentTokenUsage.unknownAccount');
 }
-function accountMeta(account: TokenUsageAccount) {
-  return account.userUuid;
+function openTokenQuota(account: TokenUsageAccount) {
+  if (!canViewUserQuota.value) return;
+  quotaUser.value = { uuid: account.userUuid };
+  quotaVisible.value = true;
+}
+function quotaUsagePercent(used: number, limit: number) {
+  if (!limit) return 0;
+  return Math.min(100, Math.max(0, Math.round((used / limit) * 1000) / 10));
+}
+async function loadQuotaPreview(account: TokenUsageAccount) {
+  const userUuid = account.userUuid;
+  if (!canViewUserQuota.value || quotaPreviewLoading.value[userUuid] || quotaPreviews.value[userUuid]) return;
+  quotaPreviewLoading.value[userUuid] = true;
+  quotaPreviewFailed.value[userUuid] = false;
+  const { data, error } = await GetUserTokenQuota(userUuid);
+  if (error) {
+    quotaPreviewFailed.value[userUuid] = true;
+  } else {
+    quotaPreviews.value[userUuid] = data.quota;
+  }
+  quotaPreviewLoading.value[userUuid] = false;
+}
+function handleQuotaPreviewShow(show: boolean, account: TokenUsageAccount) {
+  if (show) loadQuotaPreview(account);
+}
+function handleQuotaUpdated() {
+  const userUuid = quotaUser.value?.uuid;
+  if (!userUuid) return;
+  quotaPreviews.value = Object.fromEntries(
+    Object.entries(quotaPreviews.value).filter(([key]) => key !== userUuid)
+  );
+  quotaPreviewFailed.value = Object.fromEntries(
+    Object.entries(quotaPreviewFailed.value).filter(([key]) => key !== userUuid)
+  );
 }
 function conversationPage(userUuid: string) {
   if (!conversationPages.value[userUuid]) {
@@ -252,7 +360,42 @@ async function loadTrend() {
   trendLoading.value = false;
   await refreshChart();
 }
-onMounted(loadDetails);
+async function loadGlobalQuota() {
+  if (!canViewGlobalQuota.value) return;
+  quotaLoading.value = true;
+  const { data, error } = await GetTokenQuotaGlobal();
+  if (!error) {
+    quotaForm.fiveHourLimitTokens = data.quota.fiveHourLimitTokens;
+    quotaForm.sevenDayLimitTokens = data.quota.sevenDayLimitTokens;
+    globalFiveHourUnit.value = quotaUnitFor(quotaForm.fiveHourLimitTokens);
+    globalSevenDayUnit.value = quotaUnitFor(quotaForm.sevenDayLimitTokens);
+  }
+  quotaLoading.value = false;
+}
+async function openGlobalQuota() {
+  globalQuotaVisible.value = true;
+  await loadGlobalQuota();
+}
+async function saveGlobalQuota() {
+  if (!canSaveGlobalQuota.value) return;
+  if (!quotaForm.fiveHourLimitTokens || !quotaForm.sevenDayLimitTokens) {
+    window.$message?.warning($t('page.agentTokenUsage.quotaPositive'));
+    return;
+  }
+  quotaSaving.value = true;
+  const { error } = await SaveTokenQuotaGlobal({
+    fiveHourLimitTokens: quotaForm.fiveHourLimitTokens,
+    sevenDayLimitTokens: quotaForm.sevenDayLimitTokens
+  });
+  quotaSaving.value = false;
+  if (!error) {
+    globalQuotaVisible.value = false;
+    window.$message?.success($t('common.updateSuccess'));
+  }
+}
+onMounted(() => {
+  loadDetails();
+});
 watch(dimension, loadTrend, { immediate: true });
 watch(() => appStore.locale, refreshChart);
 </script>
@@ -265,6 +408,12 @@ watch(() => appStore.locale, refreshChart);
       size="small"
       class="summary-card card-wrapper"
     >
+      <template #header-extra>
+        <NButton v-if="canViewGlobalQuota" secondary size="small" @click="openGlobalQuota">
+          <template #icon><SvgIcon icon="carbon:settings-adjust" /></template>
+          {{ $t('page.agentTokenUsage.quotaTitle') }}
+        </NButton>
+      </template>
       <NSpin :show="detailsLoading">
         <div class="metric-grid">
           <div
@@ -335,10 +484,125 @@ watch(() => appStore.locale, refreshChart);
             <template #header>
               <div class="account-header">
                 <div class="account-avatar"><SvgIcon icon="carbon:user-avatar" /></div>
-                <div class="account-name">
-                  <strong>{{ accountName(account) }}</strong>
-                  <span>{{ accountMeta(account) }}</span>
-                </div>
+                <NPopover
+                  trigger="hover"
+                  placement="top-start"
+                  :disabled="!canViewUserQuota"
+                  :show-arrow="false"
+                  :delay="260"
+                  :style="{
+                    width: '320px',
+                    maxWidth: 'calc(100vw - 24px)',
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    boxShadow: '0 6px 20px rgba(15, 23, 42, 0.1)'
+                  }"
+                  @update:show="show => handleQuotaPreviewShow(show, account)"
+                >
+                  <template #trigger>
+                    <div
+                      class="account-name"
+                      :class="{ 'account-name--interactive': canViewUserQuota }"
+                      :role="canViewUserQuota ? 'button' : undefined"
+                      :tabindex="canViewUserQuota ? 0 : -1"
+                      @click.stop="openTokenQuota(account)"
+                      @keydown.enter.stop="openTokenQuota(account)"
+                      @keydown.space.prevent.stop="openTokenQuota(account)"
+                    >
+                      <strong>{{ accountName(account) }}</strong>
+                    </div>
+                  </template>
+
+                  <div class="quota-preview">
+                    <div class="quota-preview-title">
+                      <span>当前使用情况</span>
+                      <NTag
+                        v-if="quotaPreviews[account.userUuid] && !quotaPreviews[account.userUuid].enabled"
+                        size="small"
+                        type="error"
+                        :bordered="false"
+                      >
+                        已禁用
+                      </NTag>
+                    </div>
+                    <NSpin :show="quotaPreviewLoading[account.userUuid]" size="small">
+                      <div v-if="quotaPreviews[account.userUuid]" class="quota-preview-windows">
+                        <div
+                          v-if="quotaPreviews[account.userUuid].effectiveFiveHourLimit"
+                          class="quota-preview-window"
+                        >
+                          <div class="quota-preview-label">
+                            <span>5 小时</span>
+                            <strong>
+                              {{
+                                quotaUsagePercent(
+                                  quotaPreviews[account.userUuid].fiveHourUsedTokens,
+                                  quotaPreviews[account.userUuid].effectiveFiveHourLimit!
+                                )
+                              }}%
+                            </strong>
+                          </div>
+                          <NProgress
+                            :percentage="
+                              quotaUsagePercent(
+                                quotaPreviews[account.userUuid].fiveHourUsedTokens,
+                                quotaPreviews[account.userUuid].effectiveFiveHourLimit!
+                              )
+                            "
+                            :show-indicator="false"
+                            :height="5"
+                            :border-radius="3"
+                          />
+                          <div class="quota-preview-meta">
+                            <span>
+                              {{ formatDetailToken(quotaPreviews[account.userUuid].fiveHourUsedTokens) }} /
+                              {{ formatDetailToken(quotaPreviews[account.userUuid].effectiveFiveHourLimit!) }}
+                            </span>
+                            <time>
+                              {{ quotaResetText(quotaPreviews[account.userUuid].fiveHourResetAt, '5 小时') }}
+                            </time>
+                          </div>
+                        </div>
+                        <div class="quota-preview-window">
+                          <div class="quota-preview-label">
+                            <span>每周</span>
+                            <strong>
+                              {{
+                                quotaUsagePercent(
+                                  quotaPreviews[account.userUuid].sevenDayUsedTokens,
+                                  quotaPreviews[account.userUuid].effectiveSevenDayLimit
+                                )
+                              }}%
+                            </strong>
+                          </div>
+                          <NProgress
+                            :percentage="
+                              quotaUsagePercent(
+                                quotaPreviews[account.userUuid].sevenDayUsedTokens,
+                                quotaPreviews[account.userUuid].effectiveSevenDayLimit
+                              )
+                            "
+                            :show-indicator="false"
+                            :height="5"
+                            :border-radius="3"
+                          />
+                          <div class="quota-preview-meta">
+                            <span>
+                              {{ formatDetailToken(quotaPreviews[account.userUuid].sevenDayUsedTokens) }} /
+                              {{ formatDetailToken(quotaPreviews[account.userUuid].effectiveSevenDayLimit) }}
+                            </span>
+                            <time>
+                              {{ quotaResetText(quotaPreviews[account.userUuid].sevenDayResetAt, '7 天') }}
+                            </time>
+                          </div>
+                        </div>
+                      </div>
+                      <div v-else class="quota-preview-empty">
+                        {{ quotaPreviewFailed[account.userUuid] ? '暂时无法获取使用情况' : '正在获取使用情况…' }}
+                      </div>
+                    </NSpin>
+                  </div>
+                </NPopover>
                 <div class="account-stats">
                   <div>
                     <span>{{ $t('page.agentTokenUsage.conversation') }}</span>
@@ -499,6 +763,81 @@ watch(() => appStore.locale, refreshChart);
         </div>
       </NSpin>
     </NCard>
+
+    <NModal
+      v-model:show="globalQuotaVisible"
+      preset="card"
+      :title="$t('page.agentTokenUsage.quotaTitle')"
+      :bordered="false"
+      :mask-closable="!quotaSaving"
+      class="global-quota-modal"
+      style="width: min(560px, calc(100vw - 24px))"
+    >
+      <NSpin :show="quotaLoading">
+        <div class="global-quota-form">
+          <NFormItem :label="$t('page.agentTokenUsage.fiveHourQuota')">
+            <div class="global-quota-input-wrap">
+              <NInputGroup class="global-quota-input-group">
+                <NInputNumber
+                  v-model:value="globalFiveHourQuotaValue"
+                  :disabled="!canSaveGlobalQuota"
+                  :min="1"
+                  :precision="2"
+                  :show-button="false"
+                  placeholder="请输入数值"
+                />
+                <NSelect
+                  v-model:value="globalFiveHourUnit"
+                  :disabled="!canSaveGlobalQuota"
+                  :options="quotaUnitOptions"
+                  :consistent-menu-width="false"
+                />
+              </NInputGroup>
+              <span class="global-quota-input-help">即 {{ formatToken(quotaForm.fiveHourLimitTokens || 0) }} Token</span>
+            </div>
+          </NFormItem>
+          <NFormItem :label="$t('page.agentTokenUsage.sevenDayQuota')">
+            <div class="global-quota-input-wrap">
+              <NInputGroup class="global-quota-input-group">
+                <NInputNumber
+                  v-model:value="globalSevenDayQuotaValue"
+                  :disabled="!canSaveGlobalQuota"
+                  :min="1"
+                  :precision="2"
+                  :show-button="false"
+                  placeholder="请输入数值"
+                />
+                <NSelect
+                  v-model:value="globalSevenDayUnit"
+                  :disabled="!canSaveGlobalQuota"
+                  :options="quotaUnitOptions"
+                  :consistent-menu-width="false"
+                />
+              </NInputGroup>
+              <span class="global-quota-input-help">即 {{ formatToken(quotaForm.sevenDayLimitTokens || 0) }} Token</span>
+            </div>
+          </NFormItem>
+        </div>
+      </NSpin>
+      <template #footer>
+        <div class="global-quota-footer">
+          <NTag type="info" :bordered="false" round>{{ $t('page.agentTokenUsage.globalDefault') }}</NTag>
+          <div>
+            <NButton @click="globalQuotaVisible = false">{{ $t('common.cancel') }}</NButton>
+            <NButton v-if="canSaveGlobalQuota" type="primary" :loading="quotaSaving" @click="saveGlobalQuota">
+              {{ $t('common.save') }}
+            </NButton>
+          </div>
+        </div>
+      </template>
+    </NModal>
+
+    <UserTokenQuotaModal
+      v-if="quotaUser"
+      v-model:visible="quotaVisible"
+      :user-uuid="quotaUser.uuid"
+      @updated="handleQuotaUpdated"
+    />
   </div>
 </template>
 
@@ -526,6 +865,47 @@ watch(() => appStore.locale, refreshChart);
 .summary-card :deep(.n-card__content),
 .details-card :deep(.n-card__content) {
   padding: 16px;
+}
+
+.global-quota-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.global-quota-input-wrap,
+.global-quota-input-group {
+  width: 100%;
+}
+
+.global-quota-input-group :deep(.n-input-number) {
+  width: 0;
+  min-width: 0;
+  flex: 1;
+}
+
+.global-quota-input-group :deep(.n-select) {
+  width: 116px;
+  flex: 0 0 116px;
+}
+
+.global-quota-input-help {
+  display: block;
+  margin-top: 7px;
+  color: rgba(var(--base-text-color), 0.48);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.global-quota-footer,
+.global-quota-footer > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.global-quota-footer {
+  justify-content: space-between;
 }
 
 .chart-card :deep(.n-card__content) {
@@ -652,13 +1032,8 @@ watch(() => appStore.locale, refreshChart);
     box-shadow 0.2s;
 }
 
-.account-list :deep(> .n-collapse-item:hover) {
-  border-color: color-mix(in srgb, var(--token-primary) 32%, transparent);
-}
-
 .account-list :deep(> .n-collapse-item.n-collapse-item--active) {
   border-color: color-mix(in srgb, var(--token-primary) 38%, transparent);
-  box-shadow: 0 4px 16px color-mix(in srgb, var(--token-text) 7%, transparent);
 }
 
 .account-list :deep(> .n-collapse-item > .n-collapse-item__header) {
@@ -670,10 +1045,6 @@ watch(() => appStore.locale, refreshChart);
 .account-list :deep(> .n-collapse-item > .n-collapse-item__header .n-collapse-item__header-main),
 .conversation-list :deep(> .n-collapse-item > .n-collapse-item__header .n-collapse-item__header-main) {
   min-width: 0;
-}
-
-.account-list :deep(> .n-collapse-item > .n-collapse-item__header:hover) {
-  background: var(--token-soft);
 }
 
 .account-list :deep(> .n-collapse-item > .n-collapse-item__content-wrapper > .n-collapse-item__content-inner) {
@@ -703,10 +1074,26 @@ watch(() => appStore.locale, refreshChart);
 
 .account-name {
   display: flex;
-  min-width: 180px;
-  flex: 1;
-  flex-direction: column;
-  gap: 3px;
+  min-width: 0;
+  max-width: min(360px, 32vw);
+  flex: 0 1 auto;
+  padding: 6px 9px;
+  margin: -6px -9px;
+  border-radius: 7px;
+  transition:
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.account-name--interactive {
+  cursor: pointer;
+}
+
+.account-name--interactive:hover,
+.account-name--interactive:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--token-primary) 7%, var(--token-surface));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--token-primary) 15%, transparent);
 }
 
 .account-name strong {
@@ -718,24 +1105,90 @@ watch(() => appStore.locale, refreshChart);
   white-space: nowrap;
 }
 
-.account-name span {
-  overflow: hidden;
-  color: var(--token-muted);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.account-name.account-name--interactive strong {
+  color: var(--token-primary);
+}
+
+.account-name.account-name--interactive:hover strong,
+.account-name.account-name--interactive:focus-visible strong {
+  color: color-mix(in srgb, var(--token-primary) 84%, var(--token-text));
 }
 
 .account-stats {
   display: grid;
   flex: 0 0 auto;
-  grid-template-columns: 86px 86px 170px;
+  grid-template-columns: 104px 76px 150px;
+  margin-left: auto;
+}
+
+.quota-preview {
+  min-height: 46px;
+}
+
+.quota-preview-title,
+.quota-preview-label,
+.quota-preview-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.quota-preview-title {
+  margin-bottom: 10px;
+  color: rgb(var(--base-text-color));
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.quota-preview-windows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.quota-preview-window + .quota-preview-window {
+  padding-top: 11px;
+  border-top: 1px solid rgba(var(--base-text-color), 0.08);
+}
+
+.quota-preview-label {
+  margin-bottom: 7px;
+  color: rgba(var(--base-text-color), 0.64);
+  font-size: 12px;
+}
+
+.quota-preview-label strong {
+  color: rgb(var(--primary-color));
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.quota-preview-meta {
+  margin-top: 6px;
+  color: rgba(var(--base-text-color), 0.46);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.quota-preview-meta time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quota-preview-empty {
+  display: grid;
+  min-height: 48px;
+  place-items: center;
+  color: rgba(var(--base-text-color), 0.48);
+  font-size: 12px;
 }
 
 .account-stats > div {
   display: flex;
   min-height: 38px;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   flex-direction: column;
   padding: 0 18px;
@@ -744,7 +1197,8 @@ watch(() => appStore.locale, refreshChart);
 
 .account-stats span {
   color: var(--token-muted);
-  font-size: 11px;
+  font-size: 12px;
+  white-space: nowrap;
   line-height: 1.2;
 }
 
@@ -752,14 +1206,14 @@ watch(() => appStore.locale, refreshChart);
 .account-stats strong {
   margin-top: 3px;
   color: var(--token-text-secondary);
-  font-size: 13px;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
 }
 
 .account-stats .account-token strong {
   color: var(--token-primary);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .conversation-panel {
@@ -1016,8 +1470,9 @@ code {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .account-stats {
-    grid-template-columns: 72px 72px 150px;
+    grid-template-columns: 104px 76px 140px;
   }
+
   .account-stats > div {
     padding: 0 12px;
   }
@@ -1062,13 +1517,18 @@ code {
     flex-direction: column;
   }
 
+  .global-quota-form {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
   .account-stats {
     width: 100%;
     grid-template-columns: repeat(3, 1fr);
   }
 
   .account-stats > div {
-    align-items: flex-start;
+    align-items: center;
     padding: 8px 10px 0 0;
     border-left: 0;
   }
@@ -1167,6 +1627,7 @@ code {
   .account-name {
     width: auto;
     min-width: 0;
+    max-width: 100%;
   }
 
   .account-stats {
@@ -1180,6 +1641,7 @@ code {
     min-width: 0;
     min-height: 0;
     padding: 0 8px;
+    align-items: center;
   }
 
   .account-stats > div:first-child {

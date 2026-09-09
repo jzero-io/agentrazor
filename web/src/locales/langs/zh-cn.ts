@@ -53,6 +53,8 @@ const local: App.I18n.Schema = {
     }
   },
   request: {
+    unauthorized: '登录状态已失效，请重新登录',
+    forbidden: '没有权限执行此操作',
     logout: '请求失败后登出用户',
     logoutMsg: '用户状态失效，请重新登录',
     logoutWithModal: '请求失败后弹出模态框再登出用户',
@@ -257,10 +259,9 @@ const local: App.I18n.Schema = {
     },
     home: {
       dashboard: {
-        welcome: '欢迎回来，{username}',
-        description: '集中查看 Agent 运行状态、当前模型与资源使用情况。',
-        agentOnline: 'Agent 运行中',
-        agentOffline: 'Agent 未运行',
+        welcome: '欢迎回来 {username}',
+        agentOnline: '运行中',
+        agentOffline: '已停止',
         unavailable: '暂不可用',
         agentStatus: 'Agent 状态',
         currentModel: '当前模型',
@@ -348,7 +349,7 @@ const local: App.I18n.Schema = {
     agentSkills: {
       title: 'Skills 管理',
       installed: '已安装 Skills',
-      uploadZip: '上传 ZIP',
+      uploadArchive: 'Upload',
       searchPlaceholder: '搜索名称',
       deleteConfirm: '确认删除 {name}？',
       noMatch: '没有匹配的 Skill',
@@ -384,7 +385,13 @@ const local: App.I18n.Schema = {
       turnId: 'Turn ID',
       time: '时间',
       contextWindow: '上下文窗口',
-      accountCount: '共 {count} 个账号'
+      accountCount: '共 {count} 个账号',
+      quotaTitle: '额度设置',
+      globalDefault: '全局默认',
+      fiveHourQuota: '5 小时使用限额',
+      sevenDayQuota: '每周使用限额',
+      inputQuota: '请输入 Token 额度',
+      quotaPositive: '两项额度都必须大于 0'
     },
     manage: {
       common: {

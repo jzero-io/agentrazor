@@ -22,13 +22,11 @@ type pluginSkillManifest struct {
 
 // syncPluginSkills installs skills shipped by server plugins into the
 // persistent Codex home. User-managed skills are never overwritten.
-func syncPluginSkills(pluginsRoot, codexHome string) error {
+func syncPluginSkills(codexHome string) error {
 	if codexHome == "" {
 		return nil
 	}
-	if pluginsRoot == "" {
-		pluginsRoot = "plugins"
-	}
+	pluginsRoot := "plugins"
 	pluginsRoot, err := filepath.Abs(pluginsRoot)
 	if err != nil {
 		return fmt.Errorf("resolve plugins root: %w", err)

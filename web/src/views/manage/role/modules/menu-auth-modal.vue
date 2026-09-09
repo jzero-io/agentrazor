@@ -84,34 +84,28 @@ const pageSelectOptions = computed(() => {
 const tree = shallowRef<Api.Manage.MenuTree[]>([]);
 const checks = shallowRef<string[]>([]);
 
-function updateChecks() {
-  // 定义递归检查函数
-  function checkParent(node: Api.Manage.MenuTree) {
-    if (node.children && node.children.length > 0) {
-      const hasCheckedChildren = node.children.some(child => checks.value.includes(child.uuid));
+function getMenuUuidsWithAncestors() {
+  const menuUuids = new Set(checks.value);
 
-      // 如果有任意子节点被选中，则选中父节点
-      if (hasCheckedChildren && !checks.value.includes(node.uuid)) {
-        checks.value.push(node.uuid);
-      }
-      // 如果没有子节点被选中，并且父节点当前被选中，则取消选中父节点
-      else if (!hasCheckedChildren && checks.value.includes(node.uuid)) {
-        checks.value.splice(checks.value.indexOf(node.uuid), 1);
-      }
+  function includeAncestorMenus(node: Api.Manage.MenuTree): boolean {
+    let hasCheckedDescendant = false;
 
-      // 对每个子节点递归调用 checkParent 函数
-      node.children.forEach(child => {
-        if (child.children && child.children.length > 0) {
-          checkParent(child);
-        }
-      });
+    node.children?.forEach(child => {
+      if (includeAncestorMenus(child)) {
+        hasCheckedDescendant = true;
+      }
+    });
+
+    if (hasCheckedDescendant && node.uuid) {
+      menuUuids.add(node.uuid);
     }
+
+    return menuUuids.has(node.uuid) || hasCheckedDescendant;
   }
 
-  // 遍历顶层节点并开始检查
-  tree.value.forEach(topLevelNode => {
-    checkParent(topLevelNode);
-  });
+  tree.value.forEach(includeAncestorMenus);
+
+  return Array.from(menuUuids);
 }
 
 async function getTree() {
@@ -129,38 +123,13 @@ async function getTree() {
   if (!roleMenusError) {
     checks.value = roleMenusData.menuUuids;
   }
-
-  // 定义递归检查函数
-  function checkParent(node: Api.Manage.MenuTree) {
-    if (node.children && node.children.length > 0) {
-      const allChildrenChecked = node.children.every(child => checks.value.includes(child.uuid));
-
-      // 如果所有子节点都被选中，则选中父节点（如果还没有选中的话）
-      if (allChildrenChecked && !checks.value.includes(node.uuid)) {
-        checks.value.push(node.uuid);
-      }
-      // 如果不是所有子节点都被选中，并且父节点当前被选中，则取消选中父节点
-      else if (!allChildrenChecked && checks.value.includes(node.uuid)) {
-        checks.value.splice(checks.value.indexOf(node.uuid), 1);
-      }
-
-      // 对每个子节点递归调用 checkParent 函数
-      node.children.forEach(child => checkParent(child));
-    }
-  }
-
-  // 遍历顶层节点并开始检查
-  tree.value.forEach(topLevelNode => {
-    checkParent(topLevelNode);
-  });
 }
 
 async function handleSubmit() {
-  updateChecks();
   // request
   const setRoleMenusRequest: Api.Manage.SetRoleMenusRequest = {
     roleUuid: props.roleUuid,
-    menuUuids: checks.value.filter(uuid => uuid !== '')
+    menuUuids: getMenuUuidsWithAncestors().filter(uuid => uuid !== '')
   };
   setMenusConfirmStartLoading();
   const { error } = await SetRoleMenus(setRoleMenusRequest);
@@ -207,7 +176,6 @@ watch(visible, val => {
         expand-on-click
         virtual-scroll
         block-line
-        cascade
         class="h-280px"
       />
     </template>

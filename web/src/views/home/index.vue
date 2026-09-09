@@ -62,20 +62,18 @@ onMounted(loadOverview);
   <div class="home-page min-h-500px">
     <NCard :bordered="false" size="small" class="hero-card card-wrapper">
       <div class="hero-content">
-        <div class="hero-copy">
-          <div class="brand-mark">AGENTRAZOR</div>
-          <h1>
-            {{ $t('page.home.dashboard.welcome', { username: authStore.userInfo.username || 'Admin' }) }}
-          </h1>
-          <p>{{ $t('page.home.dashboard.description') }}</p>
-        </div>
-
         <div class="hero-visual" aria-hidden="true">
           <div class="orbit orbit--outer"></div>
           <div class="orbit orbit--inner"></div>
           <span class="orbit-node orbit-node--one"></span>
           <span class="orbit-node orbit-node--two"></span>
           <div class="bot-core"><SvgIcon icon="carbon:bot" /></div>
+        </div>
+
+        <div class="hero-copy">
+          <h1>
+            {{ $t('page.home.dashboard.welcome', { username: authStore.userInfo.username || 'Admin' }) }}
+          </h1>
         </div>
       </div>
     </NCard>
@@ -132,11 +130,11 @@ onMounted(loadOverview);
 
 .hero-content {
   display: flex;
-  min-height: 236px;
+  min-height: 168px;
   align-items: center;
-  justify-content: space-between;
-  gap: 32px;
-  padding: 34px 42px;
+  justify-content: flex-start;
+  gap: 20px;
+  padding: 24px 42px;
 }
 
 .hero-copy {
@@ -145,15 +143,8 @@ onMounted(loadOverview);
   max-width: 720px;
 }
 
-.brand-mark {
-  color: var(--home-primary);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.22em;
-}
-
 .hero-copy h1 {
-  margin: 10px 0 12px;
+  margin: 0;
   color: var(--home-text);
   font-size: clamp(28px, 3vw, 40px);
   font-weight: 750;
@@ -161,18 +152,10 @@ onMounted(loadOverview);
   line-height: 1.15;
 }
 
-.hero-copy p {
-  max-width: 620px;
-  margin: 0;
-  color: var(--home-muted);
-  font-size: 15px;
-  line-height: 1.7;
-}
-
 .hero-visual {
   position: relative;
-  width: 220px;
-  height: 180px;
+  width: 170px;
+  height: 130px;
   flex: 0 0 auto;
 }
 
@@ -186,13 +169,13 @@ onMounted(loadOverview);
 }
 
 .orbit--outer {
-  width: 206px;
-  height: 122px;
+  width: 160px;
+  height: 96px;
 }
 
 .orbit--inner {
-  width: 150px;
-  height: 88px;
+  width: 116px;
+  height: 68px;
   transform: translate(-50%, -50%) rotate(28deg);
 }
 
@@ -207,13 +190,13 @@ onMounted(loadOverview);
 }
 
 .orbit-node--one {
-  top: 34px;
-  right: 24px;
+  top: 20px;
+  right: 14px;
 }
 
 .orbit-node--two {
-  bottom: 29px;
-  left: 26px;
+  bottom: 17px;
+  left: 16px;
 }
 
 .bot-core {
@@ -221,15 +204,15 @@ onMounted(loadOverview);
   top: 50%;
   left: 50%;
   display: grid;
-  width: 82px;
-  height: 82px;
+  width: 66px;
+  height: 66px;
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--home-primary) 18%, transparent);
-  border-radius: 24px;
+  border-radius: 19px;
   color: var(--home-primary);
   background: color-mix(in srgb, var(--home-primary) 13%, var(--home-surface));
-  box-shadow: 0 18px 46px color-mix(in srgb, var(--home-primary) 17%, transparent);
-  font-size: 43px;
+  box-shadow: 0 14px 34px color-mix(in srgb, var(--home-primary) 17%, transparent);
+  font-size: 35px;
   transform: translate(-50%, -50%) rotate(-4deg);
 }
 
@@ -252,8 +235,8 @@ onMounted(loadOverview);
   align-items: center;
   gap: 10px;
   color: var(--home-muted);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 650;
 }
 
 .metric-icon {
@@ -311,13 +294,13 @@ onMounted(loadOverview);
 
 @media (max-width: 900px) {
   .hero-content {
-    min-height: 210px;
-    padding: 30px;
+    min-height: 150px;
+    padding: 24px 30px;
   }
 
   .hero-visual {
-    width: 180px;
-    transform: scale(0.86);
+    width: 150px;
+    transform: scale(0.9);
   }
 }
 

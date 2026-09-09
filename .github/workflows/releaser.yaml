@@ -1,0 +1,222 @@
+name: release-images
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Image version (for example, v0.1.0)
+        required: true
+        default: v0.1.0
+        type: string
+      release_type:
+        description: Release type
+        required: true
+        default: standard
+        type: choice
+        options:
+          - standard
+          - plugins
+      build_server:
+        description: Build the server base image
+        required: true
+        default: true
+        type: boolean
+      build_web:
+        description: Build the admin web base image
+        required: true
+        default: true
+        type: boolean
+      build_agent:
+        description: Build the agent web base image
+        required: true
+        default: true
+        type: boolean
+      plugins:
+        description: Comma-separated public owner/repo@branch-or-tag (empty for none)
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  prepare:
+    name: Prepare build
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.config.outputs.matrix }}
+      version: ${{ steps.config.outputs.version }}
+      server_version: ${{ steps.config.outputs.server_version }}
+      server_latest: ${{ steps.config.outputs.server_latest }}
+    steps:
+      - name: Resolve build configuration
+        id: config
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
+          BUILD_SERVER: ${{ inputs.build_server }}
+          BUILD_WEB: ${{ inputs.build_web }}
+          BUILD_AGENT: ${{ inputs.build_agent }}
+          PLUGINS: ${{ inputs.plugins }}
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            version="${DISPATCH_VERSION}"
+          else
+            version="${GITHUB_REF_NAME}"
+          fi
+          if [[ ! "${version}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "version must use a v-prefixed semantic version (for example, v0.1.0)" >&2
+            exit 1
+          fi
+
+          if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]; then
+            release_type="standard"
+          else
+            release_type="${RELEASE_TYPE}"
+          fi
+          if [ "${release_type}" = "standard" ] && [ -n "${PLUGINS}" ]; then
+            echo "plugins must be empty for a standard release" >&2
+            exit 1
+          fi
+          if [ "${release_type}" = "plugins" ] && [ -z "${PLUGINS}" ]; then
+            echo "at least one plugin is required for a plugins release" >&2
+            exit 1
+          fi
+
+          components='[]'
+          if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ] || [ "${BUILD_SERVER}" = "true" ]; then
+            components=$(jq -c '. + [{"component":"server","context":"./server"}]' <<< "${components}")
+          fi
+          if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ] || [ "${BUILD_WEB}" = "true" ]; then
+            components=$(jq -c '. + [{"component":"web","context":"./web"}]' <<< "${components}")
+          fi
+          if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ] || [ "${BUILD_AGENT}" = "true" ]; then
+            components=$(jq -c '. + [{"component":"agent","context":"./agent"}]' <<< "${components}")
+          fi
+          if [ "$(jq length <<< "${components}")" -eq 0 ]; then
+            echo "select at least one base image" >&2
+            exit 1
+          fi
+          if [ -n "${PLUGINS}" ] && [ "${BUILD_SERVER}" != "true" ]; then
+            echo "the server base image must be selected when plugins are provided" >&2
+            exit 1
+          fi
+
+          plugin_suffix=""
+          IFS=',' read -ra plugin_specs <<< "${PLUGINS}"
+          for spec in "${plugin_specs[@]}"; do
+            spec="${spec//[[:space:]]/}"
+            [ -n "${spec}" ] || continue
+            if [[ "${spec}" == *@* ]]; then
+              repository="${spec%@*}"
+              plugin_ref="${spec##*@}"
+            else
+              repository="${spec}"
+              plugin_ref="main"
+            fi
+            if [[ ! "${repository}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+              echo "invalid plugin repository: ${repository}; expected owner/repo" >&2
+              exit 1
+            fi
+            if [[ ! "${plugin_ref}" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+              echo "invalid plugin branch or tag: ${plugin_ref}" >&2
+              exit 1
+            fi
+            plugin_name="${repository##*/}"
+            plugin_tag="${plugin_name//_/-}"
+            plugin_tag="${plugin_tag,,}"
+            plugin_suffix="${plugin_suffix}-${plugin_tag}"
+          done
+          if [ "${release_type}" = "plugins" ] && [ -z "${plugin_suffix}" ]; then
+            echo "at least one valid plugin is required for a plugins release" >&2
+            exit 1
+          fi
+          if (( ${#version} + ${#plugin_suffix} > 127 )); then
+            echo "the generated server image tag is too long" >&2
+            exit 1
+          fi
+
+          {
+            echo "matrix={\"include\":${components}}"
+            echo "version=${version}"
+            echo "server_version=${version}${plugin_suffix}"
+            echo "server_latest=latest${plugin_suffix}"
+          } >> "${GITHUB_OUTPUT}"
+
+  build:
+    name: Build ${{ matrix.component }} image
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Checkout selected plugins
+        if: matrix.component == 'server' && inputs.plugins != ''
+        env:
+          PLUGINS: ${{ inputs.plugins }}
+        run: |
+          IFS=',' read -ra plugin_specs <<< "${PLUGINS}"
+          for spec in "${plugin_specs[@]}"; do
+            spec="${spec//[[:space:]]/}"
+            [ -n "${spec}" ] || continue
+            if [[ "${spec}" == *@* ]]; then
+              repository="${spec%@*}"
+              plugin_ref="${spec##*@}"
+            else
+              repository="${spec}"
+              plugin_ref="main"
+            fi
+            if [[ ! "${repository}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] \
+              || [[ ! "${plugin_ref}" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+              echo "invalid plugin: ${spec}; expected owner/repo@branch-or-tag" >&2
+              exit 1
+            fi
+            plugin_name="${repository##*/}"
+            plugin_path="server/plugins/${plugin_name}"
+            if [ -e "${plugin_path}" ]; then
+              echo "duplicate plugin directory: ${plugin_name}" >&2
+              exit 1
+            fi
+            git clone --depth 1 --single-branch --branch "${plugin_ref}" \
+              "https://github.com/${repository}.git" "${plugin_path}"
+          done
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: jzero-io
+          password: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/jzero-io/agentrazor-${{ matrix.component }}:${{ matrix.component == 'server' && needs.prepare.outputs.server_version || needs.prepare.outputs.version }}
+            ghcr.io/jzero-io/agentrazor-${{ matrix.component }}:${{ matrix.component == 'server' && needs.prepare.outputs.server_latest || 'latest' }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ matrix.component == 'server' && needs.prepare.outputs.server_version || needs.prepare.outputs.version }}
+          build-args: ${{ matrix.component == 'server' && format('LDFLAGS=-s -w -X github.com/jzero-io/agentrazor/server/cmd.Version={0} -X github.com/jzero-io/agentrazor/server/cmd.Commit={1}', needs.prepare.outputs.server_version, github.sha) || '' }}
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}

@@ -112,6 +112,23 @@ type StatsResponse struct {
 	TokenUsageAvailable   bool  `json:"tokenUsageAvailable"`
 }
 
+type TokenQuotaStatusResponse struct {
+	Enabled      bool             `json:"enabled"`
+	FiveHour     TokenQuotaWindow `json:"fiveHour"`
+	SevenDay     TokenQuotaWindow `json:"sevenDay"`
+	QuotaResetAt *string          `json:"quotaResetAt,omitempty"`
+}
+
+type TokenQuotaWindow struct {
+	Limited          bool    `json:"limited"`
+	UsedTokens       int64   `json:"usedTokens"`
+	LimitTokens      int64   `json:"limitTokens"`
+	RemainingTokens  int64   `json:"remainingTokens"`
+	RemainingPercent float64 `json:"remainingPercent"`
+	Source           string  `json:"source"`
+	ResetAt          *string `json:"resetAt,omitempty"`
+}
+
 type TokenUsageAccount struct {
 	UserUuid          string `json:"userUuid"`
 	Username          string `json:"username"`

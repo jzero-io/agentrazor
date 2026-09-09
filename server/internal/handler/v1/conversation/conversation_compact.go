@@ -192,6 +192,19 @@ func Stats(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
+// 获取当前用户 Token 额度状态
+func TokenQuotaStatus(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		l := conversation.NewTokenQuotaStatus(r.Context(), svcCtx, r)
+		resp, err := l.TokenQuotaStatus()
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.OkJsonCtx(r.Context(), w, resp)
+		}
+	}
+}
+
 // 分页获取账号下的对话和 Turn Token 消耗明细
 func TokenUsageConversations(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

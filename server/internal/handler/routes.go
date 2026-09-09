@@ -182,6 +182,12 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					{
 
 						Method:  http.MethodGet,
+						Path:    "/conversation/token-quota",
+						Handler: v1conversation.TokenQuotaStatus(serverCtx),
+					},
+					{
+
+						Method:  http.MethodGet,
 						Path:    "/conversation/token-usage-conversations",
 						Handler: v1conversation.TokenUsageConversations(serverCtx),
 					},
@@ -335,6 +341,36 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 						Method:  http.MethodPost,
 						Path:    "/manage/agent/skills/upload",
 						Handler: v1manageagent.UploadSkill(serverCtx),
+					},
+					{
+						Method:  http.MethodGet,
+						Path:    "/manage/agent/token-quota/global",
+						Handler: v1manageagent.GetTokenQuotaGlobal(serverCtx),
+					},
+					{
+						Method:  http.MethodPost,
+						Path:    "/manage/agent/token-quota/global",
+						Handler: v1manageagent.SaveTokenQuotaGlobal(serverCtx),
+					},
+					{
+						Method:  http.MethodGet,
+						Path:    "/manage/agent/token-quota/users/:user_uuid",
+						Handler: v1manageagent.GetUserTokenQuota(serverCtx),
+					},
+					{
+						Method:  http.MethodPost,
+						Path:    "/manage/agent/token-quota/users/:user_uuid",
+						Handler: v1manageagent.SaveUserTokenQuota(serverCtx),
+					},
+					{
+						Method:  http.MethodDelete,
+						Path:    "/manage/agent/token-quota/users/:user_uuid",
+						Handler: v1manageagent.DeleteUserTokenQuota(serverCtx),
+					},
+					{
+						Method:  http.MethodPost,
+						Path:    "/manage/agent/token-quota/users/:user_uuid/reset",
+						Handler: v1manageagent.ResetUserTokenQuota(serverCtx),
 					},
 				}...,
 			),

@@ -21,6 +21,11 @@ export function createBuiltinRoutes(): RouteRecordRaw[] {
           component: ConversationView
         },
         {
+          path: 'settings/usage',
+          name: 'settings-usage',
+          component: SettingsView
+        },
+        {
           path: 'settings/appearance',
           name: 'settings-appearance',
           component: SettingsView

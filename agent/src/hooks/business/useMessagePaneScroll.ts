@@ -9,15 +9,20 @@ export function useMessagePaneScroll(options: {
 }) {
   const messagePane = ref<HTMLElement>();
   const autoScrollEnabled = ref(true);
+  const lastScrollTop = ref(0);
 
   function setMessagePane(el: Element | ComponentPublicInstance | null) {
     messagePane.value = el instanceof HTMLElement ? el : undefined;
+    lastScrollTop.value = messagePane.value?.scrollTop ?? 0;
   }
 
   function handleMessageScroll(event: Event) {
     const pane = event.currentTarget;
     if (pane instanceof HTMLElement) {
-      autoScrollEnabled.value = isMessagePaneNearBottom(pane);
+      const scrollingUp = pane.scrollTop < lastScrollTop.value - 1;
+      if (scrollingUp) autoScrollEnabled.value = false;
+      else if (isMessagePaneNearBottom(pane)) autoScrollEnabled.value = true;
+      lastScrollTop.value = pane.scrollTop;
     }
   }
 
@@ -30,8 +35,9 @@ export function useMessagePaneScroll(options: {
       pane = messagePane.value || document.querySelector<HTMLElement>('.message-pane');
     }
     if (!pane) return;
-    if (!options.force && !autoScrollEnabled.value && !isMessagePaneNearBottom(pane)) return;
+    if (!options.force && !autoScrollEnabled.value) return;
     pane.scrollTo({ top: pane.scrollHeight, behavior: 'auto' });
+    lastScrollTop.value = pane.scrollHeight - pane.clientHeight;
     autoScrollEnabled.value = true;
   }
 

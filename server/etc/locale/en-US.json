@@ -1,0 +1,21 @@
+{
+  "manage": {
+    "menu": {
+      "existSubMenu": "Exist sub menu, please delete first"
+    },
+    "agent": {
+      "skill": {
+        "archiveRequired": "Please select a Skill archive to upload",
+        "archiveEmpty": "The Skill archive is empty",
+        "archiveTooLarge": "The Skill archive cannot exceed 100 MiB",
+        "archiveUnsupportedFormat": "Unsupported Skill archive format; use .zip or .tar.gz",
+        "archiveInvalid": "The Skill archive is damaged or invalid",
+        "archiveTooManyEntries": "The Skill archive contains too many files",
+        "archiveExpandedTooLarge": "The extracted Skill archive cannot exceed 128 MiB",
+        "archiveUnsafeEntry": "The Skill archive contains an unsafe file path or file type",
+        "nameInvalid": "A valid Skill name could not be determined from the archive",
+        "manifestMissing": "The Skill archive must contain a SKILL.md file"
+      }
+    }
+  }
+}

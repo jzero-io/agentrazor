@@ -360,7 +360,7 @@ declare namespace App {
     type AgentSkillsSchema = {
       title: string;
       installed: string;
-      uploadZip: string;
+      uploadArchive: string;
       searchPlaceholder: string;
       deleteConfirm: string;
       noMatch: string;
@@ -398,6 +398,12 @@ declare namespace App {
       time: string;
       contextWindow: string;
       accountCount: string;
+      quotaTitle: string;
+      globalDefault: string;
+      fiveHourQuota: string;
+      sevenDayQuota: string;
+      inputQuota: string;
+      quotaPositive: string;
     };
 
     type Schema = {
@@ -596,7 +602,6 @@ declare namespace App {
         home: {
           dashboard: {
             welcome: string;
-            description: string;
             agentOnline: string;
             agentOffline: string;
             unavailable: string;
