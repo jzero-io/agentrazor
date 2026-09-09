@@ -9,7 +9,9 @@ WORKDIR /app
 
 COPY ./ ./
 
-RUN jzero serverless build
+RUN jzero serverless build \
+    && jzero gen swagger \
+    && test -f desc/swagger/swagger.json
 
 RUN --mount=type=cache,target=/go/pkg CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -a -ldflags="$LDFLAGS" -o /dist/app main.go \
     && jzero serverless delete && for plugin in plugins/*/; do \
