@@ -5123,28 +5123,6 @@ html[data-theme="dark"] body.sidebar-resizing .sidebar-resize-handle::after {
   color: var(--text-strong);
 }
 
-/* Collapsed topbar divider and lighter overflow action */
-.sidebar-collapsed .topbar-inner {
-  position: relative;
-  padding-left: 12px;
-}
-
-.sidebar-collapsed .topbar-inner::before {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 1px;
-  height: 24px;
-  background: var(--sidebar-divider);
-  content: "";
-  transform: translateY(-50%);
-  transition: height 140ms ease;
-}
-
-.sidebar-collapsed .topbar-left-actions:hover + .topbar-inner::before {
-  height: 32px;
-}
-
 .conversation-heading-more svg {
   width: 17px;
   height: 17px;

@@ -209,7 +209,7 @@ async function renderMarkdown() {
       hljs: {
         style: themeStore.darkMode ? 'native' : 'github',
         renderMenu(codeElement, menuElement) {
-          const languageClass = [...codeElement.classList].find(className => className.startsWith('language-'));
+          const languageClass = Array.from(codeElement.classList).find(className => className.startsWith('language-'));
           const label = document.createElement('div');
           label.className = 'skill-code-language';
           label.textContent = languageClass ? languageClass.slice('language-'.length) : 'text';

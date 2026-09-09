@@ -461,6 +461,8 @@ declare namespace App {
         };
       };
       request: {
+        unauthorized: string;
+        forbidden: string;
         logout: string;
         logoutMsg: string;
         logoutWithModal: string;

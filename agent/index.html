@@ -13,6 +13,15 @@
           const appearance = localStorage.getItem('agentrazor_appearance') || 'system';
           const systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
           root.dataset.theme = appearance === 'dark' || (appearance === 'system' && systemDark) ? 'dark' : 'light';
+
+          const sidebarView = JSON.parse(localStorage.getItem('agentrazor_sidebar_view') || '{}');
+          const savedSidebarWidth = Number(sidebarView.sidebarWidth) || 296;
+          const sidebarWidth = Math.max(264, savedSidebarWidth);
+          const hasSession = Boolean(localStorage.getItem('agentrazor_token'));
+          const isMobile = window.matchMedia && window.matchMedia('(max-width: 720px)').matches;
+          const showSidebar = hasSession && sidebarView.sidebarCollapsed !== true && !isMobile;
+          root.dataset.bootSidebar = showSidebar ? 'expanded' : 'hidden';
+          root.style.setProperty('--boot-sidebar-width', String(sidebarWidth) + 'px');
         } catch {
           root.dataset.theme = 'light';
         }
@@ -23,6 +32,7 @@
         --boot-app-bg: #ffffff;
         --boot-text: #424548;
         --boot-primary: 46 130 195;
+        --boot-sidebar-width: 296px;
         color: #202124;
         background: var(--boot-app-bg);
       }
@@ -57,6 +67,10 @@
         font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", Inter, sans-serif;
         opacity: 1;
         transition: opacity 180ms ease, visibility 180ms ease;
+      }
+      :root[data-boot-sidebar="expanded"] .app-boot-shell {
+        left: var(--boot-sidebar-width);
+        width: auto;
       }
       body.app-ready .app-boot-shell {
         visibility: hidden;

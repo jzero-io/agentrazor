@@ -1344,7 +1344,7 @@ watch(settingsSection, section => {
             <n-button quaternary class="topbar-sidebar-toggle" aria-label="打开左侧边栏" title="打开左侧边栏" @mouseenter="openSidebarHover" @click="expandSidebar">
               <template #icon><Icon icon="lucide:panel-left" /></template>
             </n-button>
-            <n-button quaternary circle class="topbar-new-chat" aria-label="新对话" title="新对话" @click="createConversation">
+            <n-button v-if="!isNewChat" quaternary circle class="topbar-new-chat" aria-label="新对话" title="新对话" @click="createConversation">
               <template #icon><Icon icon="solar:pen-new-square-outline" /></template>
             </n-button>
           </div>
