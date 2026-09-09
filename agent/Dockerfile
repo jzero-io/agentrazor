@@ -12,4 +12,7 @@ FROM nginx:alpine
 
 WORKDIR /usr/share/nginx/
 
+COPY ./nginx/default.conf /etc/nginx/conf.d/default.conf
+RUN nginx -t
+
 COPY --from=builder /agentrazor-agent/dist ./html

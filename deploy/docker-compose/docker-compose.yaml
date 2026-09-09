@@ -36,8 +36,6 @@ services:
     depends_on:
       server:
         condition: service_healthy
-    volumes:
-      - ./nginx:/etc/nginx/conf.d
     environment:
       - TZ=Asia/Shanghai
       - VITE_SERVICE_BASE_URL=http://127.0.0.1
@@ -51,8 +49,6 @@ services:
     depends_on:
       server:
         condition: service_healthy
-    volumes:
-      - ./nginx:/etc/nginx/conf.d
     environment:
       - TZ=Asia/Shanghai
     ports:

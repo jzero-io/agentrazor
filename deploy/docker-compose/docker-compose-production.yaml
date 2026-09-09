@@ -21,7 +21,8 @@ services:
       - ./server/data:/dist/data
       - ./server/logs:/dist/logs
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       - TZ=Asia/Shanghai
       - DRIVER_NAME=pgx
@@ -36,8 +37,6 @@ services:
     depends_on:
       server:
         condition: service_healthy
-    volumes:
-      - ./nginx:/etc/nginx/conf.d:ro
     environment:
       - TZ=Asia/Shanghai
     ports:
@@ -51,8 +50,6 @@ services:
     depends_on:
       server:
         condition: service_healthy
-    volumes:
-      - ./nginx:/etc/nginx/conf.d:ro
     environment:
       - TZ=Asia/Shanghai
     ports:
