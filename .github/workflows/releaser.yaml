@@ -167,6 +167,7 @@ jobs:
         if: matrix.component == 'server' && inputs.plugins != ''
         env:
           PLUGINS: ${{ inputs.plugins }}
+          GH_TOKEN: ${{ secrets.ACCESS_TOKEN }}
         run: |
           IFS=',' read -ra plugin_specs <<< "${PLUGINS}"
           for spec in "${plugin_specs[@]}"; do
@@ -190,8 +191,8 @@ jobs:
               echo "duplicate plugin directory: ${plugin_name}" >&2
               exit 1
             fi
-            git clone --depth 1 --single-branch --branch "${plugin_ref}" \
-              "https://github.com/${repository}.git" "${plugin_path}"
+            gh repo clone "${repository}" "${plugin_path}" -- \
+              --depth 1 --single-branch --branch "${plugin_ref}"
           done
 
       - name: Set up QEMU
