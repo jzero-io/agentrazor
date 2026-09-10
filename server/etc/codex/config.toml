@@ -2,7 +2,8 @@ model = "deepseek-v4-flash"
 model_provider = "deepseek"
 model_reasoning_effort = "high"
 model_catalog_json = "models.json"
-sandbox_mode = "workspace-write"
+default_permissions = "workspace-only"
+approval_policy = "never"
 
 [model_providers.deepseek]
 name = "deepseek"
@@ -22,8 +23,12 @@ wire_api = "responses"
 experimental_bearer_token = ""
 
 
-[sandbox_workspace_write]
-network_access = true
-exclude_slash_tmp = true
-exclude_tmpdir_env_var = true
-writable_roots = []
+[permissions.workspace-only.filesystem]
+":minimal" = "read"
+"/opt/codex" = "read"
+
+[permissions.workspace-only.filesystem.":workspace_roots"]
+"." = "write"
+
+[permissions.workspace-only.network]
+enabled = true

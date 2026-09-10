@@ -2,6 +2,7 @@ import { computed, onBeforeUnmount, onMounted, ref, type Ref } from 'vue';
 import type { Conversation, Turn } from '../../service/api';
 import { displayConversationTitle, formatConversationDate, messagePreview } from '../../utils/conversation';
 import { renderMarkdown } from '../../utils/markdown';
+import { turnResultItems } from '../../utils/processDisplay';
 import { userItemText } from './useConversationTurns';
 
 
@@ -40,9 +41,9 @@ export function useConversationPreview(options: {
   const messagePreviews = computed<MessagePreview[]>(() => options.renderedTurns.value.flatMap(turn => {
     const userItem = turn.items.find(item => item.type === 'userMessage');
     if (!userItem) return [];
-    const finalAnswer = [...turn.items]
+    const finalAnswer = [...turnResultItems(turn)]
       .reverse()
-      .find(item => item.type === 'agentMessage' && item.phase === 'final_answer' && item.text?.trim());
+      .find(item => item.type === 'agentMessage' && item.text?.trim());
     const finalAnswerText = finalAnswer?.text?.trim() || '';
     const finalAnswerPreview = finalAnswerText ? markdownPreview(finalAnswerText) : '';
     return [{

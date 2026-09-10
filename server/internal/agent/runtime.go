@@ -333,7 +333,7 @@ func (r *CodexAppServerRuntime) StartTurn(ctx context.Context, threadID, prompt 
 
 func (r *CodexAppServerRuntime) startThread(ctx context.Context) (string, error) {
 	result, err := r.request(ctx, "thread/start", map[string]any{
-		"approvalPolicy": "never",
+		"cwd": r.options.AgentrazorHome,
 	})
 	if err != nil {
 		return "", fmt.Errorf("start Codex thread: %w", err)
@@ -379,9 +379,18 @@ func (r *CodexAppServerRuntime) ensureThread(ctx context.Context, threadID strin
 	r.loads[threadID] = load
 	r.stateMu.Unlock()
 
+	conversationDir, err := r.conversationDir(threadID)
+	if err != nil {
+		r.stateMu.Lock()
+		load.err = err
+		delete(r.loads, threadID)
+		close(load.done)
+		r.stateMu.Unlock()
+		return false, err
+	}
 	result, err := r.request(ctx, "thread/resume", map[string]any{
-		"threadId":       threadID,
-		"approvalPolicy": "never",
+		"threadId": threadID,
+		"cwd":      conversationDir,
 	})
 	if err != nil {
 		err = fmt.Errorf("resume Codex thread %s: %w", threadID, err)
@@ -579,7 +588,7 @@ func (r *CodexAppServerRuntime) readLoop(stdout io.Reader) {
 		envelope.StreamPosition = r.nextStreamPosition()
 		switch {
 		case envelope.Method != "" && envelope.ID != nil:
-			// This integration runs with approvalPolicy=never. Reject any server
+			// This integration runs with approval_policy="never" from config.toml. Reject any server
 			// request instead of leaving app-server waiting indefinitely.
 			_ = r.writeJSON(map[string]any{
 				"id": *envelope.ID,

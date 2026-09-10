@@ -52,14 +52,14 @@ interface PendingStreamDelta {
   itemId: string;
   kind: 'reasoning' | 'agentMessage';
   contentIndex: number;
-  phase: string;
+  phase?: string | null;
   text: string;
 }
 
 function streamAgentMessagePhase(params: { phase?: string | null; item?: ThreadItem } | undefined, existing?: ThreadItem) {
-  if (params?.phase) return params.phase;
-  if (params?.item?.phase) return params.item.phase;
-  return existing?.phase ?? 'commentary';
+  if (params?.phase !== undefined) return params.phase;
+  if (params?.item?.phase !== undefined) return params.item.phase;
+  return existing?.phase;
 }
 
 export function useConversationStreamEvents(options: ConversationStreamEventsOptions) {
@@ -216,7 +216,7 @@ export function useConversationStreamEvents(options: ConversationStreamEventsOpt
       const itemId = params?.itemId || params?.item?.id || `stream-agent-${event.turnId || 'active'}`;
       const existingItem = options.findStreamingItem(event.conversationId, itemId);
       const phase = streamAgentMessagePhase(params, existingItem);
-      if (phase !== 'final_answer') options.markProcessActive(event.conversationId);
+      if (phase && phase !== 'final_answer') options.markProcessActive(event.conversationId);
       queueDelta({
         conversationId: event.conversationId,
         itemId,

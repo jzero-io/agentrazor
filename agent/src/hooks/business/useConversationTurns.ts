@@ -200,7 +200,7 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
     return item.type !== 'userMessage'
       && item.type !== 'imageGeneration'
       && item.type !== 'reasoning'
-      && (item.type !== 'agentMessage' || item.phase !== 'final_answer');
+      && (item.type !== 'agentMessage' || Boolean(item.phase) && item.phase !== 'final_answer');
   }
 
   function isRunningTurnStatus(turn: Turn) {
@@ -321,9 +321,8 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
   }
 
   function activeTurnResultSeen(turn: Turn) {
-    return turn.items.some(item =>
+    return turnResultItems(turn).some(item =>
       item.type === 'agentMessage'
-      && item.phase === 'final_answer'
       && Boolean(item.text)
     );
   }
@@ -636,8 +635,8 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
 
   function normalizeStreamingItem(existing: ThreadItem | undefined, incoming: ThreadItem): ThreadItem {
     const next = { ...existing, ...incoming };
-    if (incoming.type === 'agentMessage' && (next.phase === undefined || next.phase === null)) {
-      next.phase = existing?.phase ?? 'commentary';
+    if (incoming.type === 'agentMessage' && (next.phase === undefined || next.phase === null) && existing?.phase) {
+      next.phase = existing.phase;
     }
     return next;
   }

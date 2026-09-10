@@ -116,10 +116,10 @@ function selectGroupAction(group: SidebarGroup, key: string | number) {
           </n-button>
         </div>
 
-        <n-button class="new-chat" secondary @click="createConversation">
-          <template #icon><Icon icon="lucide:square-pen" class="new-chat-icon" /></template>
+        <button type="button" class="new-chat" @click="createConversation">
+          <Icon icon="lucide:square-pen" class="new-chat-icon" />
           <span v-if="sidebarExpanded">新对话</span>
-        </n-button>
+        </button>
 
         <div v-if="sidebarExpanded" class="sidebar-section">
           <n-spin :show="loadingList">

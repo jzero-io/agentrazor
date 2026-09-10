@@ -45,7 +45,6 @@ export function useSidebarState(options: UseSidebarStateOptions) {
   }
 
   function openMobileSidebar() {
-    if (sidebarCollapsed.value) sidebarCollapsed.value = false;
     sidebarHoverOpen.value = false;
     mobileSidebarOpen.value = true;
   }
@@ -61,6 +60,11 @@ export function useSidebarState(options: UseSidebarStateOptions) {
   }
 
   function toggleSidebarPinned() {
+    if (mobileSidebarOpen.value) {
+      closeMobileSidebar();
+      sidebarHoverOpen.value = false;
+      return;
+    }
     if (sidebarCollapsed.value) {
       sidebarCollapsed.value = false;
       sidebarHoverOpen.value = false;

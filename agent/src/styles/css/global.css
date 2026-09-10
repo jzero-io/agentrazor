@@ -246,10 +246,20 @@ textarea {
 }
 
 .new-chat {
+  display: flex;
   width: 100%;
   min-height: 46px;
+  flex: 0 0 auto;
+  align-items: center;
   justify-content: flex-start;
+  padding: 0 10px;
+  border: 0;
   border-radius: 11px;
+  color: var(--text);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
   --n-padding: 0 10px !important;
   --n-color: transparent !important;
   --n-color-hover: #dfedf3 !important;
@@ -266,7 +276,16 @@ textarea {
 }
 
 .new-chat-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  margin-right: 10px;
+  color: var(--text-strong);
   stroke-width: 2.25;
+}
+
+.new-chat:hover {
+  background: var(--hover-bg);
 }
 
 .sidebar-collapsed .new-chat {
@@ -3696,6 +3715,9 @@ html[data-theme="dark"] body.sidebar-resizing .sidebar-resize-handle::after {
     left: 0;
     z-index: 40;
     width: min(320px, 84vw);
+    max-width: calc(100vw - 48px);
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+    overscroll-behavior: contain;
     transform: translateX(-100%);
     transition: transform 220ms ease;
     box-shadow: none;
@@ -3706,11 +3728,34 @@ html[data-theme="dark"] body.sidebar-resizing .sidebar-resize-handle::after {
     box-shadow: 0 0 44px rgb(8 18 23 / 30%);
   }
 
+  .sidebar.mobile-open .new-chat {
+    justify-content: flex-start;
+  }
+
   .sidebar-backdrop {
     position: fixed;
     inset: 0;
     z-index: 39;
     background: rgb(15 23 27 / 45%);
+    touch-action: none;
+  }
+
+  .sidebar-resize-handle {
+    display: none;
+  }
+
+  .conversation-item .scrolling-title-text {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .conversation-row:hover .scrolling-title.is-overflowing .scrolling-title-text,
+  .conversation-row:focus-within .scrolling-title.is-overflowing .scrolling-title-text {
+    animation: none;
+    transform: none;
   }
 
   .mobile-menu-button {

@@ -62,7 +62,7 @@ export function turnProcessItems(turn: Turn) {
     item.type !== 'userMessage'
     && item.type !== 'imageGeneration'
     && item.type !== 'reasoning'
-    && (item.type !== 'agentMessage' || !isFinalAgentMessage(item))
+    && (item.type !== 'agentMessage' || Boolean(item.phase) && !isTurnFinalAgentMessage(turn, item))
   );
 }
 
@@ -73,8 +73,22 @@ export function turnWorkedItems(turn: Turn) {
 export function turnResultItems(turn: Turn) {
   return turn.items.filter(item =>
     item.type === 'imageGeneration'
-    || item.type === 'agentMessage' && isFinalAgentMessage(item)
+    || item.type === 'agentMessage' && isTurnFinalAgentMessage(turn, item)
   );
+}
+
+export function isTurnFinalAgentMessage(turn: Turn, item: ThreadItem) {
+  if (item.type !== 'agentMessage') return false;
+
+  const hasExplicitFinalAnswer = turn.items.some(candidate =>
+    candidate.type === 'agentMessage' && candidate.phase === 'final_answer'
+  );
+  if (hasExplicitFinalAnswer) return item.phase === 'final_answer';
+
+  const fallback = [...turn.items]
+    .reverse()
+    .find(candidate => candidate.type === 'agentMessage' && !candidate.phase && candidate.text?.trim());
+  return fallback?.id === item.id;
 }
 
 export function turnActiveProcessItem(turn: Turn): ThreadItem | null {
@@ -149,7 +163,7 @@ export function processDisplayItems(turn: Turn, streaming = false): ProcessDispl
     const label = item.type === 'webSearchGroup'
       ? (live ? '正在搜索网页' : '已搜索网页')
       : skillGroup
-        ? `${live ? '正在' : '已'}读取 ${item.skillName || 'Skills'} 技能`
+        ? `${live ? '正在' : '已'}读取${item.skillName ? ` ${item.skillName} 技能` : '技能'}`
         : activityTitle(item, live);
     const detail = item.type === 'webSearchGroup' || skillGroup || skillRead ? '' : activityDetail(item);
     return {
@@ -168,12 +182,8 @@ function normalizedStatus(value: unknown) {
   return typeof value === 'string' ? value.replace(/[-_\s]/g, '').toLowerCase() : '';
 }
 
-function isFinalAgentMessage(item: ThreadItem) {
-  return item.type === 'agentMessage' && item.phase === 'final_answer';
-}
-
 function isIntermediateAgentMessage(item: ThreadItem) {
-  return item.type === 'agentMessage' && !isFinalAgentMessage(item);
+  return item.type === 'agentMessage' && item.phase !== 'final_answer';
 }
 
 function webSearchActionType(item: ThreadItem) {
@@ -332,11 +342,23 @@ function skillReadFileName(item: ThreadItem): string {
   return rest ? rest.split('/').filter(Boolean).pop() ?? '' : '';
 }
 
+function skillNameFromOutput(item: ThreadItem): string {
+  if (typeof item.aggregatedOutput !== 'string') return '';
+  const match = item.aggregatedOutput.match(/^name:\s*['"]?([^'"\r\n]+?)['"]?\s*$/m);
+  return match?.[1]?.trim() || '';
+}
+
+function displaySkillName(item: ThreadItem): string {
+  const metadataName = skillNameFromOutput(item);
+  if (metadataName) return metadataName;
+  const directoryName = skillReadName(item);
+  return /^r\d+$/i.test(directoryName) ? '' : directoryName;
+}
+
 function skillCommandTitle(item: ThreadItem, live = false) {
   const action = skillAction(item);
   const command = shellInnerCommand(commandCandidate(item));
-  const skill = skillReadName(item);
-  const skillLabel = skill ? humanizeSkillName(skill) : '';
+  const skillLabel = displaySkillName(item);
   const prefix = live ? '正在' : '已';
   if (action?.type === 'listFiles' || /^(?:find|ls)\s+/.test(command)) return `${prefix}列${skillLabel ? ` ${skillLabel} 技能` : '技能'}文件`;
   return `${prefix}读取${skillLabel ? ` ${skillLabel} 技能` : '技能'}`;
@@ -349,14 +371,14 @@ function shouldDisplayProcessItem(item: ThreadItem) {
 function createSkillReadGroup(items: ThreadItem[]): DisplayThreadItem | null {
   if (!items.length) return null;
   const first = items[0];
-  const skill = skillReadName(first);
+  const skill = items.map(displaySkillName).find(Boolean) || '';
   const files = [...new Set(items.map(skillReadFileName).filter(Boolean))];
   return {
     ...first,
     id: `skill-read-group-${first.id}-${items.length}`,
     type: 'skillReadGroup',
     memberIds: items.map(item => item.id),
-    skillName: skill ? humanizeSkillName(skill) : 'Skills',
+    skillName: skill,
     skillFiles: files
   } as DisplayThreadItem;
 }
