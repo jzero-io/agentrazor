@@ -16,12 +16,12 @@ type conversationContext struct {
 	ConversationID string `json:"conversationId"`
 }
 
-func (r *CodexAppServerRuntime) createConversationHome(conversationID string) error {
+func (r *appServer) createConversationHome(conversationID string) error {
 	dir, err := r.conversationDir(conversationID)
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), appServerStartTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), appServerTimeout)
 	defer cancel()
 	if _, err := r.request(ctx, "fs/createDirectory", map[string]any{
 		"path": dir, "recursive": true,
@@ -42,17 +42,17 @@ func (r *CodexAppServerRuntime) createConversationHome(conversationID string) er
 	return nil
 }
 
-func (r *CodexAppServerRuntime) conversationDir(conversationID string) (string, error) {
+func (r *appServer) conversationDir(conversationID string) (string, error) {
 	if err := validateThreadID(conversationID); err != nil {
 		return "", err
 	}
 	if filepath.Base(conversationID) != conversationID || strings.ContainsAny(conversationID, `/\`) {
-		return "", fmt.Errorf("%w: %q", ErrInvalidThreadID, conversationID)
+		return "", fmt.Errorf("%w: %q", errInvalidThreadID, conversationID)
 	}
-	return filepath.Join(r.options.AgentrazorHome, conversationID), nil
+	return filepath.Join(r.workspaceHome, conversationID), nil
 }
 
-func (r *CodexAppServerRuntime) DeleteConversationHome(conversationID string) error {
+func (r *appServer) deleteConversationHome(conversationID string) error {
 	dir, err := r.conversationDir(conversationID)
 	if err != nil {
 		return err

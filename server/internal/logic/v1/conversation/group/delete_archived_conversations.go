@@ -41,9 +41,6 @@ func (l *DeleteArchivedConversations) DeleteArchivedConversations(req *types.Pat
 	if err != nil || row.UserUuid != user.Uuid {
 		return nil, errors.New("conversation group not found")
 	}
-	if l.svcCtx.AgentThreads == nil {
-		return nil, errors.New("agent runtime is disabled")
-	}
 	convs, err := l.svcCtx.Model.Conversation.FindByCondition(l.ctx, nil,
 		condition.NewChain().
 			Equal(conversationmodel.UserUuid, user.Uuid).
@@ -54,11 +51,11 @@ func (l *DeleteArchivedConversations) DeleteArchivedConversations(req *types.Pat
 		return nil, err
 	}
 	for _, conv := range convs {
-		thread, err := l.svcCtx.AgentThreads.Metadata(l.ctx, conv.Id)
+		thread, err := l.svcCtx.AgentService.Metadata(l.ctx, conv.Id)
 		if err != nil {
 			// 线程已不存在（孤儿数据）：跳过 thread 侧，直接清理业务库记录
 			if errors.Is(err, agentdomain.ErrThreadNotFound) {
-				if dbErr := l.svcCtx.AgentThreads.DeleteConversationHome(conv.Id); dbErr != nil {
+				if dbErr := l.svcCtx.AgentService.DeleteConversationHome(conv.Id); dbErr != nil {
 					return nil, dbErr
 				}
 				if dbErr := l.svcCtx.Model.Conversation.DeleteByCondition(l.ctx, nil,
@@ -78,7 +75,7 @@ func (l *DeleteArchivedConversations) DeleteArchivedConversations(req *types.Pat
 		if !thread.Archived {
 			continue
 		}
-		if err := l.svcCtx.AgentThreads.Delete(l.ctx, conv.Id); err != nil {
+		if err := l.svcCtx.AgentService.Delete(l.ctx, conv.Id); err != nil {
 			return nil, err
 		}
 		if err := l.svcCtx.Model.Conversation.DeleteByCondition(l.ctx, nil,

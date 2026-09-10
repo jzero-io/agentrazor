@@ -32,7 +32,7 @@ func (l *Edit) Edit(req *types.EditRequest) (resp *types.EditResponse, err error
 		return nil, err
 	}
 
-	if err := ensureRoleUnique(l.ctx, l.svcCtx, req.RoleName, req.RoleCode, req.Uuid); err != nil {
+	if err := ensureRoleUnique(l.ctx, l.svcCtx.Model.ManageRole, req.RoleName, req.RoleCode, req.Uuid); err != nil {
 		return nil, err
 	}
 

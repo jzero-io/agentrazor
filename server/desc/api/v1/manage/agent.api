@@ -163,9 +163,7 @@ type SaveSelectionRequest {
 	ReasoningEffort string `json:"reasoningEffort,optional"`
 }
 
-type SaveSelectionResponse {
-	Runtime RuntimeStatus `json:"runtime"`
-}
+type SaveSelectionResponse {}
 
 type SaveProviderApiKeyRequest {
 	ProviderId string `json:"providerId" validate:"required"`
@@ -173,9 +171,7 @@ type SaveProviderApiKeyRequest {
 }
 
 type SaveProviderApiKeyResponse {
-	HasApiKey bool          `json:"hasApiKey"`
-	Restarted bool          `json:"restarted"`
-	Runtime   RuntimeStatus `json:"runtime"`
+	HasApiKey bool `json:"hasApiKey"`
 }
 
 type LoginApiKeyRequest {
@@ -199,12 +195,8 @@ type LogoutRequest {}
 
 type LogoutResponse {}
 
-type RestartRuntimeRequest {}
-
 type RuntimeStatus {
-	Running         bool   `json:"running"`
-	Restarting      bool   `json:"restarting"`
-	LastRestartTime string `json:"lastRestartTime,optional"`
+	Running bool `json:"running"`
 }
 
 type HomeOverviewRequest {}
@@ -261,9 +253,6 @@ service server {
 
 	@handler Logout
 	post /manage/agent/auth/logout (LogoutRequest) returns (LogoutResponse)
-
-	@handler RestartRuntime
-	post /manage/agent/runtime/restart (RestartRuntimeRequest) returns (RuntimeStatus)
 
 	@handler GetTokenQuotaGlobal
 	get /manage/agent/token-quota/global (GetTokenQuotaGlobalRequest) returns (GetTokenQuotaGlobalResponse)

@@ -120,13 +120,8 @@ type ResetUserTokenQuotaRequest struct {
 type ResetUserTokenQuotaResponse struct {
 }
 
-type RestartRuntimeRequest struct {
-}
-
 type RuntimeStatus struct {
-	Running         bool   `json:"running"`
-	Restarting      bool   `json:"restarting"`
-	LastRestartTime string `json:"lastRestartTime,optional"`
+	Running bool `json:"running"`
 }
 
 type SaveProviderApiKeyRequest struct {
@@ -135,9 +130,7 @@ type SaveProviderApiKeyRequest struct {
 }
 
 type SaveProviderApiKeyResponse struct {
-	HasApiKey bool          `json:"hasApiKey"`
-	Restarted bool          `json:"restarted"`
-	Runtime   RuntimeStatus `json:"runtime"`
+	HasApiKey bool `json:"hasApiKey"`
 }
 
 type SaveSelectionRequest struct {
@@ -147,7 +140,6 @@ type SaveSelectionRequest struct {
 }
 
 type SaveSelectionResponse struct {
-	Runtime RuntimeStatus `json:"runtime"`
 }
 
 type SaveTokenQuotaGlobalRequest struct {

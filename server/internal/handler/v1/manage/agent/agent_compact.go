@@ -100,24 +100,6 @@ func GetAccountStatus(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
-func RestartRuntime(svcCtx *svc.ServiceContext) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.RestartRuntimeRequest
-		if err := httpx.Parse(r, &req); err != nil {
-			httpx.ErrorCtx(r.Context(), w, err)
-			return
-		}
-
-		l := agent.NewRestartRuntime(r.Context(), svcCtx, r)
-		resp, err := l.RestartRuntime(&req)
-		if err != nil {
-			httpx.ErrorCtx(r.Context(), w, err)
-		} else {
-			httpx.OkJsonCtx(r.Context(), w, resp)
-		}
-	}
-}
-
 func GetSettings(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req types.GetSettingsRequest

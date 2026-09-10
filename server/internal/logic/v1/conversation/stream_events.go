@@ -6,7 +6,6 @@ package conversation
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
@@ -39,16 +38,13 @@ func (l *StreamEvents) StreamEvents(req *types.EventsRequest, client chan<- *typ
 const streamHeartbeatInterval = 15 * time.Second
 
 func (l *StreamEvents) stream(req *types.EventsRequest, client chan<- *types.EventsResponse) error {
-	if l.svcCtx.AgentThreads == nil {
-		return errors.New("agent runtime is disabled")
-	}
 	if _, err := requireOwner(l.ctx, l.svcCtx, req.ConversationId); err != nil {
 		return err
 	}
-	if err := l.svcCtx.AgentThreads.ValidateThread(l.ctx, req.ConversationId); err != nil {
+	if err := l.svcCtx.AgentService.ValidateThread(l.ctx, req.ConversationId); err != nil {
 		return err
 	}
-	subscription := l.svcCtx.AgentThreads.Subscribe(req.ConversationId)
+	subscription := l.svcCtx.AgentService.Subscribe(req.ConversationId)
 	defer subscription.Close()
 	if !sendStreamResponse(l.ctx.Done(), client, &types.EventsResponse{
 		Event: "stream.ready",

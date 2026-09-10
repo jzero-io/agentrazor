@@ -271,18 +271,14 @@ const local: App.I18n.Schema = {
     },
     agentConfig: {
       title: 'Model configuration',
-      lastRestart: 'Last restarted {time}',
-      restartAgent: 'Restart agent',
-      noRestartRecord: 'No record',
       supplier: 'Provider',
       model: 'Model',
       modelPlaceholder: 'Select or enter a model ID',
       reasoningEffort: 'Reasoning effort',
       defaultReasoningEffort: 'Use model default',
-      saveAndRestart: 'Save and restart agent',
+      save: 'Save',
       status: {
         unknown: 'Unknown',
-        restarting: 'Restarting',
         running: 'Running',
         stopped: 'Stopped',
         inUse: 'In use',
@@ -300,8 +296,7 @@ const local: App.I18n.Schema = {
       message: {
         selectProviderModel: 'Select a provider and model',
         providerApiKeyRequired: 'Enter the {provider} API Key',
-        applied: 'Model configuration applied and agent restarted',
-        restarted: 'Agent restarted',
+        applied: 'Model configuration applied',
         openAIApiKeyRequired: 'Enter an OpenAI API Key',
         openAIApiKeySaved: 'OpenAI API Key saved',
         chatGPTLoginSuccess: 'ChatGPT account connected',
@@ -325,7 +320,7 @@ const local: App.I18n.Schema = {
       },
       external: {
         title: '{provider} configuration',
-        guide: '{provider} is not configured. Enter an API Key, then save and restart.',
+        guide: '{provider} is not configured. Enter an API Key, then save.',
         apiAddress: 'API endpoint',
         replaceKey: 'Enter a new Key to replace the current value',
         keyPlaceholder: 'Enter the {provider} API Key'

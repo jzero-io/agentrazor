@@ -6,7 +6,6 @@ import (
 
 	"github.com/zeromicro/go-zero/core/logx"
 
-	agentdomain "github.com/jzero-io/agentrazor/server/internal/agent"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/manage/agent"
 )
@@ -28,15 +27,10 @@ func NewSaveProviderApiKey(ctx context.Context, svcCtx *svc.ServiceContext, r *h
 }
 
 func (l *SaveProviderApiKey) SaveProviderApiKey(req *types.SaveProviderApiKeyRequest) (resp *types.SaveProviderApiKeyResponse, err error) {
-	if l.svcCtx.AgentThreads == nil {
-		return nil, agentdomain.ErrServiceStopped
-	}
-	if err := updateAgentSettingsStore(l.ctx, l.svcCtx.Codex, func(store *agentSettingsStore) error {
-		return store.saveProviderAPIKey(req.ProviderId, req.ApiKey)
-	}); err != nil {
+	if err := l.svcCtx.AgentService.SaveProviderAPIKey(l.ctx, req.ProviderId, req.ApiKey); err != nil {
 		return nil, err
 	}
 	return &types.SaveProviderApiKeyResponse{
-		HasApiKey: true, Restarted: false, Runtime: runtimeStatus(l.svcCtx.AgentThreads.RuntimeStatus()),
+		HasApiKey: true,
 	}, nil
 }

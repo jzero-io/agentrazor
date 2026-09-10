@@ -224,12 +224,23 @@ type UpdateRequest struct {
 }
 
 type WorkspaceEntry struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-	Type string `json:"type"`
-	Size int64  `json:"size"`
+	Name     string           `json:"name"`
+	Path     string           `json:"path"`
+	Type     string           `json:"type"`
+	Children []WorkspaceEntry `json:"children"`
+}
+
+type WorkspaceFileRequest struct {
+	ConversationId string `path:"conversation_id" validate:"required"`
+	FilePath       string `form:"path" validate:"required"`
+}
+
+type WorkspaceFileResponse struct {
+	Name        string `json:"name"`
+	ContentType string `json:"contentType"`
+	DataBase64  string `json:"dataBase64"`
 }
 
 type WorkspaceFilesResponse struct {
-	Entries []WorkspaceEntry `json:"entries"`
+	Files []WorkspaceEntry `json:"files"`
 }

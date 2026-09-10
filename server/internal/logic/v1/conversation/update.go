@@ -31,25 +31,22 @@ func NewUpdate(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Request)
 }
 
 func (l *Update) Update(req *types.UpdateRequest) (resp *types.Conversation, err error) {
-	if l.svcCtx.AgentThreads == nil {
-		return nil, errors.New("agent runtime is disabled")
-	}
 	uuid, err := requireOwner(l.ctx, l.svcCtx, req.ConversationId)
 	if err != nil {
 		return nil, err
 	}
 	if req.Title != nil {
-		if err := l.svcCtx.AgentThreads.SetName(l.ctx, req.ConversationId, *req.Title); err != nil {
+		if err := l.svcCtx.AgentService.SetName(l.ctx, req.ConversationId, *req.Title); err != nil {
 			return nil, err
 		}
 	}
 	if req.Pinned != nil {
-		if err := l.svcCtx.AgentThreads.SetPinned(l.ctx, req.ConversationId, *req.Pinned); err != nil {
+		if err := l.svcCtx.AgentService.SetPinned(l.ctx, req.ConversationId, *req.Pinned); err != nil {
 			return nil, err
 		}
 	}
 	if req.Archived != nil {
-		if err := l.svcCtx.AgentThreads.SetArchived(l.ctx, req.ConversationId, *req.Archived); err != nil {
+		if err := l.svcCtx.AgentService.SetArchived(l.ctx, req.ConversationId, *req.Archived); err != nil {
 			return nil, err
 		}
 	}
@@ -73,7 +70,7 @@ func (l *Update) Update(req *types.UpdateRequest) (resp *types.Conversation, err
 			return nil, err
 		}
 	}
-	updated, err := l.svcCtx.AgentThreads.Metadata(l.ctx, req.ConversationId)
+	updated, err := l.svcCtx.AgentService.Metadata(l.ctx, req.ConversationId)
 	if err != nil {
 		return nil, err
 	}

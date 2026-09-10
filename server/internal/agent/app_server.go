@@ -16,7 +16,11 @@ import (
 )
 
 const (
-	appServerStartTimeout = 15 * time.Second
+	defaultWorkspaceHome   = "workspace"
+	defaultAppServerSocket = "/var/run/codex-app-server.sock"
+
+	// Bounds socket connection, initialization and short workspace operations.
+	appServerTimeout = 15 * time.Second
 
 	// Codex device-code authentication expires after 15 minutes. The app-server
 	// response does not currently expose this timeout, so keep it centralized here.
@@ -24,23 +28,19 @@ const (
 )
 
 var (
-	ErrRuntimeClosed       = errors.New("agent runtime is closed")
-	ErrThreadTurnRunning   = errors.New("agent thread already has an active turn")
-	ErrAppServerTerminated = errors.New("codex app-server terminated")
+	errAppServerClosed     = errors.New("Codex app-server is closed")
+	errTurnRunning         = errors.New("agent thread already has an active turn")
+	errAppServerTerminated = errors.New("codex app-server terminated")
 )
 
-type EventHandler func(map[string]any, string)
+type eventHandler func(map[string]any, string)
 
-type CodexAppServerOptions struct {
-	CodexHome      string
-	AgentrazorHome string
-	SocketPath     string
-}
-
-// CodexAppServerRuntime is a Unix socket client for the Codex app-server owned
+// appServer is a Unix socket client for the Codex app-server owned
 // by the separate codex service.
-type CodexAppServerRuntime struct {
-	options CodexAppServerOptions
+type appServer struct {
+	codexHome     string
+	workspaceHome string
+	threadCWD     string
 
 	connection *websocket.Conn
 	writeMu    sync.Mutex
@@ -76,17 +76,17 @@ type rpcError struct {
 	Message string `json:"message"`
 }
 
-// RPCError is the typed error returned when the app-server rejects a request.
+// rpcCallError is the typed error returned when the app-server rejects a request.
 // Callers inspect it with errors.As (on Code) rather than matching err.Error()
 // text, which is not a stable API. rpcError above is the on-the-wire JSON shape;
-// RPCError is the value returned to callers.
-type RPCError struct {
+// rpcCallError is the value returned to callers.
+type rpcCallError struct {
 	Method  string
 	Code    int
 	Message string
 }
 
-func (e *RPCError) Error() string {
+func (e *rpcCallError) Error() string {
 	return fmt.Sprintf("Codex app-server RPC %s failed (%d): %s", e.Method, e.Code, e.Message)
 }
 
@@ -101,27 +101,24 @@ type threadLoad struct {
 
 type appServerTurn struct {
 	threadID string
-	emit     EventHandler
+	emit     eventHandler
 	done     chan turnOutcome
 	once     sync.Once
 }
 
-func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRuntime, error) {
-	agentrazorHome, err := filepath.Abs(options.AgentrazorHome)
-	if err != nil {
-		return nil, fmt.Errorf("resolve conversation home: %w", err)
-	}
-	options.AgentrazorHome = agentrazorHome
+func (r *appServer) available() bool {
+	r.stateMu.Lock()
+	defer r.stateMu.Unlock()
+	return !r.closed && r.terminalErr == nil
+}
 
-	if strings.TrimSpace(options.SocketPath) == "" {
-		return nil, errors.New("Codex app-server socket path is required")
-	}
-	connection, err := dialCodexAppServerSocket(options.SocketPath, appServerStartTimeout)
+func newAppServer() (*appServer, error) {
+	connection, err := dialAppServer(defaultAppServerSocket, appServerTimeout)
 	if err != nil {
 		return nil, err
 	}
-	runtime := &CodexAppServerRuntime{
-		options:    options,
+	server := &appServer{
+		threadCWD:  defaultWorkspaceHome,
 		connection: connection,
 		waitDone:   make(chan struct{}),
 		pending:    make(map[int64]chan rpcEnvelope),
@@ -129,12 +126,12 @@ func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRun
 		loaded:     make(map[string]bool),
 		loads:      make(map[string]*threadLoad),
 	}
-	runtime.streamEpoch = fmt.Sprintf("%d", time.Now().UnixNano())
-	go runtime.readLoop()
+	server.streamEpoch = fmt.Sprintf("%d", time.Now().UnixNano())
+	go server.readLoop()
 
-	startCtx, cancel := context.WithTimeout(context.Background(), appServerStartTimeout)
+	startCtx, cancel := context.WithTimeout(context.Background(), appServerTimeout)
 	defer cancel()
-	if _, err := runtime.request(startCtx, "initialize", map[string]any{
+	initializeResult, err := server.request(startCtx, "initialize", map[string]any{
 		"clientInfo": map[string]any{
 			"name":    "agentrazor",
 			"title":   "AgentRazor",
@@ -143,18 +140,30 @@ func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRun
 		"capabilities": map[string]any{
 			"experimentalApi": false,
 		},
-	}); err != nil {
-		_ = runtime.Close()
+	})
+	if err != nil {
+		_ = server.close()
 		return nil, fmt.Errorf("initialize Codex app-server: %w", err)
 	}
-	if err := runtime.notify("initialized", map[string]any{}); err != nil {
-		_ = runtime.Close()
+	codexHome := filepath.Clean(strings.TrimSpace(stringValue(initializeResult["codexHome"])))
+	if !filepath.IsAbs(codexHome) {
+		_ = server.close()
+		return nil, fmt.Errorf("initialize Codex app-server: invalid codexHome %q", codexHome)
+	}
+	server.codexHome = codexHome
+	if filepath.IsAbs(server.threadCWD) {
+		server.workspaceHome = filepath.Clean(server.threadCWD)
+	} else {
+		server.workspaceHome = filepath.Join(codexHome, server.threadCWD)
+	}
+	if err := server.notify("initialized", map[string]any{}); err != nil {
+		_ = server.close()
 		return nil, fmt.Errorf("acknowledge Codex app-server initialization: %w", err)
 	}
-	return runtime, nil
+	return server, nil
 }
 
-func dialCodexAppServerSocket(socketPath string, timeout time.Duration) (*websocket.Conn, error) {
+func dialAppServer(socketPath string, timeout time.Duration) (*websocket.Conn, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	dialer := websocket.Dialer{
@@ -182,17 +191,6 @@ func dialCodexAppServerSocket(socketPath string, timeout time.Duration) (*websoc
 	}
 }
 
-func isolatedCodexEnvironment(environment []string, codexHome string) []string {
-	result := make([]string, 0, len(environment)+1)
-	for _, value := range environment {
-		if strings.HasPrefix(value, "CODEX_HOME=") || strings.HasPrefix(value, "CODEX_SQLITE_HOME=") {
-			continue
-		}
-		result = append(result, value)
-	}
-	return append(result, "CODEX_HOME="+codexHome)
-}
-
 type AccountStatus struct {
 	AuthMode string
 	Email    string
@@ -207,7 +205,7 @@ type DeviceLogin struct {
 	ExpiresIn       int64
 }
 
-func (r *CodexAppServerRuntime) AccountStatus(ctx context.Context) (AccountStatus, error) {
+func (r *appServer) accountStatus(ctx context.Context) (AccountStatus, error) {
 	result, err := r.request(ctx, "account/read", map[string]any{"refreshToken": false})
 	if err != nil {
 		return AccountStatus{}, err
@@ -224,7 +222,7 @@ func (r *CodexAppServerRuntime) AccountStatus(ctx context.Context) (AccountStatu
 	return status, nil
 }
 
-func (r *CodexAppServerRuntime) LoginAPIKey(ctx context.Context, apiKey string) error {
+func (r *appServer) loginAPIKey(ctx context.Context, apiKey string) error {
 	_, err := r.request(ctx, "account/login/start", map[string]any{"type": "apiKey", "apiKey": apiKey})
 	if err == nil {
 		r.setAccountStatus(AccountStatus{AuthMode: "apikey", LoggedIn: true})
@@ -232,7 +230,7 @@ func (r *CodexAppServerRuntime) LoginAPIKey(ctx context.Context, apiKey string) 
 	return err
 }
 
-func (r *CodexAppServerRuntime) StartChatGPTLogin(ctx context.Context) (DeviceLogin, error) {
+func (r *appServer) startChatGPTLogin(ctx context.Context) (DeviceLogin, error) {
 	result, err := r.request(ctx, "account/login/start", map[string]any{"type": "chatgptDeviceCode"})
 	if err != nil {
 		return DeviceLogin{}, err
@@ -245,7 +243,7 @@ func (r *CodexAppServerRuntime) StartChatGPTLogin(ctx context.Context) (DeviceLo
 	}, nil
 }
 
-func (r *CodexAppServerRuntime) Logout(ctx context.Context) error {
+func (r *appServer) logout(ctx context.Context) error {
 	_, err := r.request(ctx, "account/logout", map[string]any{})
 	if err == nil {
 		r.setAccountStatus(AccountStatus{})
@@ -270,20 +268,20 @@ func normalizeAuthMode(mode string) string {
 	return mode
 }
 
-func (r *CodexAppServerRuntime) setAccountStatus(status AccountStatus) {
+func (r *appServer) setAccountStatus(status AccountStatus) {
 	r.stateMu.Lock()
 	r.account = status
 	r.accountKnown = true
 	r.stateMu.Unlock()
 }
 
-func (r *CodexAppServerRuntime) cachedAccountStatus() (AccountStatus, bool) {
+func (r *appServer) cachedAccountStatus() (AccountStatus, bool) {
 	r.stateMu.Lock()
 	defer r.stateMu.Unlock()
 	return r.account, r.accountKnown
 }
 
-func (r *CodexAppServerRuntime) StartTurn(ctx context.Context, threadID, prompt string, emit EventHandler) (StartedTurn, error) {
+func (r *appServer) runTurn(ctx context.Context, threadID, prompt string, emit eventHandler) (StartedTurn, error) {
 	if threadID == "" {
 		return StartedTurn{}, errors.New("thread id is required")
 	}
@@ -292,16 +290,21 @@ func (r *CodexAppServerRuntime) StartTurn(ctx context.Context, threadID, prompt 
 		return StartedTurn{}, err
 	}
 	if resumed {
-		emitRuntimeEvent(emit, "thread.resumed", map[string]any{
+		emitEvent(emit, "thread.resumed", map[string]any{
 			"threadId": threadID,
 		}, r.currentStreamPosition())
 	}
 	return r.startTurn(ctx, threadID, prompt, emit)
 }
 
-func (r *CodexAppServerRuntime) startThread(ctx context.Context) (string, error) {
+func (r *appServer) startThread(ctx context.Context) (string, error) {
+	if _, err := r.request(ctx, "fs/createDirectory", map[string]any{
+		"path": r.workspaceHome, "recursive": true,
+	}); err != nil {
+		return "", fmt.Errorf("create conversation root: %w", err)
+	}
 	result, err := r.request(ctx, "thread/start", map[string]any{
-		"cwd": r.options.AgentrazorHome,
+		"cwd": r.threadCWD,
 	})
 	if err != nil {
 		return "", fmt.Errorf("start Codex thread: %w", err)
@@ -324,11 +327,11 @@ func (r *CodexAppServerRuntime) startThread(ctx context.Context) (string, error)
 
 // ensureThread only resumes after this app-server process starts. Threads
 // created in the current process stay loaded and can receive turns directly.
-func (r *CodexAppServerRuntime) ensureThread(ctx context.Context, threadID string) (bool, error) {
+func (r *appServer) ensureThread(ctx context.Context, threadID string) (bool, error) {
 	r.stateMu.Lock()
 	if r.closed {
 		r.stateMu.Unlock()
-		return false, ErrRuntimeClosed
+		return false, errAppServerClosed
 	}
 	if r.loaded[threadID] {
 		r.stateMu.Unlock()
@@ -382,7 +385,7 @@ func (r *CodexAppServerRuntime) ensureThread(ctx context.Context, threadID strin
 	return err == nil, err
 }
 
-func (r *CodexAppServerRuntime) startTurn(ctx context.Context, threadID, prompt string, emit EventHandler) (StartedTurn, error) {
+func (r *appServer) startTurn(ctx context.Context, threadID, prompt string, emit eventHandler) (StartedTurn, error) {
 	conversationDir, err := r.conversationDir(threadID)
 	if err != nil {
 		return StartedTurn{}, err
@@ -435,7 +438,7 @@ func (r *CodexAppServerRuntime) startTurn(ctx context.Context, threadID, prompt 
 	return StartedTurn{ID: turnID, StartedAt: time.Now().UTC(), Done: done}, nil
 }
 
-func (r *CodexAppServerRuntime) interruptTurn(threadID, turnID string) {
+func (r *appServer) interruptTurn(threadID, turnID string) {
 	interruptCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	_, _ = r.request(interruptCtx, "turn/interrupt", map[string]any{
@@ -444,23 +447,23 @@ func (r *CodexAppServerRuntime) interruptTurn(threadID, turnID string) {
 	})
 }
 
-func (r *CodexAppServerRuntime) registerExecution(execution *appServerTurn) error {
+func (r *appServer) registerExecution(execution *appServerTurn) error {
 	r.stateMu.Lock()
 	defer r.stateMu.Unlock()
 	if r.closed {
-		return ErrRuntimeClosed
+		return errAppServerClosed
 	}
 	if r.terminalErr != nil {
 		return r.terminalErr
 	}
 	if r.executions[execution.threadID] != nil {
-		return ErrThreadTurnRunning
+		return errTurnRunning
 	}
 	r.executions[execution.threadID] = execution
 	return nil
 }
 
-func (r *CodexAppServerRuntime) unregisterExecution(threadID string, execution *appServerTurn) {
+func (r *appServer) unregisterExecution(threadID string, execution *appServerTurn) {
 	r.stateMu.Lock()
 	defer r.stateMu.Unlock()
 	if r.executions[threadID] == execution {
@@ -468,19 +471,19 @@ func (r *CodexAppServerRuntime) unregisterExecution(threadID string, execution *
 	}
 }
 
-func (r *CodexAppServerRuntime) request(ctx context.Context, method string, params any) (map[string]any, error) {
+func (r *appServer) request(ctx context.Context, method string, params any) (map[string]any, error) {
 	result, _, err := r.requestWithPosition(ctx, method, params)
 	return result, err
 }
 
-func (r *CodexAppServerRuntime) requestWithPosition(ctx context.Context, method string, params any) (map[string]any, string, error) {
+func (r *appServer) requestWithPosition(ctx context.Context, method string, params any) (map[string]any, string, error) {
 	requestID := r.nextRequestID.Add(1)
 	responseCh := make(chan rpcEnvelope, 1)
 
 	r.stateMu.Lock()
 	if r.closed {
 		r.stateMu.Unlock()
-		return nil, "", ErrRuntimeClosed
+		return nil, "", errAppServerClosed
 	}
 	if r.terminalErr != nil {
 		err := r.terminalErr
@@ -502,7 +505,7 @@ func (r *CodexAppServerRuntime) requestWithPosition(ctx context.Context, method 
 	select {
 	case response := <-responseCh:
 		if response.Error != nil {
-			return nil, response.StreamPosition, &RPCError{
+			return nil, response.StreamPosition, &rpcCallError{
 				Method:  method,
 				Code:    response.Error.Code,
 				Message: response.Error.Message,
@@ -522,14 +525,14 @@ func (r *CodexAppServerRuntime) requestWithPosition(ctx context.Context, method 
 	}
 }
 
-func (r *CodexAppServerRuntime) notify(method string, params any) error {
+func (r *appServer) notify(method string, params any) error {
 	return r.writeJSON(map[string]any{
 		"method": method,
 		"params": params,
 	})
 }
 
-func (r *CodexAppServerRuntime) writeJSON(value any) error {
+func (r *appServer) writeJSON(value any) error {
 	r.writeMu.Lock()
 	defer r.writeMu.Unlock()
 	if err := r.connection.WriteJSON(value); err != nil {
@@ -538,13 +541,13 @@ func (r *CodexAppServerRuntime) writeJSON(value any) error {
 	return nil
 }
 
-func (r *CodexAppServerRuntime) removePending(requestID int64) {
+func (r *appServer) removePending(requestID int64) {
 	r.stateMu.Lock()
 	delete(r.pending, requestID)
 	r.stateMu.Unlock()
 }
 
-func (r *CodexAppServerRuntime) readLoop() {
+func (r *appServer) readLoop() {
 	defer r.waitOnce.Do(func() { close(r.waitDone) })
 	for {
 		var envelope rpcEnvelope
@@ -578,7 +581,7 @@ func (r *CodexAppServerRuntime) readLoop() {
 	}
 }
 
-func (r *CodexAppServerRuntime) handleNotification(method string, rawParams json.RawMessage, streamPosition string) {
+func (r *appServer) handleNotification(method string, rawParams json.RawMessage, streamPosition string) {
 	var params map[string]any
 	if len(rawParams) > 0 {
 		if err := json.Unmarshal(rawParams, &params); err != nil {
@@ -631,13 +634,13 @@ func (r *CodexAppServerRuntime) handleNotification(method string, rawParams json
 	execution.handleNotification(method, params, streamPosition)
 }
 
-func (r *CodexAppServerRuntime) failAll(runtimeErr error) {
-	if runtimeErr == nil {
-		runtimeErr = ErrAppServerTerminated
+func (r *appServer) failAll(err error) {
+	if err == nil {
+		err = errAppServerTerminated
 	}
 	r.stateMu.Lock()
 	if r.terminalErr == nil {
-		r.terminalErr = runtimeErr
+		r.terminalErr = err
 	}
 	pending := r.pending
 	r.pending = make(map[int64]chan rpcEnvelope)
@@ -650,15 +653,15 @@ func (r *CodexAppServerRuntime) failAll(runtimeErr error) {
 	for _, responseCh := range pending {
 		responseCh <- rpcEnvelope{Error: &rpcError{
 			Code:    -32000,
-			Message: runtimeErr.Error(),
+			Message: err.Error(),
 		}}
 	}
 	for _, execution := range executions {
-		execution.finish(turnOutcome{err: runtimeErr})
+		execution.finish(turnOutcome{err: err})
 	}
 }
 
-func (r *CodexAppServerRuntime) Close() error {
+func (r *appServer) close() error {
 	r.stateMu.Lock()
 	if r.closed {
 		r.stateMu.Unlock()
@@ -667,7 +670,7 @@ func (r *CodexAppServerRuntime) Close() error {
 	r.closed = true
 	r.stateMu.Unlock()
 
-	r.failAll(ErrRuntimeClosed)
+	r.failAll(errAppServerClosed)
 	_ = r.connection.Close()
 	select {
 	case <-r.waitDone:
@@ -714,7 +717,7 @@ func (t *appServerTurn) finish(outcome turnOutcome) {
 	})
 }
 
-func emitRuntimeEvent(emit EventHandler, eventType string, params map[string]any, streamPosition string) {
+func emitEvent(emit eventHandler, eventType string, params map[string]any, streamPosition string) {
 	if emit == nil {
 		return
 	}
@@ -725,11 +728,11 @@ func emitRuntimeEvent(emit EventHandler, eventType string, params map[string]any
 	}, streamPosition)
 }
 
-func (r *CodexAppServerRuntime) nextStreamPosition() string {
+func (r *appServer) nextStreamPosition() string {
 	return fmt.Sprintf("%s:%d", r.streamEpoch, r.nextInboundID.Add(1))
 }
 
-func (r *CodexAppServerRuntime) currentStreamPosition() string {
+func (r *appServer) currentStreamPosition() string {
 	return fmt.Sprintf("%s:%d", r.streamEpoch, r.nextInboundID.Load())
 }
 

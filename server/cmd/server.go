@@ -56,13 +56,12 @@ var serverCmd = &cobra.Command{
 		svcCtx.Middleware = middleware.NewMiddleware(svcCtx)
 		global.ServiceContext = *svcCtx
 		middleware.Register(restServer)
-		custom.RegisterWorkspaceFileServer(restServer, svcCtx)
 		handler.RegisterHandlers(restServer, svcCtx)
 
 		// load plugins
 		plugins.LoadPlugins(restServer, svcCtx)
 
-		customServer := custom.New(svcCtx.AgentThreads)
+		customServer := custom.New(svcCtx.AgentService)
 		logx.Must(customServer.Init())
 
 		group := service.NewServiceGroup()

@@ -93,7 +93,7 @@ func toConversation(value agentdomain.StoredThread) types.Conversation {
 	return result
 }
 
-func setConversationActiveTurn(conversation *types.Conversation, threads *agentdomain.ThreadService, conversationID string) {
+func setConversationActiveTurn(conversation *types.Conversation, threads *agentdomain.Service, conversationID string) {
 	turn, running := threads.ActiveTurn(conversationID)
 	conversation.Running = running
 	if running && !turn.CreatedAt.IsZero() {
@@ -110,14 +110,11 @@ func toStartedTurn(value agentdomain.StartedTurn) types.StartedTurn {
 }
 
 func buildDetail(ctx context.Context, svcCtx *svc.ServiceContext, conversationID string) (*types.DetailResponse, error) {
-	if svcCtx.AgentThreads == nil {
-		return nil, errors.New("agent runtime is disabled")
-	}
 	uuid, err := requireOwner(ctx, svcCtx, conversationID)
 	if err != nil {
 		return nil, err
 	}
-	thread, err := svcCtx.AgentThreads.Get(ctx, conversationID)
+	thread, err := svcCtx.AgentService.Get(ctx, conversationID)
 	if err != nil {
 		// 业务库有记录但 Codex thread 已不存在（孤儿数据）：按"会话不存在"处理
 		if errors.Is(err, agentdomain.ErrThreadNotFound) {
@@ -126,7 +123,7 @@ func buildDetail(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 		return nil, err
 	}
 	conversation := toConversation(thread)
-	setConversationActiveTurn(&conversation, svcCtx.AgentThreads, conversationID)
+	setConversationActiveTurn(&conversation, svcCtx.AgentService, conversationID)
 	detail := &types.DetailResponse{
 		Conversation:   conversation,
 		StreamPosition: thread.StreamPosition,
@@ -147,7 +144,7 @@ func buildDetail(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 				copyItem[key] = value
 			}
 			if stringValue(item["type"]) == "imageGeneration" {
-				if image, ok := generatedImage(ctx, item, svcCtx.Codex, conversationID); ok {
+				if image, ok := generatedImage(ctx, item, svcCtx.AgentService, conversationID); ok {
 					copyItem["dataUrl"] = image.DataUrl
 					copyItem["alt"] = image.Alt
 				}
@@ -171,12 +168,12 @@ func buildDetail(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 	return detail, nil
 }
 
-func generatedImage(ctx context.Context, item map[string]any, runtime *agentdomain.CodexAppServerClient, conversationID string) (types.GeneratedImage, bool) {
+func generatedImage(ctx context.Context, item map[string]any, service *agentdomain.Service, conversationID string) (types.GeneratedImage, bool) {
 	path := strings.TrimSpace(stringValue(item["savedPath"]))
 	if path == "" {
 		return types.GeneratedImage{}, false
 	}
-	file, err := runtime.ReadGeneratedImage(ctx, conversationID, path)
+	file, err := service.ReadGeneratedImage(ctx, conversationID, path)
 	if err != nil {
 		return types.GeneratedImage{}, false
 	}

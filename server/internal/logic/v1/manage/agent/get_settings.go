@@ -11,6 +11,15 @@ import (
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/manage/agent"
 )
 
+func toAccountStatus(status agentdomain.AccountStatus) types.AccountStatus {
+	return types.AccountStatus{
+		AuthMode: status.AuthMode,
+		Email:    status.Email,
+		PlanType: status.PlanType,
+		LoggedIn: status.LoggedIn,
+	}
+}
+
 type GetSettings struct {
 	logx.Logger
 	ctx    context.Context
@@ -28,28 +37,22 @@ func NewGetSettings(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Req
 }
 
 func (l *GetSettings) GetSettings(req *types.GetSettingsRequest) (resp *types.GetSettingsResponse, err error) {
-	store, err := readAgentSettingsStore(l.ctx, l.svcCtx.Codex)
+	settings, err := l.svcCtx.AgentService.Settings(l.ctx)
 	if err != nil {
 		return nil, err
 	}
 	account := agentdomain.AccountStatus{}
-	if l.svcCtx.AgentThreads != nil {
-		if value, accountErr := l.svcCtx.AgentThreads.AccountStatus(l.ctx); accountErr == nil {
-			account = value
-		} else {
-			l.Errorf("read Codex account: %v", accountErr)
-		}
+	if value, accountErr := l.svcCtx.AgentService.AccountStatus(l.ctx); accountErr == nil {
+		account = value
+	} else {
+		l.Errorf("read Codex account: %v", accountErr)
 	}
-	providers, err := store.providers()
+	providers, err := settings.Providers()
 	if err != nil {
 		return nil, err
 	}
-	runtime := types.RuntimeStatus{}
-	if l.svcCtx.AgentThreads != nil {
-		runtime = runtimeStatus(l.svcCtx.AgentThreads.RuntimeStatus())
-	}
 	return &types.GetSettingsResponse{
-		ActiveProvider: store.activeProvider(), Model: store.model(), ReasoningEffort: store.reasoningEffort(),
-		Providers: providers, Account: toAccountStatus(account), Runtime: runtime,
+		ActiveProvider: settings.ActiveProvider(), Model: settings.Model(), ReasoningEffort: settings.ReasoningEffort(),
+		Providers: providers, Account: toAccountStatus(account), Runtime: types.RuntimeStatus{Running: l.svcCtx.AgentService.Running()},
 	}, nil
 }

@@ -27,7 +27,6 @@ const props = defineProps<{
   filePreview: FilePreview | null;
   fileTabs: FilePreviewTab[];
   activeFileTabId: string;
-  activeFilePath: string;
   fileLoading: boolean;
   fileError: string;
   title: string;
@@ -89,11 +88,7 @@ watch(pickerOpen, open => {
 });
 
 const activeTreePath = computed(() => {
-  const decodedPath = decodeURIComponent((props.activeFilePath || '').split('?')[0] || '');
-  const marker = `/agentrazor-home/${props.conversationId}/`;
-  const markerIndex = decodedPath.indexOf(marker);
-  if (markerIndex >= 0) return decodedPath.slice(markerIndex + marker.length);
-  return '';
+  return props.fileBreadcrumbs.join('/');
 });
 
 function findTreeNode(nodes: WorkspaceTreeNode[], path: string): WorkspaceTreeNode | null {

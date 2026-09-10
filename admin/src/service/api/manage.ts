@@ -261,13 +261,6 @@ export function LogoutAgentAccount() {
   return request<Record<string, never>>({ url: '/api/v1/manage/agent/auth/logout', method: 'post' });
 }
 
-export function RestartAgentRuntime() {
-  return request<Api.Manage.AgentRuntimeStatus>({
-    url: '/api/v1/manage/agent/runtime/restart',
-    method: 'post'
-  });
-}
-
 export function GetEmailConfig() {
   return request<Api.Manage.GetEmailConfigResponse>({
     url: '/api/v1/manage/email/config',

@@ -11,7 +11,7 @@ import (
 
 	agentdomain "github.com/jzero-io/agentrazor/server/internal/agent"
 	"github.com/jzero-io/agentrazor/server/internal/errcodes"
-	"github.com/jzero-io/agentrazor/server/internal/quota"
+	"github.com/jzero-io/agentrazor/server/internal/service/quota"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/conversation"
 )
@@ -38,9 +38,6 @@ func (l *SendMessage) SendMessage(req *types.SendMessageRequest) (resp *types.St
 }
 
 func sendMessage(ctx context.Context, svcCtx *svc.ServiceContext, conversationID, content string) (*types.StartedTurn, error) {
-	if svcCtx.AgentThreads == nil {
-		return nil, errors.New("agent runtime is disabled")
-	}
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return nil, errors.New("message content is required")
@@ -51,7 +48,7 @@ func sendMessage(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 	if err != nil {
 		return nil, err
 	}
-	thread, err := svcCtx.AgentThreads.Metadata(ctx, conversationID)
+	thread, err := svcCtx.AgentService.Metadata(ctx, conversationID)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +68,7 @@ func sendMessage(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 		}
 	}
 
-	turn, err := svcCtx.AgentThreads.Send(thread.ID, content)
+	turn, err := svcCtx.AgentService.Send(thread.ID, content)
 	if err != nil {
 		return nil, err
 	}

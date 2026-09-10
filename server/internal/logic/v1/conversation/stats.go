@@ -2,7 +2,6 @@ package conversation
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/jzero-io/agentrazor/core-engine/helper/auth"
@@ -34,9 +33,6 @@ func NewStats(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Request) 
 }
 
 func (l *Stats) Stats() (resp *types.StatsResponse, err error) {
-	if l.svcCtx.AgentThreads == nil {
-		return nil, errors.New("agent runtime is disabled")
-	}
 	uuid, err := currentUserUUID(l.ctx)
 	if err != nil {
 		return nil, err
@@ -57,7 +53,7 @@ func (l *Stats) Stats() (resp *types.StatsResponse, err error) {
 	resp = &types.StatsResponse{}
 	for _, thread := range threads {
 		conversation := toConversation(thread)
-		setConversationActiveTurn(&conversation, l.svcCtx.AgentThreads, thread.ID)
+		setConversationActiveTurn(&conversation, l.svcCtx.AgentService, thread.ID)
 
 		resp.TotalConversations++
 		if conversation.Status == "archived" {
@@ -115,7 +111,7 @@ func (l *Stats) conversationRows(userUUID string, superAdmin bool) ([]*conversat
 }
 
 func (l *Stats) listOwnedThreads(owned []*conversationmodel.Conversation) ([]agentdomain.StoredThread, error) {
-	listed, err := l.svcCtx.AgentThreads.List(l.ctx)
+	listed, err := l.svcCtx.AgentService.List(l.ctx)
 	if err != nil {
 		return nil, err
 	}

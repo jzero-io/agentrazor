@@ -8,8 +8,8 @@ import (
 	"github.com/spf13/cast"
 	"github.com/zeromicro/go-zero/core/logx"
 
-	"github.com/jzero-io/agentrazor/server/internal/mailer"
 	manageemailmodel "github.com/jzero-io/agentrazor/server/internal/model/manage_email"
+	emailservice "github.com/jzero-io/agentrazor/server/internal/service/email"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/manage/email"
 )
@@ -39,7 +39,7 @@ func (l *TestConfig) TestConfig(req *types.TestConfigRequest) (resp *types.TestC
 		return nil, err
 	}
 
-	if err := mailer.Send(mailer.SMTPConfig{
+	if err := emailservice.Send(emailservice.SMTPConfig{
 		From:       config.From,
 		Host:       config.Host,
 		Port:       cast.ToInt(config.Port),

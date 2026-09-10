@@ -6,6 +6,7 @@ import (
 
 	"github.com/zeromicro/go-zero/core/logx"
 
+	agentdomain "github.com/jzero-io/agentrazor/server/internal/agent"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/conversation"
 )
@@ -31,18 +32,19 @@ func (l *WorkspaceFiles) WorkspaceFiles(req *types.PathRequest) (resp *types.Wor
 	if _, err = requireOwner(l.ctx, l.svcCtx, req.ConversationId); err != nil {
 		return nil, err
 	}
-	runtimeEntries, err := l.svcCtx.Codex.ListWorkspaceFiles(l.ctx, req.ConversationId)
+	workspaceEntries, err := l.svcCtx.AgentService.ListWorkspaceFiles(l.ctx, req.ConversationId)
 	if err != nil {
 		return nil, err
 	}
-	entries := make([]types.WorkspaceEntry, 0, len(runtimeEntries))
-	for _, entry := range runtimeEntries {
-		entries = append(entries, types.WorkspaceEntry{
-			Name: entry.Name,
-			Path: entry.Path,
-			Type: entry.Type,
-			Size: entry.Size,
+	return &types.WorkspaceFilesResponse{Files: workspaceFiles(workspaceEntries)}, nil
+}
+
+func workspaceFiles(values []agentdomain.WorkspaceEntry) []types.WorkspaceEntry {
+	result := make([]types.WorkspaceEntry, 0, len(values))
+	for _, value := range values {
+		result = append(result, types.WorkspaceEntry{
+			Name: value.Name, Path: value.Path, Type: value.Type, Children: workspaceFiles(value.Children),
 		})
 	}
-	return &types.WorkspaceFilesResponse{Entries: entries}, nil
+	return result
 }

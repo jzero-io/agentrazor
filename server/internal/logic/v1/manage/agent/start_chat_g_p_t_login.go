@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -28,15 +27,12 @@ func NewStartChatGPTLogin(ctx context.Context, svcCtx *svc.ServiceContext, r *ht
 }
 
 func (l *StartChatGPTLogin) StartChatGPTLogin(req *types.StartChatGPTLoginRequest) (resp *types.StartChatGPTLoginResponse, err error) {
-	if l.svcCtx.AgentThreads == nil {
-		return nil, errors.New("agent runtime is unavailable")
-	}
-	if account, statusErr := l.svcCtx.AgentThreads.AccountStatus(l.ctx); statusErr == nil && account.LoggedIn {
-		if err := l.svcCtx.AgentThreads.Logout(l.ctx); err != nil {
+	if account, statusErr := l.svcCtx.AgentService.AccountStatus(l.ctx); statusErr == nil && account.LoggedIn {
+		if err := l.svcCtx.AgentService.Logout(l.ctx); err != nil {
 			return nil, err
 		}
 	}
-	login, err := l.svcCtx.AgentThreads.StartChatGPTLogin(l.ctx)
+	login, err := l.svcCtx.AgentService.StartChatGPTLogin(l.ctx)
 	if err != nil {
 		return nil, err
 	}

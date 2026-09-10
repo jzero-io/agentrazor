@@ -43,7 +43,7 @@ func (l *Edit) Edit(req *types.EditRequest) (resp *types.EditResponse, err error
 	if err != nil {
 		return nil, err
 	}
-	if err := ensureUsernameUnique(l.ctx, l.svcCtx, req.Username, req.Uuid); err != nil {
+	if err := ensureUsernameUnique(l.ctx, l.svcCtx.Model.ManageUser, req.Username, req.Uuid); err != nil {
 		return nil, err
 	}
 

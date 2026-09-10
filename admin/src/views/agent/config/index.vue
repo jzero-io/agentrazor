@@ -7,25 +7,20 @@ import {
   GetAgentSettings,
   LoginAgentWithApiKey,
   LogoutAgentAccount,
-  RestartAgentRuntime,
   SaveAgentProviderApiKey,
   SaveAgentSelection,
   StartAgentChatGPTLogin
 } from '@/service/api';
 import { useAuth } from '@/hooks/business/auth';
 import { $t } from '@/locales';
-import { useAppStore } from '@/store/modules/app';
-const appStore = useAppStore();
 const { hasAuth } = useAuth();
 
 const canSaveSelection = computed(() => hasAuth('v1:manage:agent:saveSelection'));
 const canLoginApiKey = computed(() => hasAuth('v1:manage:agent:loginApiKey'));
 const canStartChatGPTLogin = computed(() => hasAuth('v1:manage:agent:startChatGPTLogin'));
 const canLogout = computed(() => hasAuth('v1:manage:agent:logout'));
-const canRestartRuntime = computed(() => hasAuth('v1:manage:agent:restartRuntime'));
 
 const savingSelection = ref(false);
-const restarting = ref(false);
 const apiKey = ref('');
 const apiKeyLoading = ref(false);
 const providerApiKey = ref('');
@@ -71,12 +66,6 @@ const effortLabels = computed<Record<string, string>>(() => ({
   max: $t('page.agentConfig.effort.max'),
   ultra: $t('page.agentConfig.effort.ultra')
 }));
-const lastRestartText = computed(() => {
-  const value = settings.value?.runtime.lastRestartTime;
-  if (!value) return $t('page.agentConfig.noRestartRecord');
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(appStore.locale, { hour12: false });
-});
 const selectionDirty = computed(() => {
   if (!settings.value) return false;
   return (
@@ -97,12 +86,10 @@ const effortOptions = computed(() => {
 });
 const runtimeText = computed(() => {
   if (!settings.value) return $t('page.agentConfig.status.unknown');
-  if (settings.value.runtime.restarting) return $t('page.agentConfig.status.restarting');
   return settings.value.runtime.running ? $t('page.agentConfig.status.running') : $t('page.agentConfig.status.stopped');
 });
 const runtimeType = computed(() => {
   if (!settings.value) return 'default';
-  if (settings.value.runtime.restarting) return 'warning';
   return settings.value.runtime.running ? 'success' : 'error';
 });
 
@@ -173,17 +160,6 @@ async function saveSelection() {
     providerApiKey.value = '';
     window.$message?.success($t('page.agentConfig.message.applied'));
     await refreshSettings();
-  }
-}
-
-async function restartRuntime() {
-  if (!canRestartRuntime.value) return;
-  restarting.value = true;
-  const { error } = await RestartAgentRuntime();
-  restarting.value = false;
-  if (!error) {
-    window.$message?.success($t('page.agentConfig.message.restarted'));
-    await refreshSettings(false);
   }
 }
 
@@ -291,9 +267,6 @@ onBeforeUnmount(stopLoginPolling);
             <span class="status-dot" :class="{ 'status-dot--running': settings?.runtime.running }"></span>
             {{ runtimeText }}
           </NTag>
-          <span class="last-restart">
-            {{ $t('page.agentConfig.lastRestart', { time: lastRestartText }) }}
-          </span>
         </div>
       </div>
 
@@ -537,11 +510,7 @@ onBeforeUnmount(stopLoginPolling);
           @click="saveSelection"
         >
           <template #icon><SvgIcon icon="carbon:checkmark" /></template>
-          {{ $t('page.agentConfig.saveAndRestart') }}
-        </NButton>
-        <NButton v-if="canRestartRuntime" secondary size="large" :loading="restarting" @click="restartRuntime">
-          <template #icon><SvgIcon icon="carbon:restart" /></template>
-          {{ $t('page.agentConfig.restartAgent') }}
+          {{ $t('page.agentConfig.save') }}
         </NButton>
       </div>
     </NCard>
@@ -690,12 +659,6 @@ onBeforeUnmount(stopLoginPolling);
 .hero-actions {
   flex: 0 0 auto;
   gap: 10px;
-}
-
-.last-restart {
-  color: var(--config-muted);
-  font-size: 12px;
-  white-space: nowrap;
 }
 
 .status-dot {
@@ -1076,11 +1039,6 @@ onBeforeUnmount(stopLoginPolling);
     width: 100%;
     flex-wrap: wrap;
     justify-content: flex-start;
-  }
-
-  .last-restart {
-    flex: 1;
-    white-space: normal;
   }
 
   .provider-heading {

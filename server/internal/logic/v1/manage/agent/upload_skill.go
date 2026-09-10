@@ -9,9 +9,23 @@ import (
 	"github.com/jzero-io/jzero/core/status"
 	"github.com/zeromicro/go-zero/core/logx"
 
+	agentdomain "github.com/jzero-io/agentrazor/server/internal/agent"
 	"github.com/jzero-io/agentrazor/server/internal/errcodes"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/manage/agent"
+)
+
+var (
+	errSkillArchiveRequired         = errors.New("skill archive file is required")
+	errSkillArchiveEmpty            = errors.New("skill archive is empty")
+	errSkillArchiveTooLarge         = errors.New("skill archive is too large")
+	errSkillArchiveUnsupported      = errors.New("unsupported skill archive format")
+	errSkillArchiveInvalid          = errors.New("invalid skill archive")
+	errSkillArchiveTooManyEntries   = errors.New("skill archive contains too many entries")
+	errSkillArchiveExpandedTooLarge = errors.New("expanded skill archive is too large")
+	errSkillArchiveUnsafeEntry      = errors.New("skill archive contains an unsafe entry")
+	errSkillNameInvalid             = errors.New("invalid skill name")
+	errSkillManifestMissing         = errors.New("skill archive must contain SKILL.md")
 )
 
 type UploadSkill struct {
@@ -38,9 +52,9 @@ func (l *UploadSkill) UploadSkill(req *types.UploadSkillRequest) (resp *types.Up
 		return nil, l.skillArchiveError(errSkillArchiveRequired)
 	}
 	name := strings.TrimSpace(l.r.FormValue("name"))
-	installed, err := l.svcCtx.Codex.InstallSkill(l.ctx, name, header.Filename, header.Size, file)
+	installed, err := l.svcCtx.AgentService.InstallSkill(l.ctx, name, header.Filename, header.Size, file)
 	if err != nil {
-		return nil, l.skillArchiveError(normalizeRuntimeSkillError(err))
+		return nil, l.skillArchiveError(normalizeSkillError(err))
 	}
 	return &types.UploadSkillResponse{Name: installed.Name}, nil
 }
@@ -73,4 +87,37 @@ func (l *UploadSkill) skillArchiveError(err error) error {
 		return err
 	}
 	return status.ErrorMessage(status.Code(code), l.svcCtx.Trans.Trans(l.ctx, key))
+}
+
+func normalizeSkillError(err error) error {
+	var remote *agentdomain.SkillError
+	if !errors.As(err, &remote) {
+		return err
+	}
+	var target error
+	switch remote.Kind {
+	case "archive_required":
+		target = errSkillArchiveRequired
+	case "archive_empty":
+		target = errSkillArchiveEmpty
+	case "archive_too_large":
+		target = errSkillArchiveTooLarge
+	case "archive_unsupported":
+		target = errSkillArchiveUnsupported
+	case "archive_invalid":
+		target = errSkillArchiveInvalid
+	case "archive_too_many_entries":
+		target = errSkillArchiveTooManyEntries
+	case "archive_expanded_too_large":
+		target = errSkillArchiveExpandedTooLarge
+	case "archive_unsafe_entry":
+		target = errSkillArchiveUnsafeEntry
+	case "name_invalid":
+		target = errSkillNameInvalid
+	case "manifest_missing":
+		target = errSkillManifestMissing
+	default:
+		return err
+	}
+	return errors.Join(target, errors.New(remote.Message))
 }

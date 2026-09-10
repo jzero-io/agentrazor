@@ -27,7 +27,7 @@ func NewResetUserTokenQuota(ctx context.Context, svcCtx *svc.ServiceContext, r *
 }
 
 func (l *ResetUserTokenQuota) ResetUserTokenQuota(req *types.ResetUserTokenQuotaRequest) (resp *types.ResetUserTokenQuotaResponse, err error) {
-	if err := ensureTokenQuotaUser(l.ctx, l.svcCtx, req.UserUuid); err != nil {
+	if err := ensureTokenQuotaUser(l.ctx, l.svcCtx.Model.ManageUser, req.UserUuid); err != nil {
 		return nil, err
 	}
 	if err := l.svcCtx.TokenQuota.ResetUser(l.ctx, req.UserUuid); err != nil {

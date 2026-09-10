@@ -4,13 +4,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/alicebob/miniredis/v2"
 	"github.com/casbin/casbin/v2"
 	"github.com/eddieowens/opts"
 	"github.com/jzero-io/jzero/core/stores/cache"
 	"github.com/jzero-io/jzero/core/stores/modelx"
 	"github.com/pkg/errors"
-	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 
@@ -48,15 +46,8 @@ func NewServiceContext(c config.Config, route2code func(r *http.Request) string,
 		SqlxConn: modelx.MustNewConn(c.Sqlx.SqlConf),
 	}
 
-	if c.Redis.MiniRedis {
-		miniRedis, err := miniredis.Run()
-		logx.Must(err)
-		svcCtx.Redis = redis.MustNewRedis(redis.RedisConf{
-			Type: redis.NodeType,
-			Host: miniRedis.Addr(),
-		})
-	} else if c.Redis.Host != "" {
-		svcCtx.Redis = redis.MustNewRedis(c.Redis.RedisConf)
+	if c.Redis.Host != "" {
+		svcCtx.Redis = redis.MustNewRedis(c.Redis)
 	}
 
 	svcCtx.Cache = cache.NewRedisNode(svcCtx.Redis, errors.New("cache not found"), cache.WithExpiry(time.Duration(5)*time.Second))

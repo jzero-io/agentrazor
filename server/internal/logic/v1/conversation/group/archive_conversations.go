@@ -41,9 +41,6 @@ func (l *ArchiveConversations) ArchiveConversations(req *types.PathRequest) (res
 	if err != nil || row.UserUuid != user.Uuid {
 		return nil, errors.New("conversation group not found")
 	}
-	if l.svcCtx.AgentThreads == nil {
-		return nil, errors.New("agent runtime is disabled")
-	}
 	convs, err := l.svcCtx.Model.Conversation.FindByCondition(l.ctx, nil,
 		condition.NewChain().
 			Equal(conversationmodel.UserUuid, user.Uuid).
@@ -55,13 +52,13 @@ func (l *ArchiveConversations) ArchiveConversations(req *types.PathRequest) (res
 	}
 	for _, conv := range convs {
 		// 线程已不存在（孤儿数据）：无需归档，跳过
-		if _, err := l.svcCtx.AgentThreads.Metadata(l.ctx, conv.Id); err != nil {
+		if _, err := l.svcCtx.AgentService.Metadata(l.ctx, conv.Id); err != nil {
 			if errors.Is(err, agentdomain.ErrThreadNotFound) {
 				continue
 			}
 			return nil, err
 		}
-		if err := l.svcCtx.AgentThreads.SetArchived(l.ctx, conv.Id, true); err != nil {
+		if err := l.svcCtx.AgentService.SetArchived(l.ctx, conv.Id, true); err != nil {
 			return nil, err
 		}
 	}

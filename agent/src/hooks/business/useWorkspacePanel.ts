@@ -169,16 +169,28 @@ export function safeWorkspaceFileURL(conversationId: string, relativePath: strin
     .join('/');
   if (!clean || clean.split('/').some(part => part === '..')) return '';
   if (!/\.[a-z0-9][a-z0-9_-]*$/i.test(clean)) return '';
-  return `/dist/data/agentrazor-home/${encodeURIComponent(conversationId)}/${clean.split('/').map(encodeURIComponent).join('/')}`;
+  return '/api/v1/conversation/' + encodeURIComponent(conversationId) + '/workspace/file?path=' + encodeURIComponent(clean);
 }
 
 export function displayWorkspaceProcessPath(filePath: string, conversationId = '') {
-  if (conversationId) {
-    const marker = `/agentrazor-home/${conversationId}/`;
-    const index = filePath.indexOf(marker);
-    if (index >= 0) return filePath.slice(index + marker.length);
+  const queryIndex = filePath.indexOf('?');
+  if (queryIndex >= 0) {
+    const requestedPath = new URLSearchParams(filePath.slice(queryIndex + 1)).get('path');
+    if (requestedPath) return requestedPath.replace(/^\/+/, '');
   }
-  return filePath.replace(/^\/dist\/data\/agentrazor-home\/[^/]+\//, '');
+
+  let decodedPath = filePath;
+  try {
+    decodedPath = decodeURIComponent(filePath);
+  } catch {
+    // Keep the original path when it contains malformed escape sequences.
+  }
+  if (conversationId) {
+    const marker = `/workspace/${conversationId}/`;
+    const index = decodedPath.indexOf(marker);
+    if (index >= 0) return decodedPath.slice(index + marker.length);
+  }
+  return decodedPath.replace(/^.*\/workspace\/[^/]+\//, '');
 }
 
 export function useWorkspacePanel(options: {
@@ -304,13 +316,17 @@ export function useWorkspacePanel(options: {
     try {
       const url = new URL(trimmed, window.location.origin);
       if (url.protocol !== 'http:' && url.protocol !== 'https:' && url.protocol !== 'file:') return '';
-      if (url.protocol !== 'file:' && url.origin !== window.location.origin && !url.pathname.includes('/agentrazor-home/')) return '';
+      if (url.protocol !== 'file:' && url.origin !== window.location.origin) return '';
+      const apiPath = '/api/v1/conversation/' + encodeURIComponent(conversationId) + '/workspace/file';
+      if (url.origin === window.location.origin && url.pathname === apiPath) {
+        return safeWorkspaceFileURL(conversationId, url.searchParams.get('path') || '');
+      }
       pathname = decodeURIComponent(url.pathname);
     } catch {
       pathname = trimmed.split('#')[0]?.split('?')[0] || '';
     }
 
-    const marker = `/agentrazor-home/${conversationId}/`;
+    const marker = `/workspace/${conversationId}/`;
     const markerIndex = pathname.indexOf(marker);
     if (markerIndex >= 0) {
       return safeWorkspaceFileURL(conversationId, pathname.slice(markerIndex + marker.length));

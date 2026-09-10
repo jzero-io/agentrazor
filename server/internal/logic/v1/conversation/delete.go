@@ -36,10 +36,7 @@ func (l *Delete) Delete(req *types.PathRequest) (resp *types.DeleteResponse, err
 	if err != nil {
 		return nil, err
 	}
-	if l.svcCtx.AgentThreads == nil {
-		return nil, errors.New("agent runtime is disabled")
-	}
-	_, err = l.svcCtx.AgentThreads.Metadata(l.ctx, req.ConversationId)
+	_, err = l.svcCtx.AgentService.Metadata(l.ctx, req.ConversationId)
 	threadGone := errors.Is(err, agentdomain.ErrThreadNotFound)
 	if err != nil && !threadGone {
 		return nil, err
@@ -54,10 +51,10 @@ func (l *Delete) Delete(req *types.PathRequest) (resp *types.DeleteResponse, err
 		if !archived {
 			return nil, errors.New("请先归档对话后再删除")
 		}
-		if err := l.svcCtx.AgentThreads.Delete(l.ctx, req.ConversationId); err != nil {
+		if err := l.svcCtx.AgentService.Delete(l.ctx, req.ConversationId); err != nil {
 			return nil, err
 		}
-	} else if err := l.svcCtx.AgentThreads.DeleteConversationHome(req.ConversationId); err != nil {
+	} else if err := l.svcCtx.AgentService.DeleteConversationHome(req.ConversationId); err != nil {
 		return nil, err
 	}
 	// 线程已不存在（孤儿数据）时忽略该错误，仅清理业务库记录
@@ -74,7 +71,7 @@ func (l *Delete) Delete(req *types.PathRequest) (resp *types.DeleteResponse, err
 }
 
 func (l *Delete) isArchived(conversationID string) (bool, error) {
-	threads, err := l.svcCtx.AgentThreads.List(l.ctx)
+	threads, err := l.svcCtx.AgentService.List(l.ctx)
 	if err != nil {
 		return false, err
 	}

@@ -3,7 +3,6 @@ package conversation
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"net/http"
 	"time"
 
@@ -32,9 +31,6 @@ func NewCreate(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Request)
 }
 
 func (l *Create) Create(req *types.CreateRequest) (resp *types.Conversation, err error) {
-	if l.svcCtx.AgentThreads == nil {
-		return nil, errors.New("agent runtime is disabled")
-	}
 	userUUID, err := currentUserUUID(l.ctx)
 	if err != nil {
 		return nil, err
@@ -43,7 +39,7 @@ func (l *Create) Create(req *types.CreateRequest) (resp *types.Conversation, err
 	if err != nil {
 		return nil, err
 	}
-	thread, err := l.svcCtx.AgentThreads.Create(l.ctx)
+	thread, err := l.svcCtx.AgentService.Create(l.ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +50,7 @@ func (l *Create) Create(req *types.CreateRequest) (resp *types.Conversation, err
 	if err := l.svcCtx.Model.Conversation.InsertV2(l.ctx, nil, row); err != nil {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		_ = l.svcCtx.AgentThreads.Delete(cleanupCtx, thread.ID)
+		_ = l.svcCtx.AgentService.Delete(cleanupCtx, thread.ID)
 		return nil, err
 	}
 

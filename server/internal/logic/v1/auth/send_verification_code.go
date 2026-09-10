@@ -15,7 +15,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 
 	"github.com/jzero-io/agentrazor/server/internal/constant"
-	"github.com/jzero-io/agentrazor/server/internal/mailer"
+	emailservice "github.com/jzero-io/agentrazor/server/internal/service/email"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/auth"
 )
@@ -68,7 +68,7 @@ func (l *SendVerificationCode) SendVerificationCode(req *types.SendVerificationC
 			return nil, SendVerificationError
 		}
 
-		if err = mailer.Send(mailer.SMTPConfig{
+		if err = emailservice.Send(emailservice.SMTPConfig{
 			From:       email.From,
 			Host:       email.Host,
 			Port:       cast.ToInt(email.Port),

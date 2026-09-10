@@ -11,10 +11,7 @@ import (
 )
 
 func (sc *ServiceContext) installAgentTokenUsageRecorder() {
-	if sc.AgentThreads == nil {
-		return
-	}
-	sc.AgentThreads.SetTokenUsageRecorder(sc.recordAgentTokenUsage)
+	sc.AgentService.SetTokenUsageRecorder(sc.recordAgentTokenUsage)
 }
 
 func (sc *ServiceContext) recordAgentTokenUsage(ctx context.Context, event agent.TokenUsageEvent) error {

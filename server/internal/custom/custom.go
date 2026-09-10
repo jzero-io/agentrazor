@@ -14,11 +14,11 @@ import (
 )
 
 type Custom struct {
-	agentThreads *agent.ThreadService
+	agent *agent.Service
 }
 
-func New(agentThreads *agent.ThreadService) *Custom {
-	return &Custom{agentThreads: agentThreads}
+func New(agentService *agent.Service) *Custom {
+	return &Custom{agent: agentService}
 }
 
 // Init Please add custom logic here.
@@ -39,8 +39,8 @@ func (c *Custom) Start() {}
 
 // Stop Please add shut down logic here.
 func (c *Custom) Stop() {
-	if c.agentThreads != nil {
-		_ = c.agentThreads.Close()
+	if c.agent != nil {
+		_ = c.agent.Close()
 	}
 }
 

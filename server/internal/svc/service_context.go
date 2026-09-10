@@ -10,15 +10,14 @@ import (
 	"github.com/jzero-io/agentrazor/server/internal/agent"
 	"github.com/jzero-io/agentrazor/server/internal/config"
 	"github.com/jzero-io/agentrazor/server/internal/model"
-	"github.com/jzero-io/agentrazor/server/internal/quota"
+	"github.com/jzero-io/agentrazor/server/internal/service/quota"
 )
 
 type ServiceContext struct {
 	*svc.ServiceContext
 	ConfigCenter configcenter.ConfigCenter[config.Config]
 	Model        model.Model
-	AgentThreads *agent.ThreadService
-	Codex        *agent.CodexAppServerClient
+	AgentService *agent.Service
 	TokenQuota   *quota.Service
 	Middleware
 }
@@ -32,21 +31,11 @@ func NewServiceContext(cc configcenter.ConfigCenter[config.Config], route2code f
 	svcCtx.ServiceContext = svc.NewServiceContext(svcCtx.ConfigCenter.MustGetConfig().Config, route2code)
 	svcCtx.Model = model.NewModel(svcCtx.SqlxConn, modelx.WithCachedConn(modelx.NewConnWithCache(svcCtx.SqlxConn, svcCtx.Cache)))
 	svcCtx.TokenQuota = quota.NewService(svcCtx.Model.AgentTokenQuota, svcCtx.Model.ConversationTokenUsageEvent)
-	runtimeFactory := func() (agent.ThreadRuntime, error) {
-		agentConfig := cc.MustGetConfig().Agent
-		return agent.NewCodexAppServerRuntime(agent.CodexAppServerOptions{
-			CodexHome:      agentConfig.CodexHome,
-			AgentrazorHome: agentConfig.AgentrazorHome,
-			SocketPath:     agentConfig.CodexSocket,
-		})
-	}
-	runtime, err := runtimeFactory()
+	agentService, err := agent.NewService()
 	if err != nil {
 		panic(err)
 	}
-	svcCtx.AgentThreads = agent.NewThreadService(runtime, runtimeFactory)
-	agentConfig := cc.MustGetConfig().Agent
-	svcCtx.Codex = agent.NewCodexAppServerClient(svcCtx.AgentThreads, agentConfig.CodexHome, agentConfig.AgentrazorHome)
+	svcCtx.AgentService = agentService
 	svcCtx.installAgentTokenUsageRecorder()
 	return svcCtx
 }

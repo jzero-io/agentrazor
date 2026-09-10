@@ -31,13 +31,10 @@ func NewMetadata(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Reques
 }
 
 func (l *Metadata) Metadata(req *types.PathRequest) (resp *types.MetadataResponse, err error) {
-	if l.svcCtx.AgentThreads == nil {
-		return nil, errors.New("agent runtime is disabled")
-	}
 	if _, err := requireOwner(l.ctx, l.svcCtx, req.ConversationId); err != nil {
 		return nil, err
 	}
-	thread, err := l.svcCtx.AgentThreads.Metadata(l.ctx, req.ConversationId)
+	thread, err := l.svcCtx.AgentService.Metadata(l.ctx, req.ConversationId)
 	if err != nil {
 		if errors.Is(err, agentdomain.ErrThreadNotFound) {
 			return nil, errConversationNotOwned

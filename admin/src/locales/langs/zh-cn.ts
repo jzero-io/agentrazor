@@ -271,18 +271,14 @@ const local: App.I18n.Schema = {
     },
     agentConfig: {
       title: '模型配置',
-      lastRestart: '最近重启 {time}',
-      restartAgent: '重启 agent',
-      noRestartRecord: '暂无记录',
       supplier: '供应商',
       model: '模型',
       modelPlaceholder: '选择或输入模型 ID',
       reasoningEffort: '推理强度',
       defaultReasoningEffort: '使用模型默认值',
-      saveAndRestart: '保存并重启 agent',
+      save: '保存',
       status: {
         unknown: '未知',
-        restarting: '重启中',
         running: '运行中',
         stopped: '未运行',
         inUse: '正在使用',
@@ -300,8 +296,7 @@ const local: App.I18n.Schema = {
       message: {
         selectProviderModel: '请选择供应商并填写模型',
         providerApiKeyRequired: '请输入 {provider} API Key',
-        applied: '模型配置已应用，agent 已重启',
-        restarted: 'agent 已重启',
+        applied: '模型配置已应用',
         openAIApiKeyRequired: '请输入 OpenAI API Key',
         openAIApiKeySaved: 'OpenAI API Key 已保存',
         chatGPTLoginSuccess: 'ChatGPT 账号登录成功',
@@ -325,7 +320,7 @@ const local: App.I18n.Schema = {
       },
       external: {
         title: '{provider} 配置',
-        guide: '尚未配置 {provider}，请输入 API Key 后保存并重启。',
+        guide: '尚未配置 {provider}，请输入 API Key 后保存。',
         apiAddress: 'API 地址',
         replaceKey: '输入新 Key 以替换当前配置',
         keyPlaceholder: '输入 {provider} API Key'

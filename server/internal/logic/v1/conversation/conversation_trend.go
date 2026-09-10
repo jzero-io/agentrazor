@@ -31,9 +31,6 @@ func NewConversationTrend(ctx context.Context, svcCtx *svc.ServiceContext, r *ht
 }
 
 func (l *ConversationTrend) ConversationTrend(req *types.ConversationTrendRequest) (resp *types.ConversationTrendResponse, err error) {
-	if l.svcCtx.AgentThreads == nil {
-		return nil, errors.New("agent runtime is disabled")
-	}
 	dimension := req.Dimension
 	if dimension == "" {
 		dimension = "day"

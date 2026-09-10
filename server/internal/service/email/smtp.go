@@ -1,4 +1,4 @@
-package mailer
+package email
 
 import (
 	"crypto/tls"

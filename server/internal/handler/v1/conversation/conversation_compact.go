@@ -160,6 +160,25 @@ func CancelTurn(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
+// 读取会话工作区文件
+func WorkspaceFile(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req types.WorkspaceFileRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+			return
+		}
+
+		l := conversation.NewWorkspaceFile(r.Context(), svcCtx, r)
+		resp, err := l.WorkspaceFile(&req)
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.OkJsonCtx(r.Context(), w, resp)
+		}
+	}
+}
+
 // 获取会话工作区文件
 func WorkspaceFiles(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

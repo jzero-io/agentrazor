@@ -12,37 +12,6 @@ interface UseWorkspaceFileTreeOptions {
   onError?: (error: unknown) => void;
 }
 
-function sortNodes(nodes: WorkspaceTreeNode[]) {
-  nodes.sort((left, right) => {
-    if (left.type !== right.type) return left.type === 'directory' ? -1 : 1;
-    return left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: 'base' });
-  });
-  for (const node of nodes) sortNodes(node.children);
-  return nodes;
-}
-
-function buildTree(entries: WorkspaceEntry[]) {
-  const roots: WorkspaceTreeNode[] = [];
-  const nodes = new Map<string, WorkspaceTreeNode>();
-
-  for (const entry of entries) {
-    nodes.set(entry.path, { ...entry, children: [] });
-  }
-
-  for (const node of nodes.values()) {
-    const separator = node.path.lastIndexOf('/');
-    if (separator < 0) {
-      roots.push(node);
-      continue;
-    }
-    const parent = nodes.get(node.path.slice(0, separator));
-    if (parent?.type === 'directory') parent.children.push(node);
-    else roots.push(node);
-  }
-
-  return sortNodes(roots);
-}
-
 export function useWorkspaceFileTree(options: UseWorkspaceFileTreeOptions) {
   const entriesByConversation = reactive(new Map<string, WorkspaceEntry[]>());
   const expandedByConversation = reactive(new Map<string, Set<string>>());
@@ -52,7 +21,7 @@ export function useWorkspaceFileTree(options: UseWorkspaceFileTreeOptions) {
 
   const conversationId = computed(() => options.selectedConversationId.value);
   const entries = computed(() => entriesByConversation.get(conversationId.value) || []);
-  const tree = computed(() => buildTree(entries.value));
+  const tree = computed(() => entries.value as WorkspaceTreeNode[]);
   const expandedPaths = computed(() => expandedByConversation.get(conversationId.value) || new Set<string>());
   const loading = computed(() => loadingConversationIds.has(conversationId.value));
   const loaded = computed(() => loadedConversationIds.has(conversationId.value));

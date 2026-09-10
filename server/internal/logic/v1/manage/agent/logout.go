@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -28,10 +27,7 @@ func NewLogout(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Request)
 }
 
 func (l *Logout) Logout(req *types.LogoutRequest) (resp *types.LogoutResponse, err error) {
-	if l.svcCtx.AgentThreads == nil {
-		return nil, errors.New("agent runtime is unavailable")
-	}
-	if err := l.svcCtx.AgentThreads.Logout(l.ctx); err != nil {
+	if err := l.svcCtx.AgentService.Logout(l.ctx); err != nil {
 		return nil, err
 	}
 	return &types.LogoutResponse{}, nil

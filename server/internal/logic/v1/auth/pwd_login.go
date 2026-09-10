@@ -23,9 +23,22 @@ func CreateToken(secret string, claims jwt.MapClaims) (string, error) {
 	return token.SignedString([]byte(secret))
 }
 
-const enabledRoleStatus = "1"
+const (
+	enabledRoleStatus = "1"
+	enabledUserStatus = "1"
+)
 
-var ErrRoleDisabled = errors.New("用户角色已被禁用")
+var (
+	errRoleDisabled = errors.New("用户角色已被禁用")
+	errUserDisabled = errors.New("用户已被禁用")
+)
+
+func ensureUserEnabled(status string) error {
+	if status != enabledUserStatus {
+		return errUserDisabled
+	}
+	return nil
+}
 
 func enabledRoleUuidsByUser(ctx context.Context, svcCtx *svc.ServiceContext, userUuid string) ([]string, error) {
 	userRoles, err := svcCtx.Model.ManageUserRole.FindByCondition(ctx, nil, condition.NewChain().
@@ -44,7 +57,7 @@ func enabledRoleUuidsByUser(ctx context.Context, svcCtx *svc.ServiceContext, use
 
 func enabledRoleUuids(ctx context.Context, svcCtx *svc.ServiceContext, roleUuids []string) ([]string, error) {
 	if len(roleUuids) == 0 {
-		return nil, ErrRoleDisabled
+		return nil, errRoleDisabled
 	}
 
 	roles, err := svcCtx.Model.ManageRole.FindByCondition(ctx, nil, condition.NewChain().
@@ -60,7 +73,7 @@ func enabledRoleUuids(ctx context.Context, svcCtx *svc.ServiceContext, roleUuids
 		enabledRoleUuids = append(enabledRoleUuids, role.Uuid)
 	}
 	if len(enabledRoleUuids) == 0 {
-		return nil, ErrRoleDisabled
+		return nil, errRoleDisabled
 	}
 	return enabledRoleUuids, nil
 }

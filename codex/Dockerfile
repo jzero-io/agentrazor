@@ -9,17 +9,17 @@ WORKDIR /app
 
 COPY server/plugins/ ./plugins/
 
-RUN --mount=type=cache,target=/go/pkg mkdir -p /dist/skills \
+RUN --mount=type=cache,target=/go/pkg mkdir -p /opt/codex/bin /opt/codex/plugins /opt/codex/skills \
     && for plugin in plugins/*/; do \
          [ -d "$plugin" ] || continue; \
          plugin_name=$(basename "$plugin"); \
          binary_name=$(printf '%s' "$plugin_name" | tr '-' '_'); \
-         (cd "$plugin" && CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -a -ldflags="$LDFLAGS" -o "/dist/$binary_name" .); \
+         (cd "$plugin" && CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -a -ldflags="$LDFLAGS" -o "/opt/codex/bin/$binary_name" .); \
          if [ -d "$plugin/etc" ]; then \
-           mkdir -p "/dist/plugins/$plugin_name"; \
-           cp -r "$plugin/etc" "/dist/plugins/$plugin_name"; \
+           mkdir -p "/opt/codex/plugins/$plugin_name"; \
+           cp -r "$plugin/etc" "/opt/codex/plugins/$plugin_name"; \
          fi; \
-         [ -d "$plugin/skills" ] && cp -r "$plugin/skills/." /dist/skills/ || true; \
+         [ -d "$plugin/skills" ] && cp -r "$plugin/skills/." /opt/codex/skills/ || true; \
        done
 
 FROM alpine:latest
@@ -39,14 +39,21 @@ RUN apk add --no-cache ca-certificates curl tar tzdata \
     && tar -xzf /tmp/codex.tar.gz -C /opt/codex \
     && rm /tmp/codex.tar.gz
 
+RUN rm /var/run && mkdir -p /var/run
+
 WORKDIR /dist
 
-ENV PATH="/dist:/opt/codex/bin:/opt/codex/codex-path:$PATH" \
+ENV PATH="/opt/codex/bin:/opt/codex/codex-path:$PATH" \
     CODEX_HOME=/dist/data \
-    CODEX_SOCKET=/run/codex/app-server.sock
+    CODEX_SOCKET=/var/run/codex-app-server.sock
 
-COPY --from=builder /dist/ /dist/
+COPY --from=builder /opt/codex/ /opt/codex/
 COPY codex/config/ /dist/defaults/
 COPY --chmod=0755 codex/entrypoint.sh /usr/local/bin/agentrazor-codex-entrypoint
+
+RUN for binary in /opt/codex/bin/*; do \
+      [ -f "$binary" ] && [ -x "$binary" ] || continue; \
+      ln -sf "$binary" "/usr/local/bin/$(basename "$binary")"; \
+    done
 
 ENTRYPOINT ["agentrazor-codex-entrypoint"]

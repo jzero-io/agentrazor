@@ -1,5 +1,18 @@
-import { apiBase, expireSession, getToken, isEnvelope, refreshAccessToken, request, withAuthHeaders } from './request';
+import { apiBase, expireSession, getToken, isEnvelope, refreshAccessToken, request } from './request';
 import type { Conversation, ConversationDetail, ConversationMetadata, Envelope, EventsResponse, StartedTurn, StreamEvent, TokenQuotaStatus, WorkspaceEntry, WorkspaceFileBlob, WorkspaceFileContent } from './types';
+interface WorkspaceFilePayload {
+  name: string;
+  contentType: string;
+  dataBase64: string;
+}
+
+function decodeBase64(value: string) {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
 
 export const conversationApi = {
   async list(): Promise<Conversation[]> {
@@ -40,34 +53,25 @@ export const conversationApi = {
     return request<null>(`/api/v1/conversation/${encodeURIComponent(id)}/turn/cancel`, { method: 'POST' });
   },
   async workspaceFiles(id: string): Promise<WorkspaceEntry[]> {
-    const result = await request<{ entries: WorkspaceEntry[] }>(`/api/v1/conversation/${encodeURIComponent(id)}/workspace/files`);
-    return result.entries;
+    const result = await request<{ files: WorkspaceEntry[] }>(`/api/v1/conversation/${encodeURIComponent(id)}/workspace/files`);
+    return result.files;
   },
-  async fetchWorkspaceResponse(path: string, retried = false): Promise<{ response: Response; pathname: string; name: string }> {
-    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    const response = await fetch(`${apiBase}${normalizedPath}`, {
-      headers: withAuthHeaders(),
-      cache: 'no-store'
-    });
-    if (response.status === 401 && !retried) {
-      const refreshResult = await refreshAccessToken();
-      if (refreshResult === 'refreshed') return this.fetchWorkspaceResponse(path, true);
-      if (refreshResult === 'expired') expireSession();
-    }
-    if (!response.ok) throw new Error(response.status === 404 ? '文件不存在或无权访问' : `读取文件失败（${response.status}）`);
-    const pathname = decodeURIComponent(normalizedPath.split('?')[0] || '');
-    const name = pathname.split('/').filter(Boolean).pop() || '文件';
-    return { response, pathname, name };
+  async fetchWorkspacePayload(path: string): Promise<{ payload: WorkspaceFilePayload; pathname: string }> {
+    const pathname = path.startsWith('/') ? path : '/' + path;
+    const payload = await request<WorkspaceFilePayload>(pathname, { cache: 'no-store' });
+    return { payload, pathname };
   },
   async fetchWorkspaceFile(path: string): Promise<WorkspaceFileContent> {
-    const { response, pathname, name } = await this.fetchWorkspaceResponse(path);
-    const content = await response.text();
-    return { path: pathname, name, content, contentType: response.headers.get('content-type') || '' };
+    const { payload, pathname } = await this.fetchWorkspacePayload(path);
+    const content = new TextDecoder().decode(decodeBase64(payload.dataBase64));
+    return { path: pathname, name: payload.name, content, contentType: payload.contentType };
   },
   async fetchWorkspaceBlob(path: string): Promise<WorkspaceFileBlob> {
-    const { response, pathname, name } = await this.fetchWorkspaceResponse(path);
-    const blob = await response.blob();
-    return { path: pathname, name, blob, contentType: response.headers.get('content-type') || blob.type || '' };
+    const { payload, pathname } = await this.fetchWorkspacePayload(path);
+    const bytes = decodeBase64(payload.dataBase64);
+    const data = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    const blob = new Blob([data], { type: payload.contentType });
+    return { path: pathname, name: payload.name, blob, contentType: payload.contentType || blob.type };
   },
   subscribe(
     id: string,

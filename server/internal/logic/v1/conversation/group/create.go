@@ -7,13 +7,45 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jzero-io/agentrazor/core-engine/helper/auth"
+	"github.com/jzero-io/jzero/core/stores/condition"
 	"github.com/zeromicro/go-zero/core/logx"
 
 	conversationgroupmodel "github.com/jzero-io/agentrazor/server/internal/model/conversation_group"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/conversation/group"
 )
+
+const conversationGroupUserNameConstraint = "uk_conversation_group_user_name"
+
+var errGroupNameExists = errors.New("分组名称已存在")
+
+func ensureGroupNameUnique(ctx context.Context, model conversationgroupmodel.ConversationGroupModel, userUUID, name, excludeUUID string) error {
+	chain := condition.NewChain().
+		Equal(conversationgroupmodel.UserUuid, userUUID).
+		Equal(conversationgroupmodel.Name, name)
+	if excludeUUID != "" {
+		chain = chain.NotEqual(conversationgroupmodel.Uuid, excludeUUID)
+	}
+
+	_, err := model.FindOneByCondition(ctx, nil, chain.Build()...)
+	if err == nil {
+		return errGroupNameExists
+	}
+	if errors.Is(err, conversationgroupmodel.ErrNotFound) {
+		return nil
+	}
+	return err
+}
+
+func normalizeGroupWriteError(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.ConstraintName == conversationGroupUserNameConstraint {
+		return errGroupNameExists
+	}
+	return err
+}
 
 type Create struct {
 	logx.Logger
@@ -35,7 +67,7 @@ func (l *Create) Create(req *types.CreateRequest) (resp *types.ConversationGroup
 	if name == "" {
 		return nil, errors.New("group name is required")
 	}
-	if err := ensureGroupNameUnique(l.ctx, l.svcCtx, user.Uuid, name, ""); err != nil {
+	if err := ensureGroupNameUnique(l.ctx, l.svcCtx.Model.ConversationGroup, user.Uuid, name, ""); err != nil {
 		return nil, err
 	}
 	row := &conversationgroupmodel.ConversationGroup{Uuid: uuid.NewString(), UserUuid: user.Uuid, Name: name}

@@ -323,8 +323,6 @@ declare namespace Api {
 
     type AgentRuntimeStatus = {
       running: boolean;
-      restarting: boolean;
-      lastRestartTime?: string;
     };
 
     type AgentSettings = {
@@ -342,7 +340,7 @@ declare namespace Api {
       reasoningEffort: string;
     };
 
-    type SaveAgentSelectionResponse = { runtime: AgentRuntimeStatus };
+    type SaveAgentSelectionResponse = Record<string, never>;
 
     type SaveAgentProviderApiKeyRequest = {
       providerId: string;
@@ -351,8 +349,6 @@ declare namespace Api {
 
     type SaveAgentProviderApiKeyResponse = {
       hasApiKey: boolean;
-      restarted: boolean;
-      runtime: AgentRuntimeStatus;
     };
 
     type AgentDeviceLogin = {

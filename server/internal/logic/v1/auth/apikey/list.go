@@ -50,3 +50,11 @@ func (l *List) List() (resp *types.ListResponse, err error) {
 	}
 	return &types.ListResponse{Keys: keys}, nil
 }
+
+func toAPIKey(row *agentapikeymodel.AgentApiKey) types.ApiKey {
+	return types.ApiKey{
+		Id:        row.Uuid,
+		KeyHint:   row.KeyHint,
+		CreatedAt: row.CreateTime.UTC().Format("2006-01-02T15:04:05.999999999Z07:00"),
+	}
+}

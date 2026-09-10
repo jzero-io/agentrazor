@@ -27,7 +27,7 @@ func NewSaveUserTokenQuota(ctx context.Context, svcCtx *svc.ServiceContext, r *h
 }
 
 func (l *SaveUserTokenQuota) SaveUserTokenQuota(req *types.SaveUserTokenQuotaRequest) (resp *types.SaveUserTokenQuotaResponse, err error) {
-	if err := ensureTokenQuotaUser(l.ctx, l.svcCtx, req.UserUuid); err != nil {
+	if err := ensureTokenQuotaUser(l.ctx, l.svcCtx.Model.ManageUser, req.UserUuid); err != nil {
 		return nil, err
 	}
 	if err := l.svcCtx.TokenQuota.SaveUser(

@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"strings"
 
@@ -29,13 +28,10 @@ func NewLoginApiKey(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Req
 }
 
 func (l *LoginApiKey) LoginApiKey(req *types.LoginApiKeyRequest) (resp *types.LoginApiKeyResponse, err error) {
-	if l.svcCtx.AgentThreads == nil {
-		return nil, errors.New("agent runtime is unavailable")
-	}
-	if err := l.svcCtx.AgentThreads.LoginAPIKey(l.ctx, strings.TrimSpace(req.ApiKey)); err != nil {
+	if err := l.svcCtx.AgentService.LoginAPIKey(l.ctx, strings.TrimSpace(req.ApiKey)); err != nil {
 		return nil, err
 	}
-	account, err := l.svcCtx.AgentThreads.AccountStatus(l.ctx)
+	account, err := l.svcCtx.AgentService.AccountStatus(l.ctx)
 	if err != nil {
 		return nil, err
 	}

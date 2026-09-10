@@ -4,7 +4,7 @@ hooks:
 
 migrate:
   driver: pgx
-  datasource-url: "postgres://root:123456@127.0.0.1:5432/agentrazor?sslmode=disable"
+  datasource-url: "postgres://agentrazor:agentrazor@127.0.0.1:5432/agentrazor?sslmode=disable"
   source-append-driver: true
 
 gen:
@@ -20,7 +20,7 @@ gen:
   model-cache: false
   model-ignore-columns: ["create_time", "update_time"]
   model-datasource: true
-  model-datasource-url: "postgres://root:123456@127.0.0.1:5432/agentrazor?sslmode=disable"
+  model-datasource-url: "postgres://agentrazor:agentrazor@127.0.0.1:5432/agentrazor?sslmode=disable"
   model-datasource-table:
     - agent_api_key
     - agent_token_quota

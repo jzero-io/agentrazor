@@ -1,3 +1,5 @@
+name: agentrazor
+
 services:
   codex:
     build:
@@ -8,19 +10,19 @@ services:
     init: true
     privileged: true
     healthcheck:
-      test: ["CMD-SHELL", "test -S /run/codex/app-server.sock"]
+      test: ["CMD-SHELL", "test -S /var/run/codex-app-server.sock"]
       interval: 2s
       timeout: 2s
       retries: 30
       start_period: 5s
     volumes:
       - ./codex/data:/dist/data
-      - codex-socket:/run/codex
+      - codex-socket:/var/run
     environment:
       - TZ=Asia/Shanghai
       - AGENTRAZOR_BASE_URL=http://server:8001
-      - AGENTRAZOR_API_KEY=${AGENTRAZOR_API_KEY:-}
-      - LARK_BOT_WEBHOOK_URL=${LARK_BOT_WEBHOOK_URL:-}
+    networks:
+      - app-network
 
   server:
     build:
@@ -43,17 +45,17 @@ services:
       start_period: 10s
     volumes:
       - ./server/logs:/dist/logs
-      - codex-socket:/run/codex
+      - codex-socket:/var/run
     env_file:
       - .env
     environment:
       - TZ=Asia/Shanghai
       - DRIVER_NAME=pgx
-      - DATASOURCE=postgres://root:123456@postgres:5432/agentrazor
+      - DATASOURCE=postgres://agentrazor:agentrazor@postgres:5432/agentrazor
       - REDIS_HOST=redis:6379
-      - CODEX_HOME=/dist/data
-      - AGENTRAZOR_HOME=/dist/data/agentrazor-home
-      - CODEX_SOCKET=/run/codex/app-server.sock
+    networks:
+      - app-network
+      - data-network
 
   admin:
     build:
@@ -68,6 +70,8 @@ services:
       - VITE_SERVICE_BASE_URL=http://127.0.0.1
     ports:
       - "8443:80"
+    networks:
+      - app-network
 
   agent:
     build:
@@ -81,6 +85,8 @@ services:
       - TZ=Asia/Shanghai
     ports:
       - "80:80"
+    networks:
+      - app-network
 
   postgres:
     image: postgres
@@ -89,8 +95,8 @@ services:
     shm_size: "1gb"
     environment:
       TZ: Asia/Shanghai
-      POSTGRES_PASSWORD: 123456
-      POSTGRES_USER: root
+      POSTGRES_PASSWORD: agentrazor
+      POSTGRES_USER: agentrazor
       POSTGRES_DB: agentrazor
     volumes:
       - ./postgres/data:/var/lib/postgresql
@@ -100,17 +106,30 @@ services:
       timeout: 3s
       retries: 20
       start_period: 10s
+    networks:
+      - data-network
 
   redis:
     image: redis:latest
     restart: always
     container_name: agentrazor-redis
+    volumes:
+      - ./redis/data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 20
       start_period: 5s
+    networks:
+      - data-network
 
 volumes:
   codex-socket:
+
+networks:
+  app-network:
+    driver: bridge
+  data-network:
+    driver: bridge
+    internal: true

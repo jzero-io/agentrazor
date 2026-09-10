@@ -27,7 +27,7 @@ func NewUpdateSkillFile(ctx context.Context, svcCtx *svc.ServiceContext, r *http
 }
 
 func (l *UpdateSkillFile) UpdateSkillFile(req *types.UpdateSkillFileRequest) (resp *types.UpdateSkillFileResponse, err error) {
-	if err := l.svcCtx.Codex.UpdateSkillFile(l.ctx, req.SkillName, req.File, req.Content); err != nil {
+	if err := l.svcCtx.AgentService.UpdateSkillFile(l.ctx, req.SkillName, req.File, req.Content); err != nil {
 		return nil, err
 	}
 	return &types.UpdateSkillFileResponse{}, nil

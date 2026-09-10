@@ -34,9 +34,6 @@ func NewList(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Request) *
 }
 
 func (l *List) List() (resp *types.ListResponse, err error) {
-	if l.svcCtx.AgentThreads == nil {
-		return nil, errors.New("agent runtime is disabled")
-	}
 	uuid, err := currentUserUUID(l.ctx)
 	if err != nil {
 		return nil, err
@@ -72,7 +69,7 @@ func (l *List) List() (resp *types.ListResponse, err error) {
 	response := &types.ListResponse{Conversations: make([]types.Conversation, 0, len(threads))}
 	for _, thread := range threads {
 		mapped := toConversation(thread)
-		setConversationActiveTurn(&mapped, l.svcCtx.AgentThreads, thread.ID)
+		setConversationActiveTurn(&mapped, l.svcCtx.AgentService, thread.ID)
 		if groupID := assignments[thread.ID]; groupID != "" {
 			mapped.GroupId = &groupID
 		}
@@ -82,7 +79,7 @@ func (l *List) List() (resp *types.ListResponse, err error) {
 }
 
 func (l *List) listOwnedThreads(owned []*conversationmodel.Conversation) ([]agentdomain.StoredThread, error) {
-	listed, err := l.svcCtx.AgentThreads.List(l.ctx)
+	listed, err := l.svcCtx.AgentService.List(l.ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -6,20 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 
-	agentdomain "github.com/jzero-io/agentrazor/server/internal/agent"
 	managetypes "github.com/jzero-io/agentrazor/server/internal/types/v1/manage/agent"
 	"github.com/pelletier/go-toml/v2"
 )
-
-var (
-	agentSettingsMu     = sync.RWMutex{}
-	allReasoningEfforts = []string{"low", "medium", "high", "xhigh", "max", "ultra"}
-)
-
-const openAIProviderID = "openai"
-const providerAPIKeyField = "experimental_bearer_token"
 
 type modelCatalog struct {
 	Models []catalogModel `json:"models"`
@@ -38,35 +28,40 @@ type catalogReasoningLevel struct {
 	Effort string `json:"effort"`
 }
 
-type agentSettingsFiles interface {
-	ReadConfigFile(context.Context, string) (string, error)
-	WriteConfigFile(context.Context, string, string) error
-}
-
-type agentSettingsStore struct {
+type Settings struct {
 	ctx     context.Context
-	runtime agentSettingsFiles
+	service *Service
 	config  map[string]any
 }
 
-func readAgentSettingsStore(ctx context.Context, runtime *agentdomain.CodexAppServerClient) (*agentSettingsStore, error) {
-	agentSettingsMu.RLock()
-	defer agentSettingsMu.RUnlock()
-	return loadAgentSettingsStoreFromRuntime(ctx, runtime)
+func (s *Service) Settings(ctx context.Context) (*Settings, error) {
+	s.settingsMu.RLock()
+	defer s.settingsMu.RUnlock()
+	return s.loadSettings(ctx)
 }
 
-func updateAgentSettingsStore(ctx context.Context, runtime *agentdomain.CodexAppServerClient, update func(*agentSettingsStore) error) error {
-	agentSettingsMu.Lock()
-	defer agentSettingsMu.Unlock()
-	store, err := loadAgentSettingsStoreFromRuntime(ctx, runtime)
+func (s *Service) SaveSelection(ctx context.Context, providerID, model, effort string) error {
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
+	settings, err := s.loadSettings(ctx)
 	if err != nil {
 		return err
 	}
-	return update(store)
+	return settings.saveSelection(providerID, model, effort)
 }
 
-func loadAgentSettingsStoreFromRuntime(ctx context.Context, runtime agentSettingsFiles) (*agentSettingsStore, error) {
-	content, err := runtime.ReadConfigFile(ctx, "config.toml")
+func (s *Service) SaveProviderAPIKey(ctx context.Context, providerID, apiKey string) error {
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
+	settings, err := s.loadSettings(ctx)
+	if err != nil {
+		return err
+	}
+	return settings.saveProviderAPIKey(providerID, apiKey)
+}
+
+func (s *Service) loadSettings(ctx context.Context) (*Settings, error) {
+	content, err := s.readConfigFile(ctx, "config.toml")
 	if err != nil {
 		return nil, err
 	}
@@ -76,41 +71,22 @@ func loadAgentSettingsStoreFromRuntime(ctx context.Context, runtime agentSetting
 			return nil, fmt.Errorf("decode Codex config: %w", err)
 		}
 	}
-	return &agentSettingsStore{ctx: ctx, runtime: runtime, config: config}, nil
+	return &Settings{ctx: ctx, service: s, config: config}, nil
 }
 
-type localAgentSettingsFiles struct {
-	codexHome string
-}
-
-func (f localAgentSettingsFiles) ReadConfigFile(_ context.Context, name string) (string, error) {
-	return readAgentConfigFile(f.codexHome, name)
-}
-
-func (f localAgentSettingsFiles) WriteConfigFile(_ context.Context, name, content string) error {
-	return writeAgentConfigFile(f.codexHome, name, content)
-}
-
-// loadAgentSettingsStore keeps unit tests focused on configuration semantics;
-// production handlers use loadAgentSettingsStoreFromRuntime through the
-// app-server socket.
-func loadAgentSettingsStore(codexHome string) (*agentSettingsStore, error) {
-	return loadAgentSettingsStoreFromRuntime(context.Background(), localAgentSettingsFiles{codexHome: codexHome})
-}
-
-func (s *agentSettingsStore) activeProvider() string {
+func (s *Settings) ActiveProvider() string {
 	return configString(s.config, "model_provider")
 }
 
-func (s *agentSettingsStore) model() string {
+func (s *Settings) Model() string {
 	return configString(s.config, "model")
 }
 
-func (s *agentSettingsStore) reasoningEffort() string {
+func (s *Settings) ReasoningEffort() string {
 	return configString(s.config, "model_reasoning_effort")
 }
 
-func (s *agentSettingsStore) providers() ([]managetypes.ModelProvider, error) {
+func (s *Settings) Providers() ([]managetypes.ModelProvider, error) {
 	catalogModels, err := s.catalogModels()
 	if err != nil {
 		return nil, err
@@ -125,7 +101,7 @@ func (s *agentSettingsStore) providers() ([]managetypes.ModelProvider, error) {
 			Name:      providerID,
 			BaseUrl:   configString(configured, "base_url"),
 			WireApi:   configString(configured, "wire_api"),
-			HasApiKey: providerID != openAIProviderID && configString(configured, providerAPIKeyField) != "",
+			HasApiKey: configString(configured, "experimental_bearer_token") != "",
 			Models:    catalogModels.forProvider(providerID),
 		})
 	}
@@ -164,14 +140,18 @@ func (models providerCatalogModels) forProvider(providerID string) []managetypes
 	result := make([]managetypes.ProviderModel, 0)
 	for _, item := range models {
 		if item.provider == providerID {
-			result = append(result, cloneProviderModel(item.model))
+			result = append(result, item.model)
 		}
 	}
 	return result
 }
 
-func (s *agentSettingsStore) catalogModels() (providerCatalogModels, error) {
-	content, err := s.runtime.ReadConfigFile(s.ctx, "models.json")
+func (s *Settings) catalogModels() (providerCatalogModels, error) {
+	catalogPath := configString(s.config, "model_catalog_json")
+	if catalogPath == "" {
+		return nil, errors.New("model_catalog_json is missing from config.toml")
+	}
+	content, err := s.service.readConfigFile(s.ctx, catalogPath)
 	if err != nil {
 		return nil, err
 	}
@@ -201,9 +181,6 @@ func (s *agentSettingsStore) catalogModels() (providerCatalogModels, error) {
 				efforts = append(efforts, effort)
 			}
 		}
-		if len(efforts) == 0 {
-			efforts = cloneStrings(allReasoningEfforts)
-		}
 		models = append(models, providerCatalogModel{
 			provider: providerID,
 			model: managetypes.ProviderModel{
@@ -215,16 +192,7 @@ func (s *agentSettingsStore) catalogModels() (providerCatalogModels, error) {
 	return models, nil
 }
 
-func cloneProviderModel(model managetypes.ProviderModel) managetypes.ProviderModel {
-	model.ReasoningEfforts = cloneStrings(model.ReasoningEfforts)
-	return model
-}
-
-func cloneStrings(values []string) []string {
-	return append([]string(nil), values...)
-}
-
-func (s *agentSettingsStore) saveSelection(providerID, model, effort string) error {
+func (s *Settings) saveSelection(providerID, model, effort string) error {
 	providerID, model, effort = strings.TrimSpace(providerID), strings.TrimSpace(model), strings.TrimSpace(effort)
 	catalogModels, err := s.catalogModels()
 	if err != nil {
@@ -236,18 +204,30 @@ func (s *agentSettingsStore) saveSelection(providerID, model, effort string) err
 	if !containsModel(catalogModels.forProvider(providerID), model) {
 		return fmt.Errorf("model %q does not belong to provider %q", model, providerID)
 	}
-	s.config["model_provider"] = providerID
-	s.config["model"] = model
-	s.config["model_catalog_json"] = "models.json"
-	if effort == "" {
-		delete(s.config, "model_reasoning_effort")
-	} else {
-		s.config["model_reasoning_effort"] = effort
+	values := map[string]any{
+		"model_provider": providerID,
+		"model":          model,
 	}
-	return s.writeConfig()
+	if effort == "" {
+		values["model_reasoning_effort"] = nil
+	} else {
+		values["model_reasoning_effort"] = effort
+	}
+	if err := s.service.writeConfigValues(s.ctx, values); err != nil {
+		return err
+	}
+	effective, err := s.service.readEffectiveConfig(s.ctx)
+	if err != nil {
+		return fmt.Errorf("verify Codex config: %w", err)
+	}
+	if configString(effective, "model_provider") != providerID || configString(effective, "model") != model ||
+		configString(effective, "model_reasoning_effort") != effort {
+		return errors.New("Codex config did not apply the selected model")
+	}
+	return nil
 }
 
-func (s *agentSettingsStore) saveProviderAPIKey(providerID, apiKey string) error {
+func (s *Settings) saveProviderAPIKey(providerID, apiKey string) error {
 	providerID, apiKey = strings.TrimSpace(providerID), strings.TrimSpace(apiKey)
 	if apiKey == "" {
 		return errors.New("provider API key is required")
@@ -256,27 +236,20 @@ func (s *agentSettingsStore) saveProviderAPIKey(providerID, apiKey string) error
 	if err != nil {
 		return err
 	}
-	if providerID == openAIProviderID || !catalogModels.hasProvider(providerID) {
-		return fmt.Errorf("provider %q does not support a config API key", providerID)
+	if !catalogModels.hasProvider(providerID) {
+		return fmt.Errorf("unsupported provider %q", providerID)
 	}
 	providers, ok := s.config["model_providers"].(map[string]any)
 	if !ok {
 		return errors.New("model_providers is missing from config.toml")
 	}
-	configured, ok := providers[providerID].(map[string]any)
+	_, ok = providers[providerID].(map[string]any)
 	if !ok {
-		return fmt.Errorf("provider %q is missing from config.toml", providerID)
+		return fmt.Errorf("provider %q does not support a config API key", providerID)
 	}
-	configured[providerAPIKeyField] = apiKey
-	return s.writeConfig()
-}
-
-func (s *agentSettingsStore) writeConfig() error {
-	data, err := toml.Marshal(s.config)
-	if err != nil {
-		return fmt.Errorf("encode Codex config: %w", err)
-	}
-	return s.runtime.WriteConfigFile(s.ctx, "config.toml", string(data))
+	return s.service.writeConfigValues(s.ctx, map[string]any{
+		"model_providers." + providerID + ".experimental_bearer_token": apiKey,
+	})
 }
 
 func configString(values map[string]any, key string) string {

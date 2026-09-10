@@ -31,7 +31,7 @@ func (l *CancelTurn) CancelTurn(req *types.PathRequest) (resp *types.CancelTurnR
 	if _, err := requireOwner(l.ctx, l.svcCtx, req.ConversationId); err != nil {
 		return nil, err
 	}
-	if err := l.svcCtx.AgentThreads.Cancel(req.ConversationId); err != nil {
+	if err := l.svcCtx.AgentService.Cancel(req.ConversationId); err != nil {
 		return nil, err
 	}
 	return &types.CancelTurnResponse{}, nil

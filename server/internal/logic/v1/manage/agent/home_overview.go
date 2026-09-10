@@ -28,15 +28,15 @@ func NewHomeOverview(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Re
 }
 
 func (l *HomeOverview) HomeOverview(req *types.HomeOverviewRequest) (resp *types.HomeOverviewResponse, err error) {
-	store, err := readAgentSettingsStore(l.ctx, l.svcCtx.Codex)
+	settings, err := l.svcCtx.AgentService.Settings(l.ctx)
 	if err != nil {
 		return nil, err
 	}
-	providers, err := store.providers()
+	providers, err := settings.Providers()
 	if err != nil {
 		return nil, err
 	}
-	skills, err := l.svcCtx.Codex.ListSkills(l.ctx)
+	skills, err := l.svcCtx.AgentService.ListSkills(l.ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -45,8 +45,8 @@ func (l *HomeOverview) HomeOverview(req *types.HomeOverviewRequest) (resp *types
 		return nil, err
 	}
 
-	providerID := store.activeProvider()
-	modelID := store.model()
+	providerID := settings.ActiveProvider()
+	modelID := settings.Model()
 	modelName := modelID
 	for _, provider := range providers {
 		if provider.Id != providerID {
@@ -61,13 +61,8 @@ func (l *HomeOverview) HomeOverview(req *types.HomeOverviewRequest) (resp *types
 		break
 	}
 
-	running := false
-	if l.svcCtx.AgentThreads != nil {
-		running = l.svcCtx.AgentThreads.RuntimeStatus().Running
-	}
-
 	return &types.HomeOverviewResponse{
-		AgentRunning:   running,
+		AgentRunning:   l.svcCtx.AgentService.Running(),
 		ActiveProvider: providerID,
 		Model:          modelID,
 		ModelName:      modelName,

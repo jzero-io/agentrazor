@@ -117,7 +117,7 @@ export interface WorkspaceEntry {
   name: string;
   path: string;
   type: 'directory' | 'file';
-  size: number;
+  children: WorkspaceEntry[];
 }
 
 export interface WorkspaceFileContent {

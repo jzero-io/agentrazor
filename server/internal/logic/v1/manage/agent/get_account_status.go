@@ -6,7 +6,6 @@ import (
 
 	"github.com/zeromicro/go-zero/core/logx"
 
-	agentdomain "github.com/jzero-io/agentrazor/server/internal/agent"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/manage/agent"
 )
@@ -28,10 +27,7 @@ func NewGetAccountStatus(ctx context.Context, svcCtx *svc.ServiceContext, r *htt
 }
 
 func (l *GetAccountStatus) GetAccountStatus(req *types.GetAccountStatusRequest) (resp *types.GetAccountStatusResponse, err error) {
-	if l.svcCtx.AgentThreads == nil {
-		return nil, agentdomain.ErrServiceStopped
-	}
-	account, err := l.svcCtx.AgentThreads.AccountStatus(l.ctx)
+	account, err := l.svcCtx.AgentService.AccountStatus(l.ctx)
 	if err != nil {
 		return nil, err
 	}

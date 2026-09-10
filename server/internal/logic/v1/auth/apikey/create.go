@@ -74,3 +74,10 @@ func (l *Create) Create() (resp *types.CreateResponse, err error) {
 
 	return &types.CreateResponse{ApiKey: toAPIKey(row), Key: plainKey}, nil
 }
+
+func keyHint(key string) string {
+	if len(key) <= 15 {
+		return key
+	}
+	return key[:11] + "…" + key[len(key)-4:]
+}

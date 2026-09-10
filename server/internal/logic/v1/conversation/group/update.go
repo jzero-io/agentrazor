@@ -42,7 +42,7 @@ func (l *Update) Update(req *types.UpdateRequest) (resp *types.ConversationGroup
 		if name == "" {
 			return nil, errors.New("group name is required")
 		}
-		if err := ensureGroupNameUnique(l.ctx, l.svcCtx, user.Uuid, name, req.GroupId); err != nil {
+		if err := ensureGroupNameUnique(l.ctx, l.svcCtx.Model.ConversationGroup, user.Uuid, name, req.GroupId); err != nil {
 			return nil, err
 		}
 		values[string(conversationgroupmodel.Name)] = name

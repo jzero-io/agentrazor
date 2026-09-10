@@ -1,5 +1,6 @@
 .idea
 deploy/docker-compose/postgres/data
+deploy/docker-compose/redis/data
 deploy/docker-compose/server/data
 deploy/docker-compose/codex/data
 deploy/docker-compose/server/logs

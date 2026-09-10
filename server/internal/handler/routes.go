@@ -170,6 +170,12 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					{
 
 						Method:  http.MethodGet,
+						Path:    "/conversation/:conversation_id/workspace/file",
+						Handler: v1conversation.WorkspaceFile(serverCtx),
+					},
+					{
+
+						Method:  http.MethodGet,
 						Path:    "/conversation/:conversation_id/workspace/files",
 						Handler: v1conversation.WorkspaceFiles(serverCtx),
 					},
@@ -301,11 +307,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 						Method:  http.MethodGet,
 						Path:    "/manage/agent/auth/status",
 						Handler: v1manageagent.GetAccountStatus(serverCtx),
-					},
-					{
-						Method:  http.MethodPost,
-						Path:    "/manage/agent/runtime/restart",
-						Handler: v1manageagent.RestartRuntime(serverCtx),
 					},
 					{
 						Method:  http.MethodGet,

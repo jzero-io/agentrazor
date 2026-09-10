@@ -281,18 +281,14 @@ declare namespace App {
 
     type AgentConfigSchema = {
       title: string;
-      lastRestart: string;
-      restartAgent: string;
-      noRestartRecord: string;
       supplier: string;
       model: string;
       modelPlaceholder: string;
       reasoningEffort: string;
       defaultReasoningEffort: string;
-      saveAndRestart: string;
+      save: string;
       status: {
         unknown: string;
-        restarting: string;
         running: string;
         stopped: string;
         inUse: string;
@@ -311,7 +307,6 @@ declare namespace App {
         selectProviderModel: string;
         providerApiKeyRequired: string;
         applied: string;
-        restarted: string;
         openAIApiKeyRequired: string;
         openAIApiKeySaved: string;
         chatGPTLoginSuccess: string;

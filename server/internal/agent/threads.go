@@ -9,38 +9,22 @@ import (
 	"time"
 )
 
-// ThreadRuntime is the storage and execution surface used by the conversation
-// service. Codex app-server owns the persisted thread data.
-type ThreadRuntime interface {
-	CreateStoredThread(ctx context.Context) (StoredThread, error)
-	ListStoredThreads(ctx context.Context, archived bool) ([]StoredThread, error)
-	ReadStoredThread(ctx context.Context, threadID string, includeTurns bool) (StoredThread, error)
-	SetThreadName(ctx context.Context, threadID, name string) error
-	SetThreadPinned(ctx context.Context, threadID string, pinned bool) error
-	ArchiveStoredThread(ctx context.Context, threadID string) error
-	UnarchiveStoredThread(ctx context.Context, threadID string) (StoredThread, error)
-	DeleteThread(ctx context.Context, threadID string) error
-	DeleteConversationHome(threadID string) error
-	StartTurn(ctx context.Context, threadID, prompt string, emit EventHandler) (StartedTurn, error)
-	Close() error
-}
-
 type StartedTurn struct {
 	ID        string
 	StartedAt time.Time
 	Done      <-chan error
 }
 
-func (r *CodexAppServerRuntime) CreateStoredThread(ctx context.Context) (StoredThread, error) {
+func (r *appServer) createThread(ctx context.Context) (StoredThread, error) {
 	threadID, err := r.startThread(ctx)
 	if err != nil {
 		return StoredThread{}, err
 	}
 	if err := r.createConversationHome(threadID); err != nil {
-		_ = r.DeleteThread(ctx, threadID)
+		_ = r.deleteThread(ctx, threadID)
 		return StoredThread{}, err
 	}
-	thread, err := r.ReadStoredThread(ctx, threadID, false)
+	thread, err := r.readThread(ctx, threadID, false)
 	if err == nil {
 		return thread, nil
 	}
@@ -52,7 +36,7 @@ func (r *CodexAppServerRuntime) CreateStoredThread(ctx context.Context) (StoredT
 	}, nil
 }
 
-func (r *CodexAppServerRuntime) ListStoredThreads(ctx context.Context, archived bool) ([]StoredThread, error) {
+func (r *appServer) listThreads(ctx context.Context, archived bool) ([]StoredThread, error) {
 	var threads []StoredThread
 	var cursor string
 	for {
@@ -99,7 +83,7 @@ func (r *CodexAppServerRuntime) ListStoredThreads(ctx context.Context, archived 
 	}
 }
 
-func (r *CodexAppServerRuntime) ReadStoredThread(ctx context.Context, threadID string, includeTurns bool) (StoredThread, error) {
+func (r *appServer) readThread(ctx context.Context, threadID string, includeTurns bool) (StoredThread, error) {
 	thread, err := r.readThreadMetadata(ctx, threadID)
 	if err != nil {
 		// thread/read reads stored threads (including archived ones) without
@@ -130,7 +114,7 @@ func (r *CodexAppServerRuntime) ReadStoredThread(ctx context.Context, threadID s
 	return thread, nil
 }
 
-func (r *CodexAppServerRuntime) readThreadMetadata(ctx context.Context, threadID string) (StoredThread, error) {
+func (r *appServer) readThreadMetadata(ctx context.Context, threadID string) (StoredThread, error) {
 	result, streamPosition, err := r.requestWithPosition(ctx, "thread/read", map[string]any{
 		"threadId":     threadID,
 		"excludeTurns": true,
@@ -150,7 +134,7 @@ func (r *CodexAppServerRuntime) readThreadMetadata(ctx context.Context, threadID
 	return thread, nil
 }
 
-func (r *CodexAppServerRuntime) listThreadTurns(ctx context.Context, threadID string) ([]StoredTurn, string, error) {
+func (r *appServer) listThreadTurns(ctx context.Context, threadID string) ([]StoredTurn, string, error) {
 	var newestFirst []StoredTurn
 	var cursor string
 	var streamPosition string
@@ -188,11 +172,11 @@ func (r *CodexAppServerRuntime) listThreadTurns(ctx context.Context, threadID st
 // failed (so the thread is not simply archived — archived threads read fine),
 // and the remaining -32600 resume failure is "no rollout found".
 func threadMissingError(err error) bool {
-	var rpcErr *RPCError
+	var rpcErr *rpcCallError
 	return errors.As(err, &rpcErr) && rpcErr.Code == -32600
 }
 
-func (r *CodexAppServerRuntime) SetThreadName(ctx context.Context, threadID, name string) error {
+func (r *appServer) setThreadName(ctx context.Context, threadID, name string) error {
 	_, err := r.request(ctx, "thread/name/set", map[string]any{
 		"threadId": threadID,
 		"name":     name,
@@ -205,7 +189,7 @@ func (r *CodexAppServerRuntime) SetThreadName(ctx context.Context, threadID, nam
 
 const pinnedThreadSectionName = "Pinned"
 
-func (r *CodexAppServerRuntime) SetThreadPinned(ctx context.Context, threadID string, pinned bool) error {
+func (r *appServer) setThreadPinned(ctx context.Context, threadID string, pinned bool) error {
 	var sectionID any
 	if pinned {
 		id, err := r.pinnedThreadSectionID(ctx)
@@ -224,7 +208,7 @@ func (r *CodexAppServerRuntime) SetThreadPinned(ctx context.Context, threadID st
 	return nil
 }
 
-func (r *CodexAppServerRuntime) pinnedThreadSectionID(ctx context.Context) (string, error) {
+func (r *appServer) pinnedThreadSectionID(ctx context.Context) (string, error) {
 	var cursor string
 	for {
 		params := map[string]any{"limit": 100}
@@ -257,7 +241,7 @@ func (r *CodexAppServerRuntime) pinnedThreadSectionID(ctx context.Context) (stri
 	}
 }
 
-func (r *CodexAppServerRuntime) ArchiveStoredThread(ctx context.Context, threadID string) error {
+func (r *appServer) archiveThread(ctx context.Context, threadID string) error {
 	if _, err := r.request(ctx, "thread/archive", map[string]any{"threadId": threadID}); err != nil {
 		if threadMissingError(err) && r.threadListed(ctx, threadID, true) {
 			return nil
@@ -270,8 +254,8 @@ func (r *CodexAppServerRuntime) ArchiveStoredThread(ctx context.Context, threadI
 	return nil
 }
 
-func (r *CodexAppServerRuntime) threadListed(ctx context.Context, threadID string, archived bool) bool {
-	threads, err := r.ListStoredThreads(ctx, archived)
+func (r *appServer) threadListed(ctx context.Context, threadID string, archived bool) bool {
+	threads, err := r.listThreads(ctx, archived)
 	if err != nil {
 		return false
 	}
@@ -283,7 +267,7 @@ func (r *CodexAppServerRuntime) threadListed(ctx context.Context, threadID strin
 	return false
 }
 
-func (r *CodexAppServerRuntime) DeleteThread(ctx context.Context, threadID string) error {
+func (r *appServer) deleteThread(ctx context.Context, threadID string) error {
 	if _, err := r.request(ctx, "thread/delete", map[string]any{"threadId": threadID}); err != nil {
 		return fmt.Errorf("delete Codex thread: %w", err)
 	}
@@ -293,14 +277,14 @@ func (r *CodexAppServerRuntime) DeleteThread(ctx context.Context, threadID strin
 	return nil
 }
 
-func (r *CodexAppServerRuntime) UnarchiveStoredThread(ctx context.Context, threadID string) (StoredThread, error) {
+func (r *appServer) unarchiveThread(ctx context.Context, threadID string) (StoredThread, error) {
 	result, err := r.request(ctx, "thread/unarchive", map[string]any{"threadId": threadID})
 	if err != nil {
 		return StoredThread{}, fmt.Errorf("unarchive Codex thread: %w", err)
 	}
 	raw, ok := result["thread"].(map[string]any)
 	if !ok {
-		return r.ReadStoredThread(ctx, threadID, false)
+		return r.readThread(ctx, threadID, false)
 	}
 	return decodeStoredThread(raw, false), nil
 }

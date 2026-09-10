@@ -27,7 +27,7 @@ func NewDeleteSkill(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Req
 }
 
 func (l *DeleteSkill) DeleteSkill(req *types.DeleteSkillRequest) (resp *types.DeleteSkillResponse, err error) {
-	if err := l.svcCtx.Codex.DeleteSkill(l.ctx, req.SkillName); err != nil {
+	if err := l.svcCtx.AgentService.DeleteSkill(l.ctx, req.SkillName); err != nil {
 		return nil, err
 	}
 	return &types.DeleteSkillResponse{}, nil

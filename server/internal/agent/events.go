@@ -104,17 +104,17 @@ func (s *eventSubscriber) close() {
 	})
 }
 
-type EventHub struct {
+type eventHub struct {
 	mu      sync.Mutex
 	streams map[string]map[*eventSubscriber]struct{}
 	closed  bool
 }
 
-func NewEventHub() *EventHub {
-	return &EventHub{streams: make(map[string]map[*eventSubscriber]struct{})}
+func newEventHub() *eventHub {
+	return &eventHub{streams: make(map[string]map[*eventSubscriber]struct{})}
 }
 
-func (h *EventHub) Publish(conversationID, turnID, eventType, streamPosition string, data any) {
+func (h *eventHub) publish(conversationID, turnID, eventType, streamPosition string, data any) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.closed {
@@ -138,7 +138,7 @@ func (h *EventHub) Publish(conversationID, turnID, eventType, streamPosition str
 	}
 }
 
-func (h *EventHub) Subscribe(conversationID string) *Subscription {
+func (h *eventHub) subscribe(conversationID string) *Subscription {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.closed {
@@ -185,7 +185,7 @@ func closeEventStreamSubscribers(subscribers map[*eventSubscriber]struct{}) {
 }
 
 // Release closes live subscribers for a conversation that has been deleted.
-func (h *EventHub) Release(conversationID string) {
+func (h *eventHub) release(conversationID string) {
 	h.mu.Lock()
 	if subscribers, ok := h.streams[conversationID]; ok {
 		closeEventStreamSubscribers(subscribers)
@@ -194,7 +194,7 @@ func (h *EventHub) Release(conversationID string) {
 	h.mu.Unlock()
 }
 
-func (h *EventHub) Close() {
+func (h *eventHub) close() {
 	h.mu.Lock()
 	h.closed = true
 	for _, subscribers := range h.streams {
