@@ -8,7 +8,7 @@ AgentRazor 主要由三个应用组成：
 
 - `server`：Go + jzero REST 服务端，负责认证、会话元数据、Codex app-server 集成、SSE 事件分发、Token 用量记录、数据库迁移和插件能力。
 - `agent`：面向用户的 Vue 3 对话界面。
-- `web`：Vue 3 管理后台。
+- `admin`：Vue 3 管理后台。
 
 ## 工作规则
 
@@ -26,7 +26,7 @@ AgentRazor 主要由三个应用组成：
 ```shell
 cd server && go test ./...
 cd agent && npm run build
-cd web && npm run build
+cd admin && npm run build
 ```
 
 ## 部署方式
@@ -36,7 +36,7 @@ cd web && npm run build
 ```shell
 docker compose build server && docker compose up -d --no-deps server
 docker compose build agent && docker compose up -d --no-deps agent
-docker compose build web && docker compose up -d --no-deps web
+docker compose build admin && docker compose up -d --no-deps admin
 ```
 
 ## 规格文档

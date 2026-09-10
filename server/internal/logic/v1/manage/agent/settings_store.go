@@ -1,12 +1,14 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"sync"
 
+	agentdomain "github.com/jzero-io/agentrazor/server/internal/agent"
 	managetypes "github.com/jzero-io/agentrazor/server/internal/types/v1/manage/agent"
 	"github.com/pelletier/go-toml/v2"
 )
@@ -36,29 +38,35 @@ type catalogReasoningLevel struct {
 	Effort string `json:"effort"`
 }
 
-type agentSettingsStore struct {
-	codexHome string
-	config    map[string]any
+type agentSettingsFiles interface {
+	ReadConfigFile(context.Context, string) (string, error)
+	WriteConfigFile(context.Context, string, string) error
 }
 
-func readAgentSettingsStore(codexHome string) (*agentSettingsStore, error) {
+type agentSettingsStore struct {
+	ctx     context.Context
+	runtime agentSettingsFiles
+	config  map[string]any
+}
+
+func readAgentSettingsStore(ctx context.Context, runtime *agentdomain.CodexAppServerClient) (*agentSettingsStore, error) {
 	agentSettingsMu.RLock()
 	defer agentSettingsMu.RUnlock()
-	return loadAgentSettingsStore(codexHome)
+	return loadAgentSettingsStoreFromRuntime(ctx, runtime)
 }
 
-func updateAgentSettingsStore(codexHome string, update func(*agentSettingsStore) error) error {
+func updateAgentSettingsStore(ctx context.Context, runtime *agentdomain.CodexAppServerClient, update func(*agentSettingsStore) error) error {
 	agentSettingsMu.Lock()
 	defer agentSettingsMu.Unlock()
-	store, err := loadAgentSettingsStore(codexHome)
+	store, err := loadAgentSettingsStoreFromRuntime(ctx, runtime)
 	if err != nil {
 		return err
 	}
 	return update(store)
 }
 
-func loadAgentSettingsStore(codexHome string) (*agentSettingsStore, error) {
-	content, err := readAgentConfigFile(codexHome, "config.toml")
+func loadAgentSettingsStoreFromRuntime(ctx context.Context, runtime agentSettingsFiles) (*agentSettingsStore, error) {
+	content, err := runtime.ReadConfigFile(ctx, "config.toml")
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +76,26 @@ func loadAgentSettingsStore(codexHome string) (*agentSettingsStore, error) {
 			return nil, fmt.Errorf("decode Codex config: %w", err)
 		}
 	}
-	return &agentSettingsStore{codexHome: codexHome, config: config}, nil
+	return &agentSettingsStore{ctx: ctx, runtime: runtime, config: config}, nil
+}
+
+type localAgentSettingsFiles struct {
+	codexHome string
+}
+
+func (f localAgentSettingsFiles) ReadConfigFile(_ context.Context, name string) (string, error) {
+	return readAgentConfigFile(f.codexHome, name)
+}
+
+func (f localAgentSettingsFiles) WriteConfigFile(_ context.Context, name, content string) error {
+	return writeAgentConfigFile(f.codexHome, name, content)
+}
+
+// loadAgentSettingsStore keeps unit tests focused on configuration semantics;
+// production handlers use loadAgentSettingsStoreFromRuntime through the
+// app-server socket.
+func loadAgentSettingsStore(codexHome string) (*agentSettingsStore, error) {
+	return loadAgentSettingsStoreFromRuntime(context.Background(), localAgentSettingsFiles{codexHome: codexHome})
 }
 
 func (s *agentSettingsStore) activeProvider() string {
@@ -144,7 +171,7 @@ func (models providerCatalogModels) forProvider(providerID string) []managetypes
 }
 
 func (s *agentSettingsStore) catalogModels() (providerCatalogModels, error) {
-	content, err := readAgentConfigFile(s.codexHome, "models.json")
+	content, err := s.runtime.ReadConfigFile(s.ctx, "models.json")
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +276,7 @@ func (s *agentSettingsStore) writeConfig() error {
 	if err != nil {
 		return fmt.Errorf("encode Codex config: %w", err)
 	}
-	return writeAgentConfigFile(s.codexHome, "config.toml", string(data))
+	return s.runtime.WriteConfigFile(s.ctx, "config.toml", string(data))
 }
 
 func configString(values map[string]any, key string) string {

@@ -1,12 +1,36 @@
 services:
+  codex:
+    build:
+      context: ../..
+      dockerfile: codex/Dockerfile
+    restart: always
+    container_name: agentrazor-codex
+    init: true
+    privileged: true
+    healthcheck:
+      test: ["CMD-SHELL", "test -S /run/codex/app-server.sock"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 5s
+    volumes:
+      - ./codex/data:/dist/data
+      - codex-socket:/run/codex
+    environment:
+      - TZ=Asia/Shanghai
+      - AGENTRAZOR_BASE_URL=http://server:8001
+      - AGENTRAZOR_API_KEY=${AGENTRAZOR_API_KEY:-}
+      - LARK_BOT_WEBHOOK_URL=${LARK_BOT_WEBHOOK_URL:-}
+
   server:
     build:
       context: ../../server
     restart: always
     container_name: agentrazor-server
     init: true
-    privileged: true
     depends_on:
+      codex:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -18,8 +42,8 @@ services:
       retries: 20
       start_period: 10s
     volumes:
-      - ./server/data:/dist/data
       - ./server/logs:/dist/logs
+      - codex-socket:/run/codex
     env_file:
       - .env
     environment:
@@ -27,12 +51,15 @@ services:
       - DRIVER_NAME=pgx
       - DATASOURCE=postgres://root:123456@postgres:5432/agentrazor
       - REDIS_HOST=redis:6379
+      - CODEX_HOME=/dist/data
+      - AGENTRAZOR_HOME=/dist/data/agentrazor-home
+      - CODEX_SOCKET=/run/codex/app-server.sock
 
-  web:
+  admin:
     build:
-      context: ../../web
+      context: ../../admin
     restart: always
-    container_name: agentrazor-web
+    container_name: agentrazor-admin
     depends_on:
       server:
         condition: service_healthy
@@ -41,6 +68,7 @@ services:
       - VITE_SERVICE_BASE_URL=http://127.0.0.1
     ports:
       - "8443:80"
+
   agent:
     build:
       context: ../../agent
@@ -53,6 +81,7 @@ services:
       - TZ=Asia/Shanghai
     ports:
       - "80:80"
+
   postgres:
     image: postgres
     restart: always
@@ -71,6 +100,7 @@ services:
       timeout: 3s
       retries: 20
       start_period: 10s
+
   redis:
     image: redis:latest
     restart: always
@@ -81,3 +111,6 @@ services:
       timeout: 3s
       retries: 20
       start_period: 5s
+
+volumes:
+  codex-socket:

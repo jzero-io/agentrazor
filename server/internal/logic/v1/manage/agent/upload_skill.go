@@ -38,12 +38,11 @@ func (l *UploadSkill) UploadSkill(req *types.UploadSkillRequest) (resp *types.Up
 		return nil, l.skillArchiveError(errSkillArchiveRequired)
 	}
 	name := strings.TrimSpace(l.r.FormValue("name"))
-	config := l.svcCtx.MustGetConfig()
-	installed, err := installSkillArchive(config.Agent.CodexHome, name, header.Filename, file, header.Size)
+	installed, err := l.svcCtx.Codex.InstallSkill(l.ctx, name, header.Filename, header.Size, file)
 	if err != nil {
-		return nil, l.skillArchiveError(err)
+		return nil, l.skillArchiveError(normalizeRuntimeSkillError(err))
 	}
-	return &installed, nil
+	return &types.UploadSkillResponse{Name: installed.Name}, nil
 }
 
 func (l *UploadSkill) skillArchiveError(err error) error {

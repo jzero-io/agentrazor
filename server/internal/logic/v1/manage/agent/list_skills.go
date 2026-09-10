@@ -22,10 +22,9 @@ func NewListSkills(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Requ
 }
 
 func (l *ListSkills) ListSkills(req *types.ListSkillsRequest) (resp *types.ListSkillsResponse, err error) {
-	config := l.svcCtx.MustGetConfig()
-	skills, err := listSkills(config.Agent.CodexHome)
+	skills, err := l.svcCtx.Codex.ListSkills(l.ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &types.ListSkillsResponse{Skills: skills}, nil
+	return &types.ListSkillsResponse{Skills: manageSkills(skills)}, nil
 }

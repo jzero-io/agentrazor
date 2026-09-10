@@ -2,8 +2,6 @@ package agent
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -42,22 +40,6 @@ func TestAccountUpdatedNotificationClearsLoginStatus(t *testing.T) {
 		t.Fatal("account status was not cached")
 	}
 	if status.LoggedIn || status.AuthMode != "" {
-		t.Fatalf("unexpected account status: %+v", status)
-	}
-}
-
-func TestPersistedAccountStatus(t *testing.T) {
-	codexHome := t.TempDir()
-	if err := os.WriteFile(filepath.Join(codexHome, "auth.json"), []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"secret"}}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	runtime := &CodexAppServerRuntime{options: CodexAppServerOptions{CodexHome: codexHome}}
-
-	status, ok := runtime.persistedAccountStatus()
-	if !ok {
-		t.Fatal("persisted account status was not found")
-	}
-	if !status.LoggedIn || status.AuthMode != "chatgpt" {
 		t.Fatalf("unexpected account status: %+v", status)
 	}
 }

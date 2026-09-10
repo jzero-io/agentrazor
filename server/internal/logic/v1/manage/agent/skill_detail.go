@@ -22,10 +22,9 @@ func NewSkillDetail(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Req
 }
 
 func (l *SkillDetail) SkillDetail(req *types.SkillDetailRequest) (resp *types.SkillDetailResponse, err error) {
-	config := l.svcCtx.MustGetConfig()
-	detail, err := skillDetail(config.Agent.CodexHome, req.SkillName, req.File)
+	detail, err := l.svcCtx.Codex.SkillDetail(l.ctx, req.SkillName, req.File)
 	if err != nil {
 		return nil, err
 	}
-	return &detail, nil
+	return manageSkillDetail(detail), nil
 }

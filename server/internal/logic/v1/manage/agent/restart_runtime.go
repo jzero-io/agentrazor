@@ -31,7 +31,7 @@ func (l *RestartRuntime) RestartRuntime(req *types.RestartRuntimeRequest) (resp 
 	if l.svcCtx.AgentThreads == nil {
 		return nil, agentdomain.ErrServiceStopped
 	}
-	if err := l.svcCtx.AgentThreads.RestartRuntime(); err != nil {
+	if err := l.svcCtx.Codex.Restart(l.ctx); err != nil {
 		return nil, err
 	}
 	status := runtimeStatus(l.svcCtx.AgentThreads.RuntimeStatus())

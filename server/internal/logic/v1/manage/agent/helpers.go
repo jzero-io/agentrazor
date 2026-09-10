@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"os"
 	"path/filepath"
 	"sort"
@@ -20,7 +19,7 @@ import (
 
 func skillsRoot(codexHome string) (string, error) {
 	if strings.TrimSpace(codexHome) == "" {
-		codexHome = "data/codex-home"
+		codexHome = "data"
 	}
 	root, err := filepath.Abs(filepath.Join(codexHome, "skills"))
 	if err != nil {
@@ -52,7 +51,7 @@ func listSkills(codexHome string) ([]managetypes.Skill, error) {
 	return result, nil
 }
 
-func installSkillZip(codexHome, explicitName string, file multipart.File, size int64) (managetypes.UploadSkillResponse, error) {
+func installSkillZip(codexHome, explicitName string, file io.Reader, size int64) (managetypes.UploadSkillResponse, error) {
 	if size <= 0 {
 		return managetypes.UploadSkillResponse{}, errSkillArchiveEmpty
 	}
@@ -442,7 +441,7 @@ var allowedConfigFiles = []string{"config.toml", "models.json"}
 
 func codexHomeRoot(codexHome string) (string, error) {
 	if strings.TrimSpace(codexHome) == "" {
-		codexHome = "data/codex-home"
+		codexHome = "data"
 	}
 	return filepath.Abs(codexHome)
 }

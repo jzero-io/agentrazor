@@ -31,13 +31,12 @@ func (l *SaveSelection) SaveSelection(req *types.SaveSelectionRequest) (resp *ty
 	if l.svcCtx.AgentThreads == nil {
 		return nil, agentdomain.ErrServiceStopped
 	}
-	config := l.svcCtx.MustGetConfig()
-	if err := updateAgentSettingsStore(config.Agent.CodexHome, func(store *agentSettingsStore) error {
+	if err := updateAgentSettingsStore(l.ctx, l.svcCtx.Codex, func(store *agentSettingsStore) error {
 		return store.saveSelection(req.ProviderId, req.Model, req.ReasoningEffort)
 	}); err != nil {
 		return nil, err
 	}
-	if err := l.svcCtx.AgentThreads.RestartRuntime(); err != nil {
+	if err := l.svcCtx.Codex.Restart(l.ctx); err != nil {
 		return nil, err
 	}
 	return &types.SaveSelectionResponse{Runtime: runtimeStatus(l.svcCtx.AgentThreads.RuntimeStatus())}, nil

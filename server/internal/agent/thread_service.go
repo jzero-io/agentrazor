@@ -135,6 +135,21 @@ func (s *ThreadService) currentRuntime() (ThreadRuntime, error) {
 	return s.runtime, nil
 }
 
+// RuntimeRequest sends a request through the active Codex app-server
+// connection. It is used for app-server capabilities such as the filesystem
+// API while keeping runtime replacement synchronized with conversation work.
+func (s *ThreadService) RuntimeRequest(ctx context.Context, method string, params any) (map[string]any, error) {
+	runtime, err := s.currentRuntime()
+	if err != nil {
+		return nil, err
+	}
+	client, ok := runtime.(*CodexAppServerRuntime)
+	if !ok {
+		return nil, errors.New("agent runtime does not support direct requests")
+	}
+	return client.request(ctx, method, params)
+}
+
 func (s *ThreadService) SetTokenUsageRecorder(recorder TokenUsageRecorder) {
 	s.mu.Lock()
 	s.tokenUsageRecorder = recorder

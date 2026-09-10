@@ -2,11 +2,7 @@ package conversation
 
 import (
 	"context"
-	"errors"
 	"net/http"
-	"os"
-	"path/filepath"
-	"sort"
 
 	"github.com/zeromicro/go-zero/core/logx"
 
@@ -35,49 +31,18 @@ func (l *WorkspaceFiles) WorkspaceFiles(req *types.PathRequest) (resp *types.Wor
 	if _, err = requireOwner(l.ctx, l.svcCtx, req.ConversationId); err != nil {
 		return nil, err
 	}
-
-	root := filepath.Join(l.svcCtx.MustGetConfig().Agent.AgentrazorHome, req.ConversationId)
-	entries := make([]types.WorkspaceEntry, 0)
-	err = filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if path == root {
-			return nil
-		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return nil
-		}
-		relativePath, relErr := filepath.Rel(root, path)
-		if relErr != nil {
-			return relErr
-		}
-		itemType := "file"
-		var size int64
-		if entry.IsDir() {
-			itemType = "directory"
-		} else {
-			info, infoErr := entry.Info()
-			if infoErr != nil {
-				return infoErr
-			}
-			size = info.Size()
-		}
-		entries = append(entries, types.WorkspaceEntry{
-			Name: entry.Name(),
-			Path: filepath.ToSlash(relativePath),
-			Type: itemType,
-			Size: size,
-		})
-		return nil
-	})
-	if errors.Is(err, os.ErrNotExist) {
-		return &types.WorkspaceFilesResponse{Entries: entries}, nil
-	}
+	runtimeEntries, err := l.svcCtx.Codex.ListWorkspaceFiles(l.ctx, req.ConversationId)
 	if err != nil {
 		return nil, err
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
-
+	entries := make([]types.WorkspaceEntry, 0, len(runtimeEntries))
+	for _, entry := range runtimeEntries {
+		entries = append(entries, types.WorkspaceEntry{
+			Name: entry.Name,
+			Path: entry.Path,
+			Type: entry.Type,
+			Size: entry.Size,
+		})
+	}
 	return &types.WorkspaceFilesResponse{Entries: entries}, nil
 }

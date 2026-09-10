@@ -3,9 +3,8 @@ package custom
 import (
 	"errors"
 	"net/http"
-	"os"
 	"path"
-	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -59,13 +58,21 @@ func serveWorkspaceFile(w http.ResponseWriter, r *http.Request, svcCtx *svc.Serv
 		return
 	}
 
-	fileName, ok := resolveWorkspaceFile(svcCtx.MustGetConfig().Agent.AgentrazorHome, conversationID, filePath)
-	if !ok {
+	runtimeFile, err := svcCtx.Codex.ReadWorkspaceFile(r.Context(), conversationID, filePath)
+	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
+	contentType := strings.TrimSpace(runtimeFile.ContentType)
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Length", strconv.Itoa(len(runtimeFile.Data)))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	http.ServeFile(w, r, fileName)
+	if r.Method == http.MethodGet {
+		_, _ = w.Write(runtimeFile.Data)
+	}
 }
 
 func authenticatedUserUUID(r *http.Request, svcCtx *svc.ServiceContext, parser *token.TokenParser) (string, bool) {
@@ -105,40 +112,4 @@ func splitWorkspacePath(urlPath string) (conversationID string, filePath string,
 		return "", "", false
 	}
 	return parts[0], parts[1], true
-}
-
-func resolveWorkspaceFile(root, conversationID, requestedPath string) (string, bool) {
-	cleanFilePath := filepath.Clean(strings.TrimPrefix(requestedPath, "/"))
-	if cleanFilePath == "." || strings.HasPrefix(cleanFilePath, "..") || filepath.IsAbs(cleanFilePath) {
-		return "", false
-	}
-	conversationRoot, err := filepath.Abs(filepath.Join(root, conversationID))
-	if err != nil {
-		return "", false
-	}
-	fileName, err := filepath.Abs(filepath.Join(conversationRoot, cleanFilePath))
-	if err != nil {
-		return "", false
-	}
-	rel, err := filepath.Rel(conversationRoot, fileName)
-	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
-		return "", false
-	}
-	info, err := filepath.EvalSymlinks(fileName)
-	if err != nil {
-		return "", false
-	}
-	resolvedRoot, err := filepath.EvalSymlinks(conversationRoot)
-	if err != nil {
-		return "", false
-	}
-	resolvedRel, err := filepath.Rel(resolvedRoot, info)
-	if err != nil || resolvedRel == "." || strings.HasPrefix(resolvedRel, "..") {
-		return "", false
-	}
-	stat, err := os.Stat(info)
-	if err != nil || !stat.Mode().IsRegular() {
-		return "", false
-	}
-	return info, true
 }

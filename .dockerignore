@@ -1,8 +1,12 @@
-.idea
-deploy/docker-compose/postgres/data
+.git
+**/.git
+**/node_modules
+**/.env
+**/.env.*
+agent/dist
+admin/dist
 deploy/docker-compose/server/data
 deploy/docker-compose/codex/data
 deploy/docker-compose/server/logs
 deploy/docker-compose/server/etc
-deploy/docker-compose/.env
-server/desc/swagger/
+deploy/docker-compose/postgres/data

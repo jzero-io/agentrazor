@@ -1,7 +1,7 @@
 # AgentRazor
 
 [![Server](https://img.shields.io/github/actions/workflow/status/jzero-io/agentrazor/server.yaml?branch=main&label=server&logo=go&style=flat-square)](https://github.com/jzero-io/agentrazor/actions/workflows/server.yaml)
-[![Admin Web](https://img.shields.io/github/actions/workflow/status/jzero-io/agentrazor/web.yaml?branch=main&label=admin%20web&logo=vuedotjs&style=flat-square)](https://github.com/jzero-io/agentrazor/actions/workflows/web.yaml)
+[![Admin Web](https://img.shields.io/github/actions/workflow/status/jzero-io/agentrazor/web.yaml?branch=main&label=admin%20web&logo=vuedotjs&style=flat-square)](https://github.com/jzero-io/agentrazor/actions/workflows/admin.yaml)
 [![Agent Web](https://img.shields.io/github/actions/workflow/status/jzero-io/agentrazor/agent.yaml?branch=main&label=agent%20web&logo=vuedotjs&style=flat-square)](https://github.com/jzero-io/agentrazor/actions/workflows/agent.yaml)
 
 [简体中文](README.md) | English
@@ -21,7 +21,7 @@ AgentRazor is a plugin-oriented AI agent platform built around the Codex app-ser
 
 - `server`: jzero REST server with Codex app-server lifecycle management, conversations, SSE, migrations, plugin loading, and Skills synchronization.
 - `agent`: user-facing Vue 3 chat application with login state, token renewal, streaming conversation display, and conversation actions.
-- `web`: Vue 3 administration application.
+- `admin`: Vue 3 administration application.
 - `core-engine`: shared base engine used by the admin web application.
 - `deploy/docker-compose`: Docker Compose deployment configuration.
 - `docs`: project documentation.
@@ -53,7 +53,7 @@ The development server listens on `http://localhost:5174` and proxies `/api` to 
 ### Admin Console
 
 ```shell
-cd web
+cd admin
 pnpm install
 pnpm typecheck
 pnpm dev
@@ -69,7 +69,7 @@ docker compose up -d --build
 ```
 
 Pushing a `v*` Git tag builds and publishes multi-platform (`linux/amd64` and
-`linux/arm64`) server, agent, and web images to GHCR. The production Compose file
+`linux/arm64`) server, agent, and admin images to GHCR. The production Compose file
 pins all three images to the release version:
 
 ```shell
@@ -82,7 +82,7 @@ Common service-only deployment commands:
 ```shell
 docker compose build server && docker compose up -d --no-deps server
 docker compose build agent && docker compose up -d --no-deps agent
-docker compose build web && docker compose up -d --no-deps web
+docker compose build admin && docker compose up -d --no-deps admin
 ```
 
 ## Specifications

@@ -25,5 +25,10 @@ redis:
     miniRedis: ${REDIS_MINI_REDIS:-true}
     host: "${REDIS_HOST:-127.0.0.1:6379}"
 
+agent:
+    codexHome: "${CODEX_HOME:-data}"
+    agentrazorHome: "${AGENTRAZOR_HOME:-data/agentrazor-home}"
+    codexSocket: "${CODEX_SOCKET:-/run/codex/app-server.sock}"
+
 i18n:
     dir: etc/locale

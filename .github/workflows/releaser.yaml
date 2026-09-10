@@ -20,17 +20,17 @@ on:
           - standard
           - standard with plugins
       build_server:
-        description: Build the server base image
+        description: Build server and Codex images (always enabled with plugins)
         required: true
         default: true
         type: boolean
-      build_web:
-        description: Build the admin web base image
+      build_admin:
+        description: Build the admin image (standard only)
         required: true
         default: true
         type: boolean
       build_agent:
-        description: Build the agent web base image
+        description: Build the agent image (standard only)
         required: true
         default: true
         type: boolean
@@ -60,7 +60,7 @@ jobs:
           DISPATCH_VERSION: ${{ inputs.version }}
           RELEASE_TYPE: ${{ inputs.release_type }}
           BUILD_SERVER: ${{ inputs.build_server }}
-          BUILD_WEB: ${{ inputs.build_web }}
+          BUILD_ADMIN: ${{ inputs.build_admin }}
           BUILD_AGENT: ${{ inputs.build_agent }}
           PLUGINS: ${{ inputs.plugins }}
         run: |
@@ -89,21 +89,24 @@ jobs:
           fi
 
           components='[]'
-          if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ] || [ "${BUILD_SERVER}" = "true" ]; then
-            components=$(jq -c '. + [{"component":"server","context":"./server"}]' <<< "${components}")
+          if [ "${release_type}" = "standard with plugins" ] \
+            || [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ] \
+            || [ "${BUILD_SERVER}" = "true" ]; then
+            components=$(jq -c '. + [
+              {"component":"server","context":"./server","file":"./server/Dockerfile"},
+              {"component":"codex","context":".","file":"./codex/Dockerfile"}
+            ]' <<< "${components}")
           fi
-          if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ] || [ "${BUILD_WEB}" = "true" ]; then
-            components=$(jq -c '. + [{"component":"web","context":"./web"}]' <<< "${components}")
-          fi
-          if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ] || [ "${BUILD_AGENT}" = "true" ]; then
-            components=$(jq -c '. + [{"component":"agent","context":"./agent"}]' <<< "${components}")
+          if [ "${release_type}" = "standard" ]; then
+            if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ] || [ "${BUILD_ADMIN}" = "true" ]; then
+              components=$(jq -c '. + [{"component":"admin","context":"./admin","file":"./admin/Dockerfile"}]' <<< "${components}")
+            fi
+            if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ] || [ "${BUILD_AGENT}" = "true" ]; then
+              components=$(jq -c '. + [{"component":"agent","context":"./agent","file":"./agent/Dockerfile"}]' <<< "${components}")
+            fi
           fi
           if [ "$(jq length <<< "${components}")" -eq 0 ]; then
             echo "select at least one base image" >&2
-            exit 1
-          fi
-          if [ -n "${PLUGINS}" ] && [ "${BUILD_SERVER}" != "true" ]; then
-            echo "the server base image must be selected when plugins are provided" >&2
             exit 1
           fi
 
@@ -164,7 +167,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Checkout selected plugins
-        if: matrix.component == 'server' && inputs.plugins != ''
+        if: (matrix.component == 'server' || matrix.component == 'codex') && inputs.plugins != ''
         env:
           PLUGINS: ${{ inputs.plugins }}
           GH_TOKEN: ${{ secrets.ACCESS_TOKEN }}
@@ -212,15 +215,16 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/jzero-io/agentrazor-${{ matrix.component }}:${{ matrix.component == 'server' && needs.prepare.outputs.server_version || needs.prepare.outputs.version }}
-            ghcr.io/jzero-io/agentrazor-${{ matrix.component }}:${{ matrix.component == 'server' && needs.prepare.outputs.server_latest || 'latest' }}
+            ghcr.io/jzero-io/agentrazor-${{ matrix.component }}:${{ (matrix.component == 'server' || matrix.component == 'codex') && needs.prepare.outputs.server_version || needs.prepare.outputs.version }}
+            ghcr.io/jzero-io/agentrazor-${{ matrix.component }}:${{ (matrix.component == 'server' || matrix.component == 'codex') && needs.prepare.outputs.server_latest || 'latest' }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ matrix.component == 'server' && needs.prepare.outputs.server_version || needs.prepare.outputs.version }}
-          build-args: ${{ matrix.component == 'server' && format('LDFLAGS=-s -w -X github.com/jzero-io/agentrazor/server/cmd.Version={0} -X github.com/jzero-io/agentrazor/server/cmd.Commit={1}', needs.prepare.outputs.server_version, github.sha) || '' }}
+            org.opencontainers.image.version=${{ (matrix.component == 'server' || matrix.component == 'codex') && needs.prepare.outputs.server_version || needs.prepare.outputs.version }}
+          build-args: ${{ matrix.component == 'server' && format('LDFLAGS=-s -w -X github.com/jzero-io/agentrazor/server/cmd.Version={0} -X github.com/jzero-io/agentrazor/server/cmd.Commit={1}', needs.prepare.outputs.server_version, github.sha) || matrix.component == 'codex' && 'LDFLAGS=-s -w' || '' }}
           cache-from: type=gha,scope=${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}

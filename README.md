@@ -1,7 +1,7 @@
 # AgentRazor
 
 [![Server](https://img.shields.io/github/actions/workflow/status/jzero-io/agentrazor/server.yaml?branch=main&label=server&logo=go&style=flat-square)](https://github.com/jzero-io/agentrazor/actions/workflows/server.yaml)
-[![Admin Web](https://img.shields.io/github/actions/workflow/status/jzero-io/agentrazor/web.yaml?branch=main&label=admin%20web&logo=vuedotjs&style=flat-square)](https://github.com/jzero-io/agentrazor/actions/workflows/web.yaml)
+[![Admin Web](https://img.shields.io/github/actions/workflow/status/jzero-io/agentrazor/web.yaml?branch=main&label=admin%20web&logo=vuedotjs&style=flat-square)](https://github.com/jzero-io/agentrazor/actions/workflows/admin.yaml)
 [![Agent Web](https://img.shields.io/github/actions/workflow/status/jzero-io/agentrazor/agent.yaml?branch=main&label=agent%20web&logo=vuedotjs&style=flat-square)](https://github.com/jzero-io/agentrazor/actions/workflows/agent.yaml)
 
 简体中文 | [English](README.en.md)
@@ -21,7 +21,7 @@ AgentRazor 是一个围绕 Codex app-server 协议构建的插件化 AI Agent �
 
 - `server`：jzero REST 服务端，包含 Codex app-server 生命周期管理、会话、SSE、迁移、插件加载和 Skills 同步。
 - `agent`：面向用户的 Vue 3 对话应用，包含登录态维护、Token 续期、对话流式展示和会话操作。
-- `web`：Vue 3 管理后台。
+- `admin`：Vue 3 管理后台。
 - `core-engine`：管理后台使用的共享基础引擎。
 - `deploy/docker-compose`：Docker Compose 部署配置。
 - `docs`：项目文档。
@@ -39,7 +39,7 @@ docker compose up -d --build
 服务启动后：
 
 - Agent 用户端由 `agent` 服务提供。
-- 管理后台由 `web` 服务提供。
+- 管理后台由 `admin` 服务提供。
 - 服务端配置、数据和日志位于 `deploy/docker-compose/server` 下。
 - Codex app-server 会从服务端数据目录中的 Codex home 读取 `config.toml`、`models.json` 和 `auth.json`。
 
@@ -48,7 +48,7 @@ docker compose up -d --build
 ```shell
 docker compose build server && docker compose up -d --no-deps server
 docker compose build agent && docker compose up -d --no-deps agent
-docker compose build web && docker compose up -d --no-deps web
+docker compose build admin && docker compose up -d --no-deps admin
 ```
 
 提交前按改动范围运行验证命令：
@@ -56,7 +56,7 @@ docker compose build web && docker compose up -d --no-deps web
 ```shell
 cd server && go test ./...
 cd agent && npm run build
-cd web && npm run build
+cd admin && npm run build
 ```
 
 ## 部署
@@ -68,7 +68,7 @@ cd deploy/docker-compose
 docker compose up -d --build
 ```
 
-发布 `v*` Git 标签后，GitHub Actions 会构建并推送 server、agent 和 web 的
+发布 `v*` Git 标签后，GitHub Actions 会构建并推送 server、agent 和 admin 的
 `linux/amd64`、`linux/arm64` 镜像到 GHCR。生产 Compose 固定使用发布版本：
 
 ```shell
@@ -81,7 +81,7 @@ docker compose -f docker-compose-production.yaml up -d
 ```shell
 docker compose build server && docker compose up -d --no-deps server
 docker compose build agent && docker compose up -d --no-deps agent
-docker compose build web && docker compose up -d --no-deps web
+docker compose build admin && docker compose up -d --no-deps admin
 ```
 
 ## 规格文档

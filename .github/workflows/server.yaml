@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - 'server/**'
+      - 'codex/**'
+      - '.dockerignore'
       - '.github/workflows/server.yaml'
 
 permissions:
@@ -28,3 +30,13 @@ jobs:
       - name: Test server
         working-directory: server
         run: go test ./...
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Codex image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./codex/Dockerfile
+          push: false

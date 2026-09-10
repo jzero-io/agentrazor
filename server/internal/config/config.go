@@ -8,6 +8,7 @@ type Config struct {
 }
 
 type AgentConf struct {
-	CodexHome      string `json:",default=data/codex-home"`
+	CodexHome      string `json:",default=data"`
 	AgentrazorHome string `json:",default=data/agentrazor-home"`
+	CodexSocket    string `json:",default=/run/codex/app-server.sock"`
 }

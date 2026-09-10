@@ -1,11 +1,13 @@
 package agent
 
 import (
+	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const conversationContextFile = "context.json"
@@ -19,7 +21,11 @@ func (r *CodexAppServerRuntime) createConversationHome(conversationID string) er
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), appServerStartTimeout)
+	defer cancel()
+	if _, err := r.request(ctx, "fs/createDirectory", map[string]any{
+		"path": dir, "recursive": true,
+	}); err != nil {
 		return fmt.Errorf("create conversation home: %w", err)
 	}
 	data, err := json.MarshalIndent(conversationContext{ConversationID: conversationID}, "", "  ")
@@ -27,14 +33,11 @@ func (r *CodexAppServerRuntime) createConversationHome(conversationID string) er
 		return fmt.Errorf("encode conversation context: %w", err)
 	}
 	data = append(data, '\n')
-	path := filepath.Join(dir, conversationContextFile)
-	temporaryPath := path + ".tmp"
-	if err := os.WriteFile(temporaryPath, data, 0o600); err != nil {
+	if _, err := r.request(ctx, "fs/writeFile", map[string]any{
+		"path":       filepath.Join(dir, conversationContextFile),
+		"dataBase64": base64.StdEncoding.EncodeToString(data),
+	}); err != nil {
 		return fmt.Errorf("write conversation context: %w", err)
-	}
-	if err := os.Rename(temporaryPath, path); err != nil {
-		_ = os.Remove(temporaryPath)
-		return fmt.Errorf("publish conversation context: %w", err)
 	}
 	return nil
 }
@@ -54,7 +57,11 @@ func (r *CodexAppServerRuntime) DeleteConversationHome(conversationID string) er
 	if err != nil {
 		return err
 	}
-	if err := os.RemoveAll(dir); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if _, err := r.request(ctx, "fs/remove", map[string]any{
+		"path": dir, "recursive": true, "force": true,
+	}); err != nil {
 		return fmt.Errorf("delete conversation home: %w", err)
 	}
 	return nil

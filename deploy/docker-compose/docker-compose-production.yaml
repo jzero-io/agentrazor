@@ -1,12 +1,35 @@
 services:
+  codex:
+    image: ghcr.io/jzero-io/agentrazor-codex:v0.1.0
+    pull_policy: always
+    restart: always
+    container_name: agentrazor-codex
+    init: true
+    privileged: true
+    healthcheck:
+      test: ["CMD-SHELL", "test -S /run/codex/app-server.sock"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 5s
+    volumes:
+      - ./codex/data:/dist/data
+      - codex-socket:/run/codex
+    environment:
+      - TZ=Asia/Shanghai
+      - AGENTRAZOR_BASE_URL=http://server:8001
+      - AGENTRAZOR_API_KEY=${AGENTRAZOR_API_KEY:-}
+      - LARK_BOT_WEBHOOK_URL=${LARK_BOT_WEBHOOK_URL:-}
+
   server:
     image: ghcr.io/jzero-io/agentrazor-server:v0.1.0
     pull_policy: always
     restart: always
     container_name: agentrazor-server
     init: true
-    privileged: true
     depends_on:
+      codex:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -18,8 +41,8 @@ services:
       retries: 20
       start_period: 10s
     volumes:
-      - ./server/data:/dist/data
       - ./server/logs:/dist/logs
+      - codex-socket:/run/codex
     env_file:
       - path: .env
         required: false
@@ -28,12 +51,15 @@ services:
       - DRIVER_NAME=pgx
       - DATASOURCE=postgres://root:123456@postgres:5432/agentrazor
       - REDIS_HOST=redis:6379
+      - CODEX_HOME=/dist/data
+      - AGENTRAZOR_HOME=/dist/data/agentrazor-home
+      - CODEX_SOCKET=/run/codex/app-server.sock
 
-  web:
-    image: ghcr.io/jzero-io/agentrazor-web:v0.1.0
+  admin:
+    image: ghcr.io/jzero-io/agentrazor-admin:v0.1.0
     pull_policy: always
     restart: always
-    container_name: agentrazor-web
+    container_name: agentrazor-admin
     depends_on:
       server:
         condition: service_healthy
@@ -84,3 +110,6 @@ services:
       timeout: 3s
       retries: 20
       start_period: 5s
+
+volumes:
+  codex-socket:

@@ -1,20 +1,18 @@
 package agent
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"os"
-	"os/exec"
+	"net"
 	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 const (
@@ -36,19 +34,18 @@ type EventHandler func(map[string]any, string)
 type CodexAppServerOptions struct {
 	CodexHome      string
 	AgentrazorHome string
+	SocketPath     string
 }
 
-// CodexAppServerRuntime owns one long-running Codex app-server process. Business
-// conversations are mapped to Codex threads and messages are mapped to turns.
+// CodexAppServerRuntime is a Unix socket client for the Codex app-server owned
+// by the separate codex service.
 type CodexAppServerRuntime struct {
 	options CodexAppServerOptions
 
-	cmd      *exec.Cmd
-	stdin    io.WriteCloser
-	writeMu  sync.Mutex
-	stderr   limitedBuffer
-	waitDone chan struct{}
-	waitOnce sync.Once
+	connection *websocket.Conn
+	writeMu    sync.Mutex
+	waitDone   chan struct{}
+	waitOnce   sync.Once
 
 	nextRequestID atomic.Int64
 	nextInboundID atomic.Int64
@@ -110,62 +107,30 @@ type appServerTurn struct {
 }
 
 func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRuntime, error) {
-	if options.CodexHome != "" {
-		codexHome, err := filepath.Abs(options.CodexHome)
-		if err != nil {
-			return nil, fmt.Errorf("resolve Codex home: %w", err)
-		}
-		if err := ensureDefaultCodexConfig(codexHome); err != nil {
-			return nil, err
-		}
-		options.CodexHome = codexHome
-		if err := syncPluginSkills(options.CodexHome); err != nil {
-			return nil, fmt.Errorf("sync plugin skills: %w", err)
-		}
-	}
 	agentrazorHome, err := filepath.Abs(options.AgentrazorHome)
 	if err != nil {
 		return nil, fmt.Errorf("resolve conversation home: %w", err)
 	}
-	if err := os.MkdirAll(agentrazorHome, 0o700); err != nil {
-		return nil, fmt.Errorf("create conversation home: %w", err)
-	}
 	options.AgentrazorHome = agentrazorHome
 
-	cmd := exec.Command("codex-app-server", "--listen", "stdio://")
-	if options.CodexHome != "" {
-		cmd.Env = isolatedCodexEnvironment(os.Environ(), options.CodexHome)
+	if strings.TrimSpace(options.SocketPath) == "" {
+		return nil, errors.New("Codex app-server socket path is required")
 	}
-	stdin, err := cmd.StdinPipe()
+	connection, err := dialCodexAppServerSocket(options.SocketPath, appServerStartTimeout)
 	if err != nil {
-		return nil, fmt.Errorf("create Codex app-server stdin: %w", err)
+		return nil, err
 	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		_ = stdin.Close()
-		return nil, fmt.Errorf("create Codex app-server stdout: %w", err)
-	}
-
 	runtime := &CodexAppServerRuntime{
 		options:    options,
-		cmd:        cmd,
-		stdin:      stdin,
+		connection: connection,
 		waitDone:   make(chan struct{}),
 		pending:    make(map[int64]chan rpcEnvelope),
 		executions: make(map[string]*appServerTurn),
 		loaded:     make(map[string]bool),
 		loads:      make(map[string]*threadLoad),
 	}
-	runtime.stderr.limit = 64 << 10
-	cmd.Stderr = &runtime.stderr
-
-	if err := cmd.Start(); err != nil {
-		_ = stdin.Close()
-		return nil, fmt.Errorf("start Codex app-server: %w", err)
-	}
-	runtime.streamEpoch = fmt.Sprintf("%d-%d", time.Now().UnixNano(), cmd.Process.Pid)
-	go runtime.readLoop(stdout)
-	go runtime.waitProcess()
+	runtime.streamEpoch = fmt.Sprintf("%d", time.Now().UnixNano())
+	go runtime.readLoop()
 
 	startCtx, cancel := context.WithTimeout(context.Background(), appServerStartTimeout)
 	defer cancel()
@@ -187,6 +152,34 @@ func NewCodexAppServerRuntime(options CodexAppServerOptions) (*CodexAppServerRun
 		return nil, fmt.Errorf("acknowledge Codex app-server initialization: %w", err)
 	}
 	return runtime, nil
+}
+
+func dialCodexAppServerSocket(socketPath string, timeout time.Duration) (*websocket.Conn, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	dialer := websocket.Dialer{
+		HandshakeTimeout: timeout,
+		NetDialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
+		},
+	}
+	var lastErr error
+	for {
+		connection, response, err := dialer.DialContext(ctx, "ws://localhost/rpc", nil)
+		if response != nil && response.Body != nil {
+			_ = response.Body.Close()
+		}
+		if err == nil {
+			connection.SetReadLimit(16 << 20)
+			return connection, nil
+		}
+		lastErr = err
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("connect Codex app-server socket %s: %w", socketPath, lastErr)
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
 }
 
 func isolatedCodexEnvironment(environment []string, codexHome string) []string {
@@ -227,10 +220,6 @@ func (r *CodexAppServerRuntime) AccountStatus(ctx context.Context) (AccountStatu
 	}
 	if cached, ok := r.cachedAccountStatus(); ok {
 		return cached, nil
-	}
-	if persisted, ok := r.persistedAccountStatus(); ok {
-		r.setAccountStatus(persisted)
-		return persisted, nil
 	}
 	return status, nil
 }
@@ -292,27 +281,6 @@ func (r *CodexAppServerRuntime) cachedAccountStatus() (AccountStatus, bool) {
 	r.stateMu.Lock()
 	defer r.stateMu.Unlock()
 	return r.account, r.accountKnown
-}
-
-func (r *CodexAppServerRuntime) persistedAccountStatus() (AccountStatus, bool) {
-	if r.options.CodexHome == "" {
-		return AccountStatus{}, false
-	}
-	data, err := os.ReadFile(filepath.Join(r.options.CodexHome, "auth.json"))
-	if err != nil {
-		return AccountStatus{}, false
-	}
-	var auth struct {
-		AuthMode string `json:"auth_mode"`
-	}
-	if err := json.Unmarshal(data, &auth); err != nil {
-		return AccountStatus{}, false
-	}
-	mode := normalizeAuthMode(auth.AuthMode)
-	if mode == "" {
-		return AccountStatus{}, false
-	}
-	return AccountStatus{AuthMode: mode, LoggedIn: true}, true
 }
 
 func (r *CodexAppServerRuntime) StartTurn(ctx context.Context, threadID, prompt string, emit EventHandler) (StartedTurn, error) {
@@ -564,7 +532,7 @@ func (r *CodexAppServerRuntime) notify(method string, params any) error {
 func (r *CodexAppServerRuntime) writeJSON(value any) error {
 	r.writeMu.Lock()
 	defer r.writeMu.Unlock()
-	if err := json.NewEncoder(r.stdin).Encode(value); err != nil {
+	if err := r.connection.WriteJSON(value); err != nil {
 		return fmt.Errorf("write Codex app-server message: %w", err)
 	}
 	return nil
@@ -576,13 +544,12 @@ func (r *CodexAppServerRuntime) removePending(requestID int64) {
 	r.stateMu.Unlock()
 }
 
-func (r *CodexAppServerRuntime) readLoop(stdout io.Reader) {
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 64<<10), 16<<20)
-	for scanner.Scan() {
+func (r *CodexAppServerRuntime) readLoop() {
+	defer r.waitOnce.Do(func() { close(r.waitDone) })
+	for {
 		var envelope rpcEnvelope
-		if err := json.Unmarshal(scanner.Bytes(), &envelope); err != nil {
-			r.failAll(fmt.Errorf("decode Codex app-server message: %w", err))
+		if err := r.connection.ReadJSON(&envelope); err != nil {
+			r.failAll(fmt.Errorf("read Codex app-server message: %w", err))
 			return
 		}
 		envelope.StreamPosition = r.nextStreamPosition()
@@ -609,14 +576,6 @@ func (r *CodexAppServerRuntime) readLoop(stdout io.Reader) {
 			}
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		r.failAll(fmt.Errorf("read Codex app-server output: %w", err))
-		return
-	}
-	// stdout normally closes just before cmd.Wait returns. Let waitProcess
-	// report the exit status together with stderr instead of racing it with a
-	// generic "terminated" error.
-	<-r.waitDone
 }
 
 func (r *CodexAppServerRuntime) handleNotification(method string, rawParams json.RawMessage, streamPosition string) {
@@ -672,22 +631,6 @@ func (r *CodexAppServerRuntime) handleNotification(method string, rawParams json
 	execution.handleNotification(method, params, streamPosition)
 }
 
-func (r *CodexAppServerRuntime) waitProcess() {
-	err := r.cmd.Wait()
-	message := strings.TrimSpace(r.stderr.String())
-	if err != nil {
-		if message != "" {
-			err = fmt.Errorf("%w: %v: %s", ErrAppServerTerminated, err, message)
-		} else {
-			err = fmt.Errorf("%w: %v", ErrAppServerTerminated, err)
-		}
-	} else {
-		err = ErrAppServerTerminated
-	}
-	r.failAll(err)
-	r.waitOnce.Do(func() { close(r.waitDone) })
-}
-
 func (r *CodexAppServerRuntime) failAll(runtimeErr error) {
 	if runtimeErr == nil {
 		runtimeErr = ErrAppServerTerminated
@@ -725,14 +668,10 @@ func (r *CodexAppServerRuntime) Close() error {
 	r.stateMu.Unlock()
 
 	r.failAll(ErrRuntimeClosed)
-	_ = r.stdin.Close()
+	_ = r.connection.Close()
 	select {
 	case <-r.waitDone:
 	case <-time.After(2 * time.Second):
-		if r.cmd.Process != nil {
-			_ = r.cmd.Process.Kill()
-		}
-		<-r.waitDone
 	}
 	return nil
 }
@@ -797,30 +736,4 @@ func (r *CodexAppServerRuntime) currentStreamPosition() string {
 func stringValue(value any) string {
 	text, _ := value.(string)
 	return text
-}
-
-type limitedBuffer struct {
-	mu sync.Mutex
-	bytes.Buffer
-	limit int
-}
-
-func (b *limitedBuffer) Write(p []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	original := len(p)
-	if b.Len() < b.limit {
-		remaining := b.limit - b.Len()
-		if len(p) > remaining {
-			p = p[:remaining]
-		}
-		_, _ = b.Buffer.Write(p)
-	}
-	return original, nil
-}
-
-func (b *limitedBuffer) String() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.Buffer.String()
 }

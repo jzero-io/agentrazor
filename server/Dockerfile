@@ -30,28 +30,11 @@ RUN --mount=type=cache,target=/go/pkg CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARC
 
 FROM alpine:latest
 
-ARG TARGETARCH
-ARG CODEX_VERSION=0.153.4
-
-RUN set -o pipefail \
-    && apk add --no-cache ca-certificates curl jq py3-pycryptodome python3 tar tzdata \
-    && python3 -c "import Crypto" \
-    && case "$TARGETARCH" in \
-         amd64) codex_arch="x86_64" ;; \
-         arm64) codex_arch="aarch64" ;; \
-         *) echo "unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
-       esac \
-    && mkdir -p /opt/codex \
-    && curl -fsSL "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/codex-app-server-package-${codex_arch}-unknown-linux-musl.tar.gz" \
-       | tar -xzf - -C /opt/codex \
-    && test -x /opt/codex/bin/codex-app-server \
-    && test -x /opt/codex/bin/codex-code-mode-host \
-    && test -x /opt/codex/codex-resources/bwrap \
-    && test -x /opt/codex/codex-path/rg
-
+RUN apk add --no-cache ca-certificates curl jq py3-pycryptodome python3 tar tzdata \
+    && python3 -c "import Crypto"
 WORKDIR /dist
 
-ENV PATH="/dist:/opt/codex/bin:/opt/codex/codex-path:${PATH}"
+ENV PATH="/dist:${PATH}"
 
 COPY --from=builder /dist .
 

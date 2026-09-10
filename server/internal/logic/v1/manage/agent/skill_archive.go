@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,7 +32,7 @@ const (
 	maxSkillArchiveEntries       = 4096
 )
 
-func installSkillArchive(codexHome, explicitName, archiveName string, file multipart.File, size int64) (managetypes.UploadSkillResponse, error) {
+func installSkillArchive(codexHome, explicitName, archiveName string, file io.Reader, size int64) (managetypes.UploadSkillResponse, error) {
 	if size <= 0 {
 		return managetypes.UploadSkillResponse{}, errSkillArchiveEmpty
 	}
@@ -55,7 +54,7 @@ func installSkillArchive(codexHome, explicitName, archiveName string, file multi
 	}
 }
 
-func installSkillTarGz(codexHome, explicitName string, file multipart.File, size int64) (managetypes.UploadSkillResponse, error) {
+func installSkillTarGz(codexHome, explicitName string, file io.Reader, size int64) (managetypes.UploadSkillResponse, error) {
 	if size <= 0 {
 		return managetypes.UploadSkillResponse{}, errSkillArchiveEmpty
 	}

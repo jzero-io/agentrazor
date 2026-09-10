@@ -28,8 +28,7 @@ func NewGetSettings(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Req
 }
 
 func (l *GetSettings) GetSettings(req *types.GetSettingsRequest) (resp *types.GetSettingsResponse, err error) {
-	config := l.svcCtx.MustGetConfig()
-	store, err := readAgentSettingsStore(config.Agent.CodexHome)
+	store, err := readAgentSettingsStore(l.ctx, l.svcCtx.Codex)
 	if err != nil {
 		return nil, err
 	}

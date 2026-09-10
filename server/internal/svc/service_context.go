@@ -18,6 +18,7 @@ type ServiceContext struct {
 	ConfigCenter configcenter.ConfigCenter[config.Config]
 	Model        model.Model
 	AgentThreads *agent.ThreadService
+	Codex        *agent.CodexAppServerClient
 	TokenQuota   *quota.Service
 	Middleware
 }
@@ -36,6 +37,7 @@ func NewServiceContext(cc configcenter.ConfigCenter[config.Config], route2code f
 		return agent.NewCodexAppServerRuntime(agent.CodexAppServerOptions{
 			CodexHome:      agentConfig.CodexHome,
 			AgentrazorHome: agentConfig.AgentrazorHome,
+			SocketPath:     agentConfig.CodexSocket,
 		})
 	}
 	runtime, err := runtimeFactory()
@@ -43,6 +45,8 @@ func NewServiceContext(cc configcenter.ConfigCenter[config.Config], route2code f
 		panic(err)
 	}
 	svcCtx.AgentThreads = agent.NewThreadService(runtime, runtimeFactory)
+	agentConfig := cc.MustGetConfig().Agent
+	svcCtx.Codex = agent.NewCodexAppServerClient(svcCtx.AgentThreads, agentConfig.CodexHome, agentConfig.AgentrazorHome)
 	svcCtx.installAgentTokenUsageRecorder()
 	return svcCtx
 }

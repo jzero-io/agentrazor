@@ -31,8 +31,7 @@ func (l *SaveProviderApiKey) SaveProviderApiKey(req *types.SaveProviderApiKeyReq
 	if l.svcCtx.AgentThreads == nil {
 		return nil, agentdomain.ErrServiceStopped
 	}
-	config := l.svcCtx.MustGetConfig()
-	if err := updateAgentSettingsStore(config.Agent.CodexHome, func(store *agentSettingsStore) error {
+	if err := updateAgentSettingsStore(l.ctx, l.svcCtx.Codex, func(store *agentSettingsStore) error {
 		return store.saveProviderAPIKey(req.ProviderId, req.ApiKey)
 	}); err != nil {
 		return nil, err

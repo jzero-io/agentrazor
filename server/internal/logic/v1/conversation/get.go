@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -149,7 +147,7 @@ func buildDetail(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 				copyItem[key] = value
 			}
 			if stringValue(item["type"]) == "imageGeneration" {
-				if image, ok := generatedImage(item, svcCtx.MustGetConfig().Agent.CodexHome, conversationID); ok {
+				if image, ok := generatedImage(ctx, item, svcCtx.Codex, conversationID); ok {
 					copyItem["dataUrl"] = image.DataUrl
 					copyItem["alt"] = image.Alt
 				}
@@ -173,39 +171,13 @@ func buildDetail(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 	return detail, nil
 }
 
-const maxGeneratedImageSize = 10 << 20
-
-func generatedImage(item map[string]any, codexHome, conversationID string) (types.GeneratedImage, bool) {
+func generatedImage(ctx context.Context, item map[string]any, runtime *agentdomain.CodexAppServerClient, conversationID string) (types.GeneratedImage, bool) {
 	path := strings.TrimSpace(stringValue(item["savedPath"]))
 	if path == "" {
 		return types.GeneratedImage{}, false
 	}
-	root, err := filepath.Abs(filepath.Join(codexHome, "generated_images", conversationID))
+	file, err := runtime.ReadGeneratedImage(ctx, conversationID, path)
 	if err != nil {
-		return types.GeneratedImage{}, false
-	}
-	resolvedRoot, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		return types.GeneratedImage{}, false
-	}
-	resolvedPath, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		return types.GeneratedImage{}, false
-	}
-	relative, err := filepath.Rel(resolvedRoot, resolvedPath)
-	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return types.GeneratedImage{}, false
-	}
-	info, err := os.Stat(resolvedPath)
-	if err != nil || !info.Mode().IsRegular() || info.Size() > maxGeneratedImageSize {
-		return types.GeneratedImage{}, false
-	}
-	data, err := os.ReadFile(resolvedPath)
-	if err != nil {
-		return types.GeneratedImage{}, false
-	}
-	contentType := http.DetectContentType(data)
-	if !strings.HasPrefix(contentType, "image/") {
 		return types.GeneratedImage{}, false
 	}
 	alt := strings.TrimSpace(stringValue(item["revisedPrompt"]))
@@ -214,11 +186,10 @@ func generatedImage(item map[string]any, codexHome, conversationID string) (type
 	}
 	return types.GeneratedImage{
 		Id:      stringValue(item["id"]),
-		DataUrl: "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(data),
+		DataUrl: "data:" + file.ContentType + ";base64," + base64.StdEncoding.EncodeToString(file.Data),
 		Alt:     alt,
 	}, true
 }
-
 func stringValue(value any) string {
 	switch typed := value.(type) {
 	case string:

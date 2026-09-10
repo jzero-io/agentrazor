@@ -28,8 +28,7 @@ func NewHomeOverview(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Re
 }
 
 func (l *HomeOverview) HomeOverview(req *types.HomeOverviewRequest) (resp *types.HomeOverviewResponse, err error) {
-	config := l.svcCtx.MustGetConfig()
-	store, err := readAgentSettingsStore(config.Agent.CodexHome)
+	store, err := readAgentSettingsStore(l.ctx, l.svcCtx.Codex)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +36,7 @@ func (l *HomeOverview) HomeOverview(req *types.HomeOverviewRequest) (resp *types
 	if err != nil {
 		return nil, err
 	}
-	skills, err := listSkills(config.Agent.CodexHome)
+	skills, err := l.svcCtx.Codex.ListSkills(l.ctx)
 	if err != nil {
 		return nil, err
 	}
