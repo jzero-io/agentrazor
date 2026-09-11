@@ -24,7 +24,11 @@ const (
 )
 
 type Skill struct {
-	Name string
+	Name        string
+	Description string
+	Enabled     bool
+	Path        string
+	Scope       string
 }
 
 type SkillFile struct {
@@ -41,6 +45,11 @@ type SkillDetail struct {
 	Content     string
 }
 
+type PluginSkillSyncResult struct {
+	Installed []string
+	Skipped   []string
+}
+
 type SkillError struct {
 	Kind    string
 	Message string
@@ -51,25 +60,62 @@ func (e *SkillError) Error() string {
 }
 
 type archiveEntry struct {
-	Path      string
-	Directory bool
-	Data      []byte
+	Path       string
+	Directory  bool
+	Executable bool
+	Data       []byte
 }
 
 func (s *Service) ListSkills(ctx context.Context) ([]Skill, error) {
-	root := filepath.Join(s.codexHome, "skills")
-	entries, err := s.readDirectory(ctx, root)
-	if isRemoteNotFound(err) {
-		return []Skill{}, nil
-	}
+	return s.listSkills(ctx, false)
+}
+
+func (s *Service) listSkills(ctx context.Context, forceReload bool) ([]Skill, error) {
+	result, err := s.call(ctx, "skills/list", map[string]any{
+		"cwds":        []string{s.workspace},
+		"forceReload": forceReload,
+	})
 	if err != nil {
 		return nil, err
 	}
-	result := make([]Skill, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDirectory && entry.Name != ".system" {
-			result = append(result, Skill{Name: entry.Name})
+	return managedSkillsFromListResponse(result, filepath.Join(s.codexHome, "skills"))
+}
+
+func managedSkillsFromListResponse(response map[string]any, managedRoot string) ([]Skill, error) {
+	values, ok := response["data"].([]any)
+	if !ok {
+		return nil, errors.New("Codex skills/list response did not contain data")
+	}
+
+	byName := make(map[string]Skill)
+	for _, value := range values {
+		entry, ok := value.(map[string]any)
+		if !ok {
+			continue
 		}
+		rawSkills, _ := entry["skills"].([]any)
+		for _, rawSkill := range rawSkills {
+			metadata, ok := rawSkill.(map[string]any)
+			if !ok {
+				continue
+			}
+			skill := Skill{
+				Name:        stringValue(metadata["name"]),
+				Description: stringValue(metadata["description"]),
+				Enabled:     boolValue(metadata["enabled"]),
+				Path:        filepath.Clean(stringValue(metadata["path"])),
+				Scope:       stringValue(metadata["scope"]),
+			}
+			if !isManagedSkill(skill, managedRoot) {
+				continue
+			}
+			byName[skill.Name] = skill
+		}
+	}
+
+	result := make([]Skill, 0, len(byName))
+	for _, skill := range byName {
+		result = append(result, skill)
 	}
 	sort.SliceStable(result, func(i, j int) bool {
 		return strings.ToLower(result[i].Name) < strings.ToLower(result[j].Name)
@@ -77,12 +123,38 @@ func (s *Service) ListSkills(ctx context.Context) ([]Skill, error) {
 	return result, nil
 }
 
-func (s *Service) SkillDetail(ctx context.Context, name, file string) (SkillDetail, error) {
+func isManagedSkill(skill Skill, managedRoot string) bool {
+	if skill.Name == "" || safeSkillName(skill.Name) != skill.Name || !filepath.IsAbs(skill.Path) ||
+		filepath.Base(skill.Path) != "SKILL.md" {
+		return false
+	}
+	relative, err := filepath.Rel(filepath.Clean(managedRoot), filepath.Dir(skill.Path))
+	return err == nil && relative != "." && filepath.Dir(relative) == "." && safeSkillName(relative) == relative
+}
+
+func (s *Service) managedSkill(ctx context.Context, name string) (Skill, error) {
 	name = safeSkillName(name)
 	if name == "" {
-		return SkillDetail{}, errors.New("skill name is required")
+		return Skill{}, errors.New("skill name is required")
 	}
-	root := filepath.Join(s.codexHome, "skills", name)
+	skills, err := s.listSkills(ctx, false)
+	if err != nil {
+		return Skill{}, err
+	}
+	for _, skill := range skills {
+		if skill.Name == name {
+			return skill, nil
+		}
+	}
+	return Skill{}, errors.New("skill not found")
+}
+
+func (s *Service) SkillDetail(ctx context.Context, name, file string) (SkillDetail, error) {
+	skill, err := s.managedSkill(ctx, name)
+	if err != nil {
+		return SkillDetail{}, err
+	}
+	root := filepath.Dir(skill.Path)
 	metadata, err := s.metadata(ctx, root)
 	if err != nil {
 		return SkillDetail{}, err
@@ -103,7 +175,7 @@ func (s *Service) SkillDetail(ctx context.Context, name, file string) (SkillDeta
 		return SkillDetail{}, err
 	}
 	return SkillDetail{
-		Skill:       Skill{Name: name},
+		Skill:       skill,
 		Files:       files,
 		CurrentFile: filepath.ToSlash(currentFile),
 		Content:     content,
@@ -197,14 +269,14 @@ func (s *Service) readSkillFile(ctx context.Context, root, file string) (string,
 }
 
 func (s *Service) UpdateSkillFile(ctx context.Context, name, file, content string) error {
-	name = safeSkillName(name)
-	if name == "" {
-		return errors.New("skill name is required")
-	}
 	if len(content) > int(maxSkillFileSize) {
 		return errors.New("file content is larger than 2 MiB")
 	}
-	root := filepath.Join(s.codexHome, "skills", name)
+	skill, err := s.managedSkill(ctx, name)
+	if err != nil {
+		return err
+	}
+	root := filepath.Dir(skill.Path)
 	rootMetadata, err := s.metadata(ctx, root)
 	if err != nil {
 		return err
@@ -223,18 +295,19 @@ func (s *Service) UpdateSkillFile(ctx context.Context, name, file, content strin
 	if metadata.IsSymlink || !metadata.IsFile {
 		return errors.New("only regular files can be edited")
 	}
-	return s.writeFile(ctx, target, []byte(content))
+	if err := s.writeFile(ctx, target, []byte(content)); err != nil {
+		return err
+	}
+	_, err = s.listSkills(ctx, true)
+	return err
 }
 
 func (s *Service) DeleteSkill(ctx context.Context, name string) error {
-	if strings.TrimSpace(name) == ".system" {
-		return errors.New("system skills cannot be deleted")
+	skill, err := s.managedSkill(ctx, name)
+	if err != nil {
+		return err
 	}
-	name = safeSkillName(name)
-	if name == "" {
-		return errors.New("skill name is required")
-	}
-	target := filepath.Join(s.codexHome, "skills", name)
+	target := filepath.Dir(skill.Path)
 	metadata, err := s.metadata(ctx, target)
 	if err != nil {
 		return err
@@ -242,7 +315,11 @@ func (s *Service) DeleteSkill(ctx context.Context, name string) error {
 	if metadata.IsSymlink || !metadata.IsDirectory {
 		return errors.New("skill is not a directory")
 	}
-	return s.remove(ctx, target, true, false)
+	if err := s.remove(ctx, target, true, false); err != nil {
+		return err
+	}
+	_, err = s.listSkills(ctx, true)
+	return err
 }
 
 func (s *Service) InstallSkill(ctx context.Context, explicitName, archiveName string, size int64, archive io.Reader) (Skill, error) {
@@ -271,6 +348,10 @@ func (s *Service) InstallSkill(ctx context.Context, explicitName, archiveName st
 	if err != nil {
 		return Skill{}, err
 	}
+	return s.installSkillEntries(ctx, name, entries)
+}
+
+func (s *Service) installSkillEntries(ctx context.Context, name string, entries []archiveEntry) (Skill, error) {
 	hasManifest := false
 	for _, entry := range entries {
 		if !entry.Directory && filepath.ToSlash(entry.Path) == "SKILL.md" {
@@ -316,9 +397,173 @@ func (s *Service) InstallSkill(ctx context.Context, explicitName, archiveName st
 		if err := s.writeFile(ctx, entryPath, entry.Data); err != nil {
 			return Skill{}, err
 		}
+		if entry.Executable {
+			if err := s.makeSkillScriptExecutable(ctx, target, entryPath); err != nil {
+				return Skill{}, err
+			}
+		}
 	}
-	committed = true
-	return Skill{Name: name}, nil
+	installedSkills, err := s.listSkills(ctx, true)
+	if err != nil {
+		return Skill{}, err
+	}
+	for _, installed := range installedSkills {
+		if filepath.Dir(installed.Path) == target {
+			committed = true
+			return installed, nil
+		}
+	}
+	return Skill{}, skillError("archive_invalid", "Codex did not discover the installed skill")
+}
+
+func (s *Service) SyncPluginSkills(ctx context.Context, pluginsRoot string) (PluginSkillSyncResult, error) {
+	var result PluginSkillSyncResult
+	bundled, err := pluginSkillDirectories(pluginsRoot)
+	if err != nil {
+		return result, err
+	}
+	if len(bundled) == 0 {
+		return result, nil
+	}
+
+	installed, err := s.listSkills(ctx, true)
+	if err != nil {
+		return result, err
+	}
+	pending, skipped := splitPluginSkills(bundled, installed)
+	result.Skipped = skipped
+
+	for _, item := range pending {
+		entries, err := readSkillDirectory(item.Path)
+		if err != nil {
+			return result, fmt.Errorf("package plugin skill %q: %w", item.Name, err)
+		}
+		skill, err := s.installSkillEntries(ctx, item.Name, entries)
+		if err != nil {
+			return result, fmt.Errorf("install plugin skill %q: %w", item.Name, err)
+		}
+		result.Installed = append(result.Installed, skill.Name)
+	}
+	return result, nil
+}
+
+func splitPluginSkills(bundled []pluginSkillDirectory, installed []Skill) ([]pluginSkillDirectory, []string) {
+	existing := make(map[string]struct{}, len(installed)*2)
+	for _, skill := range installed {
+		existing[skill.Name] = struct{}{}
+		existing[filepath.Base(filepath.Dir(skill.Path))] = struct{}{}
+	}
+
+	pending := make([]pluginSkillDirectory, 0, len(bundled))
+	skipped := make([]string, 0, len(bundled))
+	for _, item := range bundled {
+		if _, ok := existing[item.Name]; ok {
+			skipped = append(skipped, item.Name)
+			continue
+		}
+		pending = append(pending, item)
+		existing[item.Name] = struct{}{}
+	}
+	return pending, skipped
+}
+
+type pluginSkillDirectory struct {
+	Name string
+	Path string
+}
+
+func pluginSkillDirectories(pluginsRoot string) ([]pluginSkillDirectory, error) {
+	pluginsRoot = filepath.Clean(strings.TrimSpace(pluginsRoot))
+	if pluginsRoot == "" || pluginsRoot == "." {
+		return nil, nil
+	}
+	plugins, err := os.ReadDir(pluginsRoot)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	var result []pluginSkillDirectory
+	for _, plugin := range plugins {
+		if !plugin.IsDir() || plugin.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		skillsRoot := filepath.Join(pluginsRoot, plugin.Name(), "skills")
+		skills, err := os.ReadDir(skillsRoot)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, skill := range skills {
+			if !skill.IsDir() || skill.Type()&os.ModeSymlink != 0 || safeSkillName(skill.Name()) != skill.Name() {
+				continue
+			}
+			result = append(result, pluginSkillDirectory{
+				Name: skill.Name(),
+				Path: filepath.Join(skillsRoot, skill.Name()),
+			})
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Name == result[j].Name {
+			return result[i].Path < result[j].Path
+		}
+		return result[i].Name < result[j].Name
+	})
+	return result, nil
+}
+
+func readSkillDirectory(root string) ([]archiveEntry, error) {
+	root = filepath.Clean(root)
+	var (
+		entries  []archiveEntry
+		expanded int64
+	)
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == root {
+			return nil
+		}
+		if len(entries) >= maxSkillArchiveEntries {
+			return skillError("archive_too_many_entries", "skill contains too many entries")
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 || (!info.IsDir() && !info.Mode().IsRegular()) {
+			return skillError("archive_invalid", fmt.Sprintf("unsupported skill entry %q", path))
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			entries = append(entries, archiveEntry{Path: relative, Directory: true})
+			return nil
+		}
+		if info.Size() < 0 || info.Size() > maxSkillExtractedSize-expanded {
+			return skillError("archive_expanded_too_large", "plugin skill is too large")
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		expanded += int64(len(content))
+		entries = append(entries, archiveEntry{
+			Path:       relative,
+			Executable: isExecutableSkillScript(relative, info.Mode()),
+			Data:       content,
+		})
+		return nil
+	})
+	return entries, err
 }
 
 func readArchiveBytes(reader io.Reader, size, limit int64) ([]byte, error) {
@@ -380,7 +625,11 @@ func readSkillZip(data []byte, skillName string) ([]archiveEntry, error) {
 		if expanded > maxSkillExtractedSize {
 			return nil, skillError("archive_expanded_too_large", "expanded skill archive is too large")
 		}
-		result = append(result, archiveEntry{Path: entryPath, Data: content})
+		result = append(result, archiveEntry{
+			Path:       entryPath,
+			Executable: isExecutableSkillScript(entryPath, mode),
+			Data:       content,
+		})
 	}
 	return result, nil
 }
@@ -424,12 +673,59 @@ func readSkillTarGz(data []byte, skillName string) ([]archiveEntry, error) {
 				return nil, skillError("archive_invalid", fmt.Sprintf("incomplete archive entry %q", header.Name))
 			}
 			expanded += int64(len(content))
-			result = append(result, archiveEntry{Path: entryPath, Data: content})
+			result = append(result, archiveEntry{
+				Path:       entryPath,
+				Executable: isExecutableSkillScript(entryPath, os.FileMode(header.Mode)),
+				Data:       content,
+			})
 		default:
 			return nil, skillError("archive_invalid", fmt.Sprintf("unsupported archive entry %q", header.Name))
 		}
 	}
 	return result, nil
+}
+
+func isExecutableSkillScript(path string, mode os.FileMode) bool {
+	path = filepath.ToSlash(filepath.Clean(path))
+	return strings.HasPrefix(path, "scripts/") && mode.Perm()&0o111 != 0
+}
+
+func (s *Service) makeSkillScriptExecutable(ctx context.Context, skillRoot, path string) error {
+	result, err := s.call(ctx, "command/exec", map[string]any{
+		"command":        []string{"chmod", "0755", path},
+		"cwd":            skillRoot,
+		"timeoutMs":      5000,
+		"outputBytesCap": 4096,
+		"sandboxPolicy": map[string]any{
+			"type":          "externalSandbox",
+			"networkAccess": "restricted",
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("set executable permission on %q: %w", filepath.Base(path), err)
+	}
+	exitCode, ok := integerValue(result["exitCode"])
+	if !ok || exitCode != 0 {
+		stderr := strings.TrimSpace(stringValue(result["stderr"]))
+		if stderr == "" {
+			stderr = "chmod failed"
+		}
+		return fmt.Errorf("set executable permission on %q: %s", filepath.Base(path), stderr)
+	}
+	return nil
+}
+
+func integerValue(value any) (int64, bool) {
+	switch typed := value.(type) {
+	case int:
+		return int64(typed), true
+	case int64:
+		return typed, true
+	case float64:
+		return int64(typed), typed == float64(int64(typed))
+	default:
+		return 0, false
+	}
 }
 
 func normalizeArchivePath(rawName, skillName string) (string, error) {

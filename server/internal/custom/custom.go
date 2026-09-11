@@ -3,9 +3,13 @@ package custom
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/casbin/casbin/v2"
+	"github.com/zeromicro/go-zero/core/logx"
 
 	"github.com/jzero-io/agentrazor/server/internal/agent"
 	"github.com/jzero-io/agentrazor/server/internal/global"
@@ -24,13 +28,24 @@ func New(agentService *agent.Service) *Custom {
 // Init Please add custom logic here.
 func (c *Custom) Init() error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
 
 	// auto gen casbin rules
 	if err := InitCasbinRule(ctx, global.ServiceContext.Model, global.ServiceContext.CasbinEnforcer); err != nil {
+		cancel()
 		return err
 	}
+	cancel()
 
+	pluginsRoot := strings.TrimSpace(os.Getenv("AGENTRAZOR_PLUGIN_SKILLS_ROOT"))
+	if c.agent != nil && pluginsRoot != "" {
+		syncCtx, syncCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer syncCancel()
+		result, err := c.agent.SyncPluginSkills(syncCtx, pluginsRoot)
+		if err != nil {
+			return fmt.Errorf("sync plugin skills: %w", err)
+		}
+		logx.Infof("Plugin skills synchronized: installed=%d skipped=%d", len(result.Installed), len(result.Skipped))
+	}
 	return nil
 }
 

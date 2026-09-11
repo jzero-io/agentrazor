@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -113,7 +114,11 @@ func (r *appServer) available() bool {
 }
 
 func newAppServer() (*appServer, error) {
-	connection, err := dialAppServer(defaultAppServerSocket, appServerTimeout)
+	socketPath := strings.TrimSpace(os.Getenv("CODEX_SOCKET"))
+	if socketPath == "" {
+		socketPath = defaultAppServerSocket
+	}
+	connection, err := dialAppServer(socketPath, appServerTimeout)
 	if err != nil {
 		return nil, err
 	}

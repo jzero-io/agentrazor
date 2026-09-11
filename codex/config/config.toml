@@ -26,7 +26,6 @@ experimental_bearer_token = ""
 [permissions.workspace-only.filesystem]
 ":minimal" = "read"
 "/opt/codex" = "read"
-"/opt/agentrazor" = "read"
 "/dist/data/skills" = "read"
 
 [permissions.workspace-only.filesystem.":workspace_roots"]

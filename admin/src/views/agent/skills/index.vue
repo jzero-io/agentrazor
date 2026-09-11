@@ -40,6 +40,7 @@ const selectedSkill = computed(() => skills.value.find(item => item.name === sel
 const visibleContent = computed(() => selectedDetail.value?.content || '');
 const currentFile = computed(() => selectedDetail.value?.currentFile || selectedFile.value || 'SKILL.md');
 const isMarkdown = computed(() => /\.md$/i.test(currentFile.value));
+const isCurrentFilePreviewable = computed(() => isPreviewableSkillFile(currentFile.value));
 const filteredSkills = computed(() => {
   const keyword = searchKeyword.value.trim().toLowerCase();
   if (!keyword) return skills.value;
@@ -67,6 +68,7 @@ function buildTreeOptions(files: Api.Manage.AgentSkillFile[]): TreeOption[] {
     label: item.name,
     type: item.type,
     isLeaf: item.type === 'file',
+    disabled: item.type === 'file' && !isPreviewableSkillFile(item.path),
     prefix: () =>
       item.type === 'directory' ? (
         <icon-mdi-folder-outline class="text-icon text-gray-400" />
@@ -75,6 +77,63 @@ function buildTreeOptions(files: Api.Manage.AgentSkillFile[]): TreeOption[] {
       ),
     children: item.children?.length ? buildTreeOptions(item.children) : undefined
   }));
+}
+
+function isPreviewableSkillFile(path: string) {
+  const name = path.split('/').pop()?.toLowerCase() ?? '';
+  if (['dockerfile', 'makefile', 'license', 'readme', 'changelog'].includes(name)) return true;
+
+  const dot = name.lastIndexOf('.');
+  if (dot < 0) return false;
+
+  return new Set([
+    '.md',
+    '.txt',
+    '.json',
+    '.yaml',
+    '.yml',
+    '.toml',
+    '.ini',
+    '.conf',
+    '.env',
+    '.xml',
+    '.html',
+    '.htm',
+    '.css',
+    '.scss',
+    '.less',
+    '.js',
+    '.jsx',
+    '.ts',
+    '.tsx',
+    '.vue',
+    '.go',
+    '.py',
+    '.sh',
+    '.bash',
+    '.zsh',
+    '.fish',
+    '.ps1',
+    '.bat',
+    '.cmd',
+    '.sql',
+    '.csv',
+    '.graphql',
+    '.gql',
+    '.proto',
+    '.java',
+    '.c',
+    '.h',
+    '.cc',
+    '.cpp',
+    '.rs',
+    '.rb',
+    '.php',
+    '.swift',
+    '.kt',
+    '.kts',
+    '.lua'
+  ]).has(name.slice(dot));
 }
 
 const handleTreeNodeClick: TreeOverrideNodeClickBehavior = ({ option }) =>
@@ -128,7 +187,7 @@ async function selectSkill(skill: Api.Manage.AgentSkill, file = '') {
 
 async function selectFile(keys: Array<string | number>) {
   const key = String(keys[0] ?? '');
-  if (!key || !selectedSkill.value || key === selectedFile.value) return;
+  if (!key || !selectedSkill.value || key === selectedFile.value || !isPreviewableSkillFile(key)) return;
   await selectSkill(selectedSkill.value, key);
 }
 
@@ -222,11 +281,9 @@ async function renderMarkdown() {
   }
 }
 
-watch(
-  [visibleContent, currentFile, editing, detailLoading, () => themeStore.darkMode],
-  renderMarkdown,
-  { flush: 'post' }
-);
+watch([visibleContent, currentFile, editing, detailLoading, () => themeStore.darkMode], renderMarkdown, {
+  flush: 'post'
+});
 
 onMounted(getData);
 </script>
@@ -302,9 +359,7 @@ onMounted(getData);
               class="min-h-0 flex flex-col border-r border-gray-100 p-16px lt-lg:border-b lt-lg:border-r-0 dark:border-gray-700"
             >
               <div class="mb-12px shrink-0 truncate text-15px font-semibold">{{ selectedSkill.name }}</div>
-              <div
-                class="skill-file-tree-scroll min-h-0 flex-1 overflow-auto rounded-6px py-8px lt-lg:h-280px"
-              >
+              <div class="skill-file-tree-scroll min-h-0 flex-1 overflow-auto rounded-6px py-8px lt-lg:h-280px">
                 <NTree
                   class="skill-file-tree"
                   :data="treeData"
@@ -324,7 +379,12 @@ onMounted(getData);
                   <div class="truncate text-15px font-semibold">{{ currentFile }}</div>
                 </div>
                 <div class="flex shrink-0 items-center gap-8px">
-                  <NButton v-if="!editing && canEditSkill" size="small" secondary @click="startEdit">
+                  <NButton
+                    v-if="!editing && canEditSkill && isCurrentFilePreviewable"
+                    size="small"
+                    secondary
+                    @click="startEdit"
+                  >
                     <template #icon><icon-material-symbols-edit-outline class="text-icon" /></template>
                     {{ $t('common.edit') }}
                   </NButton>

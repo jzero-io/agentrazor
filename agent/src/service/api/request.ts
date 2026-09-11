@@ -2,6 +2,8 @@ import type { Envelope, LoginResponse } from './types';
 
 export const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
+const BUSINESS_SUCCESS_CODE = 0;
+
 const TOKEN_KEY = 'agentrazor_token';
 const REFRESH_TOKEN_KEY = 'agentrazor_refresh_token';
 
@@ -53,7 +55,7 @@ export async function refreshAccessToken(): Promise<RefreshAccessTokenResult> {
         const envelope = body !== null && isEnvelope<LoginResponse>(body) ? body : null;
         if (response.status === 401 || envelope?.code === 40102) return 'expired';
         if (!response.ok) return 'failed';
-        if (envelope && envelope.code !== 200) return envelope.code === 40102 ? 'expired' : 'failed';
+        if (envelope && envelope.code !== BUSINESS_SUCCESS_CODE) return envelope.code === 40102 ? 'expired' : 'failed';
         const data = envelope ? envelope.data : (body as LoginResponse | null);
         if (!data?.token || !data.refreshToken) return 'failed';
         setToken(data.token);
@@ -111,7 +113,7 @@ export async function request<T>(path: string, init?: RequestInit, retried = fal
   }
   if (!response.ok) throw new Error(`请求失败（${response.status}）`);
   if (envelope) {
-    if (envelope.code !== 200) {
+    if (envelope.code !== BUSINESS_SUCCESS_CODE) {
       if (envelope.code === 40102) expireSession();
       throw new Error(envelope.msg || '服务请求失败');
     }

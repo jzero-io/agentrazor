@@ -20,7 +20,7 @@ on:
           - standard
           - standard with plugins
       build_server:
-        description: Build server and Codex images (always enabled with plugins)
+        description: Build Server and Codex images (Server is always enabled with plugins)
         required: true
         default: true
         type: boolean
@@ -92,10 +92,10 @@ jobs:
           if [ "${release_type}" = "standard with plugins" ] \
             || [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ] \
             || [ "${BUILD_SERVER}" = "true" ]; then
-            components=$(jq -c '. + [
-              {"component":"server","context":"./server","file":"./server/Dockerfile"},
-              {"component":"codex","context":".","file":"./codex/Dockerfile"}
-            ]' <<< "${components}")
+            components=$(jq -c '. + [{"component":"server","context":"./server","file":"./server/Dockerfile"}]' <<< "${components}")
+            if [ "${release_type}" = "standard" ]; then
+              components=$(jq -c '. + [{"component":"codex","context":".","file":"./codex/Dockerfile"}]' <<< "${components}")
+            fi
           fi
           if [ "${release_type}" = "standard" ]; then
             if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ] || [ "${BUILD_ADMIN}" = "true" ]; then
@@ -167,7 +167,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Checkout selected plugins
-        if: (matrix.component == 'server' || matrix.component == 'codex') && inputs.plugins != ''
+        if: matrix.component == 'server' && inputs.plugins != ''
         env:
           PLUGINS: ${{ inputs.plugins }}
           GH_TOKEN: ${{ secrets.ACCESS_TOKEN }}
