@@ -50,7 +50,7 @@ func (e *ErrorMiddleware) Handle(ctx context.Context, err error) (int, any) {
 func (o *OkMiddleware) Handle(_ context.Context, data any) any {
 	return Body{
 		Data: data,
-		Code: http.StatusOK,
+		Code: 0,
 		Msg:  "success",
 	}
 }

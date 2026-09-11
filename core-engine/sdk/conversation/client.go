@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	apiKeyHeader  = "X-API-Key"
-	maxEventBytes = 8 << 20
+	apiKeyHeader        = "X-API-Key"
+	maxEventBytes       = 8 << 20
+	businessSuccessCode = 0
 )
 
 // Config configures a conversation client.
@@ -233,7 +234,7 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body any, outp
 	if err := json.Unmarshal(payload, &wrapped); err != nil {
 		return fmt.Errorf("conversation SDK: decode response: %w", err)
 	}
-	if wrapped.Code != http.StatusOK {
+	if wrapped.Code != businessSuccessCode {
 		return &APIError{StatusCode: response.StatusCode, Code: wrapped.Code, Message: wrapped.Msg}
 	}
 	if output == nil {
