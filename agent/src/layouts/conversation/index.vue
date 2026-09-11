@@ -708,6 +708,14 @@ function archiveGroupConversations(group: ConversationGroup) {
 async function selectConversation(id: string) {
   closeMobileSidebar();
   if (!id) return;
+  if (!conversations.value.some(item => item.id === id)) {
+    closeConversationStream(id);
+    clearConversationDetail(id);
+    setConversationProcessing(id, false);
+    showDraftConversation();
+    toast.warning('对话不存在或已被删除');
+    return;
+  }
   if (id === selectedConversationId.value && activeDetail.value) {
     if (loadingDetailId.value !== id) loadingDetail.value = false;
     return;
@@ -734,6 +742,10 @@ async function selectConversation(id: string) {
       });
     } catch (error) {
       if (conversationSelectionToken !== token || selectedConversationId.value !== id) return;
+      if (loadingDetailId.value === id) {
+        loadingDetail.value = false;
+        loadingDetailId.value = '';
+      }
       showError(error);
     }
   }
@@ -1022,20 +1034,30 @@ function confirmDelete() {
   );
 }
 
+function discardDeletedConversationState(ids: string[]) {
+  if (!ids.length) return;
+  const removed = new Set(ids);
+  ids.forEach(id => {
+    clearConversationDetail(id);
+    workspacePanel.removeConversation(id);
+    closeConversationStream(id);
+  });
+  clearConversationProcessing(ids);
+
+  if (!removed.has(selectedConversationId.value)) return;
+  resetActiveTurn({ clearCache: true });
+  selectedConversationId.value = '';
+  draftConversationGroupId.value = '';
+  syncConversationUrl('');
+  detail.value = null;
+}
+
 async function deleteConversation() {
   if (!activeConversation.value) return;
   try {
     const removedId = activeConversation.value.id;
     await conversationApi.remove(removedId);
-    clearConversationDetail(removedId);
-    workspacePanel.removeConversation(removedId);
-    setConversationProcessing(removedId, false);
-    closeConversationStream(removedId);
-    selectedConversationId.value = '';
-    draftConversationGroupId.value = '';
-    syncConversationUrl('');
-    detail.value = null;
-    resetActiveTurn();
+    discardDeletedConversationState([removedId]);
     await loadConversations(true);
   } catch (error) {
     showError(error);
@@ -1139,7 +1161,7 @@ function confirmDeleteArchived(item: Conversation) {
     async () => {
       try {
         await conversationApi.remove(item.id);
-        clearConversationDetail(item.id);
+        discardDeletedConversationState([item.id]);
         await loadConversations();
       } catch (error) {
         showError(error);
@@ -1158,8 +1180,7 @@ function confirmDeleteAllArchived() {
       try {
         const removedIds = archivedConversations.value.map(item => item.id);
         await Promise.all(removedIds.map(id => conversationApi.remove(id)));
-        removedIds.forEach(id => clearConversationDetail(id));
-        clearConversationProcessing(removedIds);
+        discardDeletedConversationState(removedIds);
         await loadConversations();
       } catch (error) {
         showError(error);
@@ -1177,6 +1198,7 @@ function confirmDeleteGroupArchived(section: { title: string; groupId?: string; 
     async () => {
       try {
         await conversationGroupApi.deleteArchivedConversations(section.groupId!);
+        discardDeletedConversationState(section.items.map(item => item.id));
         await loadConversations();
       } catch (error) {
         showError(error);

@@ -764,7 +764,7 @@ watch(
 
 .archive-delete-all {
   border-radius: 12px;
-  background: #fff1f1;
+  background: color-mix(in srgb, var(--danger) 10%, var(--panel-bg));
 }
 
 .archive-toolbar {
@@ -801,7 +801,7 @@ watch(
   display: flex;
   align-items: center;
   gap: 9px;
-  color: #30383c;
+  color: var(--text);
   font-size: 15px;
   font-weight: 600;
 }
@@ -815,15 +815,15 @@ watch(
   display: flex;
   align-items: center;
   gap: 14px;
-  color: #899399;
+  color: var(--muted);
   font-size: 13px;
 }
 
 .archive-section-list {
   overflow: hidden;
-  border: 1px solid #e5e9eb;
+  border: 1px solid var(--border);
   border-radius: 16px;
-  background: #fff;
+  background: var(--panel-bg);
 }
 
 .archive-page-list .archive-item {
@@ -831,7 +831,7 @@ watch(
   gap: 12px;
   padding: 14px 18px 14px 22px;
   border: 0;
-  border-bottom: 1px solid #edf0f1;
+  border-bottom: 1px solid var(--border-soft);
   border-radius: 0;
   background: transparent;
 }
@@ -845,17 +845,18 @@ watch(
 }
 
 .archive-item-copy strong {
-  color: #202729;
+  color: var(--text-strong);
   font-size: 15px;
   font-weight: 600;
 }
 
 .archive-item-copy span {
+  color: var(--muted);
   font-size: 13px;
 }
 
 .archive-delete-button {
-  color: #98a1a5;
+  color: var(--muted);
 }
 
 .archive-restore-button {
@@ -872,28 +873,6 @@ watch(
   min-height: 180px;
   border-radius: 16px;
   font-size: 14px;
-}
-
-:global(:root[data-theme="dark"]) .archive-delete-all {
-  background: rgb(239 104 104 / 12%);
-}
-
-:global(:root[data-theme="dark"]) .archive-section-title {
-  color: #edf1f2;
-}
-
-:global(:root[data-theme="dark"]) .archive-section-list {
-  border-color: #3d3d3d;
-  background: #222;
-}
-
-:global(:root[data-theme="dark"]) .archive-page-list .archive-item {
-  border-bottom-color: #353535;
-  background: transparent;
-}
-
-:global(:root[data-theme="dark"]) .archive-delete-button {
-  color: #989898;
 }
 
 @media (max-width: 720px) {

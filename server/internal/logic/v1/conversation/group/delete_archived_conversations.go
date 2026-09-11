@@ -50,8 +50,16 @@ func (l *DeleteArchivedConversations) DeleteArchivedConversations(req *types.Pat
 	if err != nil {
 		return nil, err
 	}
+	// thread/read (used by Metadata) does not reliably include the archived
+	// flag. Build the archive set from thread/list, which is the authoritative
+	// source for archive state.
+	threads, err := l.svcCtx.AgentService.List(l.ctx)
+	if err != nil {
+		return nil, err
+	}
+	archived := archivedThreadIDs(threads)
 	for _, conv := range convs {
-		thread, err := l.svcCtx.AgentService.Metadata(l.ctx, conv.Id)
+		_, err := l.svcCtx.AgentService.Metadata(l.ctx, conv.Id)
 		if err != nil {
 			// 线程已不存在（孤儿数据）：跳过 thread 侧，直接清理业务库记录
 			if errors.Is(err, agentdomain.ErrThreadNotFound) {
@@ -72,7 +80,7 @@ func (l *DeleteArchivedConversations) DeleteArchivedConversations(req *types.Pat
 			return nil, err
 		}
 		// 只删除已归档的对话，组内未归档的跳过，不影响本次批量删除
-		if !thread.Archived {
+		if _, ok := archived[conv.Id]; !ok {
 			continue
 		}
 		if err := l.svcCtx.AgentService.Delete(l.ctx, conv.Id); err != nil {
@@ -89,4 +97,14 @@ func (l *DeleteArchivedConversations) DeleteArchivedConversations(req *types.Pat
 		// Keep token usage events so the historical total remains stable.
 	}
 	return &types.DeleteArchivedConversationsResponse{}, nil
+}
+
+func archivedThreadIDs(threads []agentdomain.StoredThread) map[string]struct{} {
+	result := make(map[string]struct{})
+	for _, thread := range threads {
+		if thread.Archived {
+			result[thread.ID] = struct{}{}
+		}
+	}
+	return result
 }

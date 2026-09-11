@@ -213,6 +213,14 @@ export const conversationApi = {
         } catch (error) {
           if ((error as Error)?.name === 'AbortError') return;
         }
+        // A valid stream always sends stream.ready before it can end. The SSE
+        // handler closes immediately for a missing or inaccessible conversation;
+        // treating that empty response as reconnectable would leave `ready`
+        // pending forever and keep the conversation page spinning.
+        if (!readySettled) {
+          fail();
+          return;
+        }
         if (!(await waitForReconnect())) return;
       }
     };
