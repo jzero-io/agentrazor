@@ -3,7 +3,6 @@ FROM --platform=$BUILDPLATFORM ghcr.io/jzero-io/jzero:latest AS builder
 ARG TARGETARCH
 ARG LDFLAGS
 
-ENV GOPROXY=https://goproxy.cn,direct
 
 RUN apk add --no-cache git
 
