@@ -9,17 +9,13 @@ WORKDIR /app
 
 COPY server/plugins/ ./plugins/
 
-RUN --mount=type=cache,target=/go/pkg mkdir -p /opt/codex/bin /opt/codex/plugins /opt/codex/skills \
+RUN --mount=type=cache,target=/go/pkg mkdir -p /opt/agentrazor/bin /opt/agentrazor/skills \
     && for plugin in plugins/*/; do \
          [ -d "$plugin" ] || continue; \
          plugin_name=$(basename "$plugin"); \
          binary_name=$(printf '%s' "$plugin_name" | tr '-' '_'); \
-         (cd "$plugin" && CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -a -ldflags="$LDFLAGS" -o "/opt/codex/bin/$binary_name" .); \
-         if [ -d "$plugin/etc" ]; then \
-           mkdir -p "/opt/codex/plugins/$plugin_name"; \
-           cp -r "$plugin/etc" "/opt/codex/plugins/$plugin_name"; \
-         fi; \
-         [ -d "$plugin/skills" ] && cp -r "$plugin/skills/." /opt/codex/skills/ || true; \
+         (cd "$plugin" && CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -a -ldflags="$LDFLAGS" -o "/opt/agentrazor/bin/$binary_name" .); \
+         [ -d "$plugin/skills" ] && cp -r "$plugin/skills/." /opt/agentrazor/skills/ || true; \
        done
 
 FROM alpine:latest
@@ -43,15 +39,16 @@ RUN rm /var/run && mkdir -p /var/run
 
 WORKDIR /dist
 
-ENV PATH="/opt/codex/bin:/opt/codex/codex-path:$PATH" \
+ENV PATH="/opt/agentrazor/bin:/opt/codex/bin:/opt/codex/codex-path:$PATH" \
     CODEX_HOME=/dist/data \
     CODEX_SOCKET=/var/run/codex-app-server.sock
 
-COPY --from=builder /opt/codex/ /opt/codex/
+COPY --from=builder /opt/agentrazor/ /opt/agentrazor/
+COPY codex/skills/ /opt/agentrazor/skills/
 COPY codex/config/ /dist/defaults/
 COPY --chmod=0755 codex/entrypoint.sh /usr/local/bin/agentrazor-codex-entrypoint
 
-RUN for binary in /opt/codex/bin/*; do \
+RUN for binary in /opt/agentrazor/bin/*; do \
       [ -f "$binary" ] && [ -x "$binary" ] || continue; \
       ln -sf "$binary" "/usr/local/bin/$(basename "$binary")"; \
     done
