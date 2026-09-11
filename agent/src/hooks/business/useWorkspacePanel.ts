@@ -576,7 +576,7 @@ export function useWorkspacePanel(options: {
 
   function selectFile(tabId: string) {
     const state = activeState.value;
-    const tab = state?.kind === 'file' ? state.fileTabs?.find(item => item.tabId === tabId) : null;
+    const tab = state?.fileTabs?.find(item => item.tabId === tabId);
     if (!tab) return;
     fileError.value = '';
     setState(options.selectedConversationId.value, { visible: true, kind: 'file', activeFileTabId: tabId });
