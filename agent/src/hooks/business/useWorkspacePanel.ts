@@ -50,6 +50,19 @@ interface RightPanelViewState {
 }
 
 const RIGHT_PANEL_VIEW_KEY = 'agentrazor_right_panel_view';
+const MAX_FILE_PREVIEW_CHARACTERS = 100_000;
+const MAX_FILE_PREVIEW_LINES = 1_000;
+const MAX_HIGHLIGHT_CHARACTERS = 64_000;
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, character => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  })[character] || character);
+}
 
 function createTabId() {
   return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -270,16 +283,34 @@ export function useWorkspacePanel(options: {
     if (language === 'text') return 'TXT';
     return language.slice(0, 3).toUpperCase();
   });
-  const fileLines = computed(() => {
+  const filePreviewText = computed(() => {
     const file = activeFilePreview.value;
-    if (!file || file.kind !== 'text') return [] as Array<{ number: number; html: string }>;
-    const rawLines = file.content.replace(/\r\n/g, '\n').split('\n');
+    if (!file || file.kind !== 'text') {
+      return { rawLines: [] as string[], language: 'plaintext', highlight: false, truncated: false };
+    }
+    const normalized = file.content.replace(/\r\n/g, '\n');
+    const characterLimited = normalized.length > MAX_FILE_PREVIEW_CHARACTERS;
+    const rawLines = normalized.slice(0, MAX_FILE_PREVIEW_CHARACTERS).split('\n');
+    const lineLimited = rawLines.length > MAX_FILE_PREVIEW_LINES;
+    if (lineLimited) rawLines.length = MAX_FILE_PREVIEW_LINES;
     if (rawLines.length > 1 && rawLines[rawLines.length - 1] === '') rawLines.pop();
     const language = hljs.getLanguage(file.language) ? file.language : 'plaintext';
+    return {
+      rawLines,
+      language,
+      highlight: normalized.length <= MAX_HIGHLIGHT_CHARACTERS,
+      truncated: characterLimited || lineLimited
+    };
+  });
+  const filePreviewTruncated = computed(() => filePreviewText.value.truncated);
+  const fileLines = computed(() => {
+    const { rawLines, language, highlight } = filePreviewText.value;
     return rawLines.map((line, index) => ({
       number: index + 1,
       html: line
-        ? hljs.highlight(line, { language, ignoreIllegals: true }).value
+        ? highlight
+          ? hljs.highlight(line, { language, ignoreIllegals: true }).value
+          : escapeHtml(line)
         : '&nbsp;'
     }));
   });
@@ -446,7 +477,6 @@ export function useWorkspacePanel(options: {
         placeholder: true
       });
     }
-    loadingFilePaths.add(path);
     setState(conversationId, {
       visible: true,
       kind: 'file',
@@ -454,6 +484,8 @@ export function useWorkspacePanel(options: {
       fileTabs,
       activeFileTabId: tab.tabId
     });
+    if (loadingFilePaths.has(path)) return;
+    loadingFilePaths.add(path);
     try {
       const name = fileNameFromPath(path);
       if (isImageFile(name)) {
@@ -735,6 +767,7 @@ export function useWorkspacePanel(options: {
     fileBreadcrumbs,
     fileBadge,
     fileLines,
+    filePreviewTruncated,
     previewBadge,
     panelStyle,
     normalizeFilePath,

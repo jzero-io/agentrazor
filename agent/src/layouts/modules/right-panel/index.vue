@@ -29,6 +29,7 @@ const props = defineProps<{
   activeFileTabId: string;
   fileLoading: boolean;
   fileError: string;
+  filePreviewTruncated: boolean;
   title: string;
   reloadVersion: number;
   fileBadge: string;
@@ -119,6 +120,7 @@ function openFiles(forceNewTab: boolean) {
 
 function openTreeFile(path: string) {
   emit('openTreeFile', path, addFileTabMode.value);
+  if (window.matchMedia('(max-width: 720px)').matches) fileTreeVisible.value = false;
   addFileTabMode.value = false;
   breadcrumbPopupOpen.value = false;
 }
@@ -348,6 +350,7 @@ function dropTab(event: DragEvent, tabId: string) {
     </header>
     <div class="workspace-panel-actions">
       <n-button
+        v-if="activeKind"
         quaternary
         circle
         class="workspace-action-button"
@@ -481,6 +484,9 @@ function dropTab(event: DragEvent, tabId: string) {
                     <span>此文件暂不支持预览</span>
                   </div>
                   <div v-else class="file-preview-code-view">
+                    <div v-if="filePreviewTruncated" class="file-preview-limit-notice">
+                      文件较大，为避免页面卡顿，仅显示前 1,000 行或 100,000 个字符
+                    </div>
                     <div
                       v-for="line in fileLines"
                       :key="line.number"
