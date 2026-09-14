@@ -39,8 +39,7 @@ RUN --mount=type=cache,target=/go/pkg CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARC
 
 FROM alpine:latest
 
-RUN apk add --no-cache ca-certificates curl jq py3-pycryptodome python3 tar tzdata \
-    && python3 -c "import Crypto"
+RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /dist
 
 ENV PATH="/dist:${PATH}"

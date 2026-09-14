@@ -3,7 +3,7 @@ FROM alpine:latest
 ARG TARGETARCH
 ARG CODEX_VERSION=0.153.4
 
-RUN apk add --no-cache ca-certificates curl tar tzdata \
+RUN apk add --no-cache ca-certificates curl jq py3-pycryptodome python3 tar tzdata \
     && case "$TARGETARCH" in \
          amd64) codex_arch=x86_64 ;; \
          arm64) codex_arch=aarch64 ;; \

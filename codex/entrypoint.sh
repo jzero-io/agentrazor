@@ -3,11 +3,13 @@ set -eu
 
 umask 077
 mkdir -p "$CODEX_HOME" "$CODEX_HOME/skills" "$CODEX_HOME/workspace" "$(dirname "$CODEX_SOCKET")"
+system_skills_home="$CODEX_HOME/skills/.system"
+mkdir -p "$system_skills_home"
 
 for default_skill in /etc/codex/skills/*; do
   [ -d "$default_skill" ] || continue
   skill_name=$(basename "$default_skill")
-  [ -e "$CODEX_HOME/skills/$skill_name" ] || cp -a "$default_skill" "$CODEX_HOME/skills/$skill_name"
+  [ -e "$system_skills_home/$skill_name" ] || cp -a "$default_skill" "$system_skills_home/$skill_name"
 done
 
 cp -n /dist/defaults/* "$CODEX_HOME/"

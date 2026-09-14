@@ -19,6 +19,7 @@ import (
 const (
 	defaultWorkspaceHome   = "workspace"
 	defaultAppServerSocket = "/var/run/codex-app-server.sock"
+	requestGuardSkillName  = "request-guard"
 
 	// Bounds socket connection, initialization and short workspace operations.
 	appServerTimeout = 15 * time.Second
@@ -407,10 +408,7 @@ func (r *appServer) startTurn(ctx context.Context, threadID, prompt string, emit
 	params := map[string]any{
 		"threadId": threadID,
 		"cwd":      conversationDir,
-		"input": []map[string]any{{
-			"type": "text",
-			"text": prompt,
-		}},
+		"input":    r.turnInput(prompt),
 	}
 	result, err := r.request(ctx, "turn/start", params)
 	if err != nil {
@@ -441,6 +439,20 @@ func (r *appServer) startTurn(ctx context.Context, threadID, prompt string, emit
 		}
 	}()
 	return StartedTurn{ID: turnID, StartedAt: time.Now().UTC(), Done: done}, nil
+}
+
+func (r *appServer) turnInput(prompt string) []map[string]any {
+	return []map[string]any{
+		{
+			"type": "text",
+			"text": prompt,
+		},
+		{
+			"type": "skill",
+			"name": requestGuardSkillName,
+			"path": filepath.Join(r.codexHome, "skills", ".system", requestGuardSkillName, "SKILL.md"),
+		},
+	}
 }
 
 func (r *appServer) interruptTurn(threadID, turnID string) {
