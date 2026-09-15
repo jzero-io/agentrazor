@@ -269,6 +269,8 @@ declare namespace Api {
 
     type AgentSkill = {
       name: string;
+      enabled: boolean;
+      readOnly: boolean;
     };
 
     type AgentSkillFile = {

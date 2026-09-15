@@ -29,6 +29,7 @@ type Skill struct {
 	Enabled     bool
 	Path        string
 	Scope       string
+	ReadOnly    bool
 }
 
 type SkillFile struct {
@@ -106,10 +107,15 @@ func managedSkillsFromListResponse(response map[string]any, managedRoot string) 
 				Path:        filepath.Clean(stringValue(metadata["path"])),
 				Scope:       stringValue(metadata["scope"]),
 			}
-			if !isManagedSkill(skill, managedRoot) {
+			readOnly, managed := managedSkillReadOnly(skill, managedRoot)
+			if !managed {
 				continue
 			}
-			byName[skill.Name] = skill
+			skill.ReadOnly = readOnly
+			current, exists := byName[skill.Name]
+			if !exists || skill.ReadOnly && !current.ReadOnly {
+				byName[skill.Name] = skill
+			}
 		}
 	}
 
@@ -124,12 +130,26 @@ func managedSkillsFromListResponse(response map[string]any, managedRoot string) 
 }
 
 func isManagedSkill(skill Skill, managedRoot string) bool {
+	_, ok := managedSkillReadOnly(skill, managedRoot)
+	return ok
+}
+
+func managedSkillReadOnly(skill Skill, managedRoot string) (bool, bool) {
 	if skill.Name == "" || safeSkillName(skill.Name) != skill.Name || !filepath.IsAbs(skill.Path) ||
 		filepath.Base(skill.Path) != "SKILL.md" {
-		return false
+		return false, false
 	}
 	relative, err := filepath.Rel(filepath.Clean(managedRoot), filepath.Dir(skill.Path))
-	return err == nil && relative != "." && filepath.Dir(relative) == "." && safeSkillName(relative) == relative
+	if err != nil || relative == "." {
+		return false, false
+	}
+	if filepath.Dir(relative) == "." && relative != ".system" && safeSkillName(relative) == relative {
+		return false, true
+	}
+	if filepath.Dir(relative) == ".system" && safeSkillName(filepath.Base(relative)) == filepath.Base(relative) {
+		return true, true
+	}
+	return false, false
 }
 
 func (s *Service) managedSkill(ctx context.Context, name string) (Skill, error) {
@@ -276,6 +296,9 @@ func (s *Service) UpdateSkillFile(ctx context.Context, name, file, content strin
 	if err != nil {
 		return err
 	}
+	if skill.ReadOnly {
+		return errors.New("system skills are read-only")
+	}
 	root := filepath.Dir(skill.Path)
 	rootMetadata, err := s.metadata(ctx, root)
 	if err != nil {
@@ -302,10 +325,25 @@ func (s *Service) UpdateSkillFile(ctx context.Context, name, file, content strin
 	return err
 }
 
+func (s *Service) SetSkillStatus(ctx context.Context, name string, enabled bool) error {
+	skill, err := s.managedSkill(ctx, name)
+	if err != nil {
+		return err
+	}
+	_, err = s.call(ctx, "skills/config/write", map[string]any{
+		"path":    skill.Path,
+		"enabled": enabled,
+	})
+	return err
+}
+
 func (s *Service) DeleteSkill(ctx context.Context, name string) error {
 	skill, err := s.managedSkill(ctx, name)
 	if err != nil {
 		return err
+	}
+	if skill.ReadOnly {
+		return errors.New("system skills are read-only")
 	}
 	target := filepath.Dir(skill.Path)
 	metadata, err := s.metadata(ctx, target)
@@ -352,6 +390,14 @@ func (s *Service) InstallSkill(ctx context.Context, explicitName, archiveName st
 }
 
 func (s *Service) installSkillEntries(ctx context.Context, name string, entries []archiveEntry) (Skill, error) {
+	return s.installSkillEntriesAt(ctx, filepath.Join(s.codexHome, "skills"), name, entries)
+}
+
+func (s *Service) installSystemSkillEntries(ctx context.Context, name string, entries []archiveEntry) (Skill, error) {
+	return s.installSkillEntriesAt(ctx, filepath.Join(s.codexHome, "skills", ".system"), name, entries)
+}
+
+func (s *Service) installSkillEntriesAt(ctx context.Context, root, name string, entries []archiveEntry) (Skill, error) {
 	hasManifest := false
 	for _, entry := range entries {
 		if !entry.Directory && filepath.ToSlash(entry.Path) == "SKILL.md" {
@@ -363,7 +409,6 @@ func (s *Service) installSkillEntries(ctx context.Context, name string, entries 
 		return Skill{}, skillError("manifest_missing", "skill archive must contain SKILL.md")
 	}
 
-	root := filepath.Join(s.codexHome, "skills")
 	target := filepath.Join(root, name)
 	if err := s.createDirectory(ctx, root); err != nil {
 		return Skill{}, err
@@ -426,11 +471,7 @@ func (s *Service) SyncPluginSkills(ctx context.Context, pluginsRoot string) (Plu
 		return result, nil
 	}
 
-	installed, err := s.listSkills(ctx, true)
-	if err != nil {
-		return result, err
-	}
-	pending, skipped := splitPluginSkills(bundled, installed)
+	pending, skipped := splitPluginSkills(bundled)
 	result.Skipped = skipped
 
 	for _, item := range pending {
@@ -438,7 +479,7 @@ func (s *Service) SyncPluginSkills(ctx context.Context, pluginsRoot string) (Plu
 		if err != nil {
 			return result, fmt.Errorf("package plugin skill %q: %w", item.Name, err)
 		}
-		skill, err := s.installSkillEntries(ctx, item.Name, entries)
+		skill, err := s.installSystemSkillEntries(ctx, item.Name, entries)
 		if err != nil {
 			return result, fmt.Errorf("install plugin skill %q: %w", item.Name, err)
 		}
@@ -447,13 +488,8 @@ func (s *Service) SyncPluginSkills(ctx context.Context, pluginsRoot string) (Plu
 	return result, nil
 }
 
-func splitPluginSkills(bundled []pluginSkillDirectory, installed []Skill) ([]pluginSkillDirectory, []string) {
-	existing := make(map[string]struct{}, len(installed)*2)
-	for _, skill := range installed {
-		existing[skill.Name] = struct{}{}
-		existing[filepath.Base(filepath.Dir(skill.Path))] = struct{}{}
-	}
-
+func splitPluginSkills(bundled []pluginSkillDirectory) ([]pluginSkillDirectory, []string) {
+	existing := make(map[string]struct{}, len(bundled))
 	pending := make([]pluginSkillDirectory, 0, len(bundled))
 	skipped := make([]string, 0, len(bundled))
 	for _, item := range bundled {

@@ -28,7 +28,7 @@ func (l *SkillDetail) SkillDetail(req *types.SkillDetailRequest) (resp *types.Sk
 		return nil, err
 	}
 	return &types.SkillDetailResponse{
-		Skill:       types.Skill{Name: detail.Skill.Name},
+		Skill:       types.Skill{Name: detail.Skill.Name, Enabled: detail.Skill.Enabled, ReadOnly: detail.Skill.ReadOnly},
 		Files:       manageSkillFiles(detail.Files),
 		CurrentFile: detail.CurrentFile,
 		Content:     detail.Content,

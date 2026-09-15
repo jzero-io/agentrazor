@@ -208,6 +208,24 @@ func UpdateSkillFile(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
+func SetSkillStatus(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req types.SetSkillStatusRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+			return
+		}
+
+		l := agent.NewSetSkillStatus(r.Context(), svcCtx, r)
+		resp, err := l.SetSkillStatus(&req)
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.OkJsonCtx(r.Context(), w, resp)
+		}
+	}
+}
+
 func UploadSkill(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req types.UploadSkillRequest

@@ -215,6 +215,14 @@ export function UpdateAgentSkillFile(name: string, file: string, content: string
   });
 }
 
+export function SetAgentSkillStatus(name: string, enabled: boolean) {
+  return request<Record<string, never>>({
+    url: `/api/v1/manage/agent/skills/${encodeURIComponent(name)}/status`,
+    method: 'post',
+    data: { enabled }
+  });
+}
+
 export function GetAgentSettings() {
   return request<Api.Manage.AgentSettings>({ url: '/api/v1/manage/agent/settings', method: 'get' });
 }

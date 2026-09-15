@@ -161,8 +161,18 @@ type SaveUserTokenQuotaRequest struct {
 type SaveUserTokenQuotaResponse struct {
 }
 
+type SetSkillStatusRequest struct {
+	SkillName string `path:"skill_name" validate:"required"`
+	Enabled   bool   `json:"enabled"`
+}
+
+type SetSkillStatusResponse struct {
+}
+
 type Skill struct {
-	Name string `json:"name"`
+	Name     string `json:"name"`
+	Enabled  bool   `json:"enabled"`
+	ReadOnly bool   `json:"readOnly"`
 }
 
 type SkillDetailRequest struct {

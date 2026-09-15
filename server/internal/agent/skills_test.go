@@ -62,6 +62,13 @@ func TestManagedSkillsFromListResponse(t *testing.T) {
 			Scope:       "user",
 		},
 		{
+			Name:     "system-skill",
+			Enabled:  true,
+			Path:     filepath.Join(managedRoot, ".system", "system-skill", "SKILL.md"),
+			Scope:    "system",
+			ReadOnly: true,
+		},
+		{
 			Name:        "zeta",
 			Description: "Zeta skill",
 			Enabled:     true,
@@ -92,6 +99,63 @@ func TestIsManagedSkillRejectsUnsafeMetadata(t *testing.T) {
 		if isManagedSkill(skill, managedRoot) {
 			t.Errorf("isManagedSkill(%#v) = true, want false", skill)
 		}
+	}
+}
+
+func TestManagedSkillReadOnly(t *testing.T) {
+	managedRoot := filepath.Join(string(filepath.Separator), "dist", "data", "skills")
+	tests := []struct {
+		name     string
+		path     string
+		readOnly bool
+		managed  bool
+	}{
+		{name: "uploaded", path: filepath.Join(managedRoot, "uploaded", "SKILL.md"), managed: true},
+		{name: "built-in", path: filepath.Join(managedRoot, ".system", "built-in", "SKILL.md"), readOnly: true, managed: true},
+		{name: "nested", path: filepath.Join(managedRoot, ".system", "group", "nested", "SKILL.md")},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			readOnly, managed := managedSkillReadOnly(Skill{Name: test.name, Path: test.path}, managedRoot)
+			if readOnly != test.readOnly || managed != test.managed {
+				t.Fatalf("managedSkillReadOnly() = (%v, %v), want (%v, %v)", readOnly, managed, test.readOnly, test.managed)
+			}
+		})
+	}
+}
+
+func TestManagedSkillsFromListResponsePrefersSystemSkill(t *testing.T) {
+	managedRoot := filepath.Join(string(filepath.Separator), "dist", "data", "skills")
+	response := map[string]any{
+		"data": []any{
+			map[string]any{
+				"skills": []any{
+					map[string]any{
+						"name": "shared",
+						"path": filepath.Join(managedRoot, ".system", "shared", "SKILL.md"),
+					},
+					map[string]any{
+						"name": "shared",
+						"path": filepath.Join(managedRoot, "shared", "SKILL.md"),
+					},
+				},
+			},
+		},
+	}
+
+	got, err := managedSkillsFromListResponse(response, managedRoot)
+	if err != nil {
+		t.Fatalf("managedSkillsFromListResponse() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("managedSkillsFromListResponse() returned %d skills, want 1", len(got))
+	}
+	if !got[0].ReadOnly {
+		t.Fatal("managedSkillsFromListResponse() selected editable skill, want system skill")
+	}
+	wantPath := filepath.Join(managedRoot, ".system", "shared", "SKILL.md")
+	if got[0].Path != wantPath {
+		t.Fatalf("managedSkillsFromListResponse() path = %q, want %q", got[0].Path, wantPath)
 	}
 }
 
@@ -173,20 +237,18 @@ func TestPluginSkillDirectoriesAndReadSkillDirectory(t *testing.T) {
 	})
 }
 
-func TestSplitPluginSkillsSkipsExistingAndDuplicateNames(t *testing.T) {
+func TestSplitPluginSkillsSkipsOnlyDuplicateNames(t *testing.T) {
 	bundled := []pluginSkillDirectory{
 		{Name: "already-installed", Path: "/plugins/a/skills/already-installed"},
 		{Name: "new-skill", Path: "/plugins/a/skills/new-skill"},
 		{Name: "new-skill", Path: "/plugins/b/skills/new-skill"},
 	}
-	installed := []Skill{{
-		Name: "manifest-name",
-		Path: "/dist/data/skills/already-installed/SKILL.md",
-	}}
-
-	pending, skipped := splitPluginSkills(bundled, installed)
-	wantPending := []pluginSkillDirectory{{Name: "new-skill", Path: "/plugins/a/skills/new-skill"}}
-	wantSkipped := []string{"already-installed", "new-skill"}
+	pending, skipped := splitPluginSkills(bundled)
+	wantPending := []pluginSkillDirectory{
+		{Name: "already-installed", Path: "/plugins/a/skills/already-installed"},
+		{Name: "new-skill", Path: "/plugins/a/skills/new-skill"},
+	}
+	wantSkipped := []string{"new-skill"}
 	if !reflect.DeepEqual(pending, wantPending) {
 		t.Fatalf("pending = %#v, want %#v", pending, wantPending)
 	}

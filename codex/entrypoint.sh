@@ -6,9 +6,21 @@ mkdir -p "$CODEX_HOME" "$CODEX_HOME/skills" "$CODEX_HOME/workspace" "$(dirname "
 system_skills_home="$CODEX_HOME/skills/.system"
 mkdir -p "$system_skills_home"
 
-cp -n /dist/defaults/* "$CODEX_HOME/"
+if [ -d /dist/defaults ]; then
+  cp -r --update=none /dist/defaults/. "$CODEX_HOME/"
+  rm -rf /dist/defaults
+fi
 rm -f "$CODEX_SOCKET"
 cd "$CODEX_HOME"
+if [ -d /etc/codex/skills ]; then
+  for default_skill in /etc/codex/skills/*; do
+    [ -d "$default_skill" ] || continue
+    skill_name=$(basename "$default_skill")
+    rm -rf "$system_skills_home/$skill_name"
+    cp -a "$default_skill" "$system_skills_home/$skill_name"
+  done
+  rm -rf /etc/codex/skills
+fi
 
 codex-app-server --listen "unix://$CODEX_SOCKET" &
 app_server_pid=$!
@@ -34,11 +46,6 @@ while [ ! -S "$CODEX_SOCKET" ]; do
   sleep 0.1
 done
 
-for default_skill in /etc/codex/skills/*; do
-  [ -d "$default_skill" ] || continue
-  skill_name=$(basename "$default_skill")
-  [ -e "$system_skills_home/$skill_name" ] || cp -a "$default_skill" "$system_skills_home/$skill_name"
-done
 
 status=0
 wait "$app_server_pid" || status=$?

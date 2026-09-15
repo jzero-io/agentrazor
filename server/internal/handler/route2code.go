@@ -59,6 +59,7 @@ var RoutesCodesMap = map[string]string{
 	"GET:/api/v1/manage/agent/skills/:skill_name":                              "v1:manage:agent:skillDetail",
 	"POST:/api/v1/manage/agent/skills/:skill_name/delete":                      "v1:manage:agent:deleteSkill",
 	"POST:/api/v1/manage/agent/skills/:skill_name/file":                        "v1:manage:agent:updateSkillFile",
+	"POST:/api/v1/manage/agent/skills/:skill_name/status":                      "v1:manage:agent:setSkillStatus",
 	"POST:/api/v1/manage/agent/skills/upload":                                  "v1:manage:agent:uploadSkill",
 	"GET:/api/v1/manage/agent/token-quota/global":                              "v1:manage:agent:getTokenQuotaGlobal",
 	"POST:/api/v1/manage/agent/token-quota/global":                             "v1:manage:agent:saveTokenQuotaGlobal",

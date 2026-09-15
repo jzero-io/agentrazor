@@ -1,6 +1,6 @@
 <script setup lang="tsx">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { NButton, NCard, NEmpty, NInput, NPopconfirm, NTree, NUpload } from 'naive-ui';
+import { NButton, NCard, NEmpty, NInput, NPopconfirm, NSwitch, NTabPane, NTabs, NTag, NTree, NUpload } from 'naive-ui';
 import type { TreeOption, TreeOverrideNodeClickBehavior, UploadCustomRequestOptions } from 'naive-ui';
 import Vditor from 'vditor';
 import 'vditor/dist/index.css';
@@ -8,6 +8,7 @@ import {
   DeleteAgentSkill,
   GetAgentSkillDetail,
   GetAgentSkills,
+  SetAgentSkillStatus,
   UpdateAgentSkillFile,
   UploadAgentSkill
 } from '@/service/api';
@@ -21,14 +22,17 @@ const { hasAuth } = useAuth();
 const canUploadSkill = computed(() => hasAuth('v1:manage:agent:uploadSkill'));
 const canEditSkill = computed(() => hasAuth('v1:manage:agent:updateSkillFile'));
 const canDeleteSkill = computed(() => hasAuth('v1:manage:agent:deleteSkill'));
+const canSetSkillStatus = computed(() => hasAuth('v1:manage:agent:setSkillStatus'));
 
 const detailLoading = ref(false);
 const uploading = ref(false);
 const deletingName = ref('');
 const editing = ref(false);
 const saving = ref(false);
+const settingStatusName = ref('');
 const editContent = ref('');
 const searchKeyword = ref('');
+const activeSkillGroup = ref<'system' | 'custom'>('system');
 const selectedName = ref('');
 const selectedFile = ref('');
 const expandedKeys = ref<string[]>([]);
@@ -37,6 +41,9 @@ const skills = ref<Api.Manage.AgentSkill[]>([]);
 const selectedDetail = ref<Api.Manage.SkillDetailResponse | null>(null);
 
 const selectedSkill = computed(() => skills.value.find(item => item.name === selectedName.value));
+const selectedSkillReadOnly = computed(() =>
+  Boolean(selectedDetail.value?.skill.readOnly ?? selectedSkill.value?.readOnly)
+);
 const visibleContent = computed(() => selectedDetail.value?.content || '');
 const currentFile = computed(() => selectedDetail.value?.currentFile || selectedFile.value || 'SKILL.md');
 const isMarkdown = computed(() => /\.md$/i.test(currentFile.value));
@@ -47,6 +54,11 @@ const filteredSkills = computed(() => {
 
   return skills.value.filter(item => item.name.toLowerCase().includes(keyword));
 });
+const systemSkills = computed(() => filteredSkills.value.filter(item => item.readOnly));
+const customSkills = computed(() => filteredSkills.value.filter(item => !item.readOnly));
+const visibleGroupSkills = computed(() =>
+  activeSkillGroup.value === 'system' ? systemSkills.value : customSkills.value
+);
 const visibleFiles = computed(() => normalizeTreeFiles(selectedDetail.value?.files ?? []));
 const treeData = computed<TreeOption[]>(() => buildTreeOptions(visibleFiles.value));
 
@@ -158,19 +170,29 @@ async function getData() {
   if (error) return;
 
   skills.value = data.skills;
-  if (!selectedName.value && skills.value.length) {
-    await selectSkill(skills.value[0]);
+  if (selectedName.value) {
+    const next = skills.value.find(item => item.name === selectedName.value);
+    if (next) {
+      activeSkillGroup.value = next.readOnly ? 'system' : 'custom';
+      await selectSkill(next, selectedFile.value);
+      return;
+    }
+  }
+
+  const preferred = visibleGroupSkills.value[0];
+  const fallback = skills.value[0];
+  const next = preferred ?? fallback;
+  if (next) {
+    activeSkillGroup.value = next.readOnly ? 'system' : 'custom';
+    await selectSkill(next);
     return;
   }
 
-  if (selectedName.value) {
-    const next = skills.value.find(item => item.name === selectedName.value);
-    if (next) await selectSkill(next, selectedFile.value);
-    else selectedName.value = '';
-  }
+  clearSelection();
 }
 
 async function selectSkill(skill: Api.Manage.AgentSkill, file = '') {
+  activeSkillGroup.value = skill.readOnly ? 'system' : 'custom';
   selectedName.value = skill.name;
   selectedFile.value = file;
   detailLoading.value = true;
@@ -183,6 +205,13 @@ async function selectSkill(skill: Api.Manage.AgentSkill, file = '') {
     editing.value = false;
     editContent.value = data.content;
   }
+}
+
+function clearSelection() {
+  selectedName.value = '';
+  selectedFile.value = '';
+  selectedDetail.value = null;
+  editing.value = false;
 }
 
 async function selectFile(keys: Array<string | number>) {
@@ -212,26 +241,27 @@ async function uploadSkill(options: UploadCustomRequestOptions) {
   options.onFinish();
   await getData();
   const next = skills.value.find(item => item.name === data.name);
-  if (next) await selectSkill(next);
+  if (next) {
+    activeSkillGroup.value = 'custom';
+    await selectSkill(next);
+  }
 }
 
 async function deleteSkill(skill: Api.Manage.AgentSkill) {
-  if (!canDeleteSkill.value) return;
+  if (!canDeleteSkill.value || skill.readOnly) return;
   deletingName.value = skill.name;
   const { error } = await DeleteAgentSkill(skill.name);
   deletingName.value = '';
   if (error) return;
 
   if (selectedName.value === skill.name) {
-    selectedName.value = '';
-    selectedFile.value = '';
-    selectedDetail.value = null;
+    clearSelection();
   }
   await getData();
 }
 
 function startEdit() {
-  if (!canEditSkill.value) return;
+  if (!canEditSkill.value || selectedSkillReadOnly.value) return;
   editContent.value = visibleContent.value;
   editing.value = true;
 }
@@ -242,7 +272,7 @@ function cancelEdit() {
 }
 
 async function saveFile() {
-  if (!canEditSkill.value) return;
+  if (!canEditSkill.value || selectedSkillReadOnly.value) return;
   if (!selectedSkill.value || !currentFile.value) return;
 
   saving.value = true;
@@ -252,6 +282,24 @@ async function saveFile() {
 
   editing.value = false;
   await selectSkill(selectedSkill.value, currentFile.value);
+}
+
+async function setSkillStatus(skill: Api.Manage.AgentSkill, enabled: boolean) {
+  if (!canSetSkillStatus.value || settingStatusName.value || skill.enabled === enabled) return;
+
+  const name = skill.name;
+  settingStatusName.value = name;
+  const { error } = await SetAgentSkillStatus(name, enabled);
+  settingStatusName.value = '';
+  if (error) return;
+
+  skills.value = skills.value.map(item => (item.name === name ? { ...item, enabled } : item));
+  if (selectedDetail.value?.skill.name === name) {
+    selectedDetail.value = {
+      ...selectedDetail.value,
+      skill: { ...selectedDetail.value.skill, enabled }
+    };
+  }
 }
 
 async function renderMarkdown() {
@@ -285,6 +333,16 @@ watch([visibleContent, currentFile, editing, detailLoading, () => themeStore.dar
   flush: 'post'
 });
 
+watch([activeSkillGroup, visibleGroupSkills], async () => {
+  if (visibleGroupSkills.value.some(item => item.name === selectedName.value)) return;
+  const first = visibleGroupSkills.value[0];
+  if (first) {
+    await selectSkill(first);
+    return;
+  }
+  clearSelection();
+});
+
 onMounted(getData);
 </script>
 
@@ -313,39 +371,110 @@ onMounted(getData);
             <template #prefix><icon-ic-round-search class="text-icon text-gray-400" /></template>
           </NInput>
 
-          <div v-if="filteredSkills.length" class="mt-12px min-h-0 flex-1 overflow-auto pr-4px lt-lg:max-h-420px">
-            <button
-              v-for="item in filteredSkills"
-              :key="item.name"
-              type="button"
-              class="group mb-8px w-full border rounded-6px px-12px py-11px text-left transition-colors last:mb-0"
-              :class="
-                selectedName === item.name
-                  ? 'border-primary bg-primary bg-opacity-8'
-                  : 'border-gray-200 bg-white hover:border-primary/60 dark:border-gray-700 dark:bg-#101014'
-              "
-              @click="selectSkill(item)"
-            >
-              <div class="flex items-center justify-between gap-8px">
-                <span class="truncate text-14px font-medium">{{ item.name }}</span>
-                <div class="flex shrink-0 items-center gap-6px">
-                  <NPopconfirm v-if="canDeleteSkill" @positive-click="deleteSkill(item)">
-                    <template #trigger>
-                      <NButton size="tiny" quaternary type="error" :loading="deletingName === item.name" @click.stop>
-                        <template #icon><icon-material-symbols-delete-outline class="text-icon" /></template>
-                      </NButton>
-                    </template>
-                    {{ $t('page.agentSkills.deleteConfirm', { name: item.name }) }}
-                  </NPopconfirm>
+          <NTabs v-model:value="activeSkillGroup" type="segment" class="skills-tabs mt-12px min-h-0 flex-1">
+            <NTabPane name="system" :tab="`${$t('page.agentSkills.system')} (${systemSkills.length})`">
+              <div v-if="visibleGroupSkills.length" class="max-h-full overflow-auto pr-4px lt-lg:max-h-360px">
+                <div
+                  v-for="item in visibleGroupSkills"
+                  :key="item.name"
+                  class="group mb-8px w-full border rounded-6px px-12px py-11px text-left transition-colors last:mb-0"
+                  :class="
+                    selectedName === item.name
+                      ? 'border-primary bg-primary bg-opacity-8'
+                      : 'border-gray-200 bg-white hover:border-primary/60 dark:border-gray-700 dark:bg-#101014'
+                  "
+                  role="button"
+                  tabindex="0"
+                  @click="selectSkill(item)"
+                  @keydown.enter="selectSkill(item)"
+                >
+                  <div class="flex items-center justify-between gap-8px">
+                    <span class="min-w-0 truncate text-14px font-medium">{{ item.name }}</span>
+                    <div class="flex shrink-0 items-center gap-6px">
+                      <NSwitch
+                        size="small"
+                        :value="item.enabled"
+                        :loading="settingStatusName === item.name"
+                        :disabled="!canSetSkillStatus || Boolean(settingStatusName)"
+                        @click.stop
+                        @update:value="enabled => setSkillStatus(item, enabled)"
+                      />
+                      <NPopconfirm v-if="canDeleteSkill && !item.readOnly" @positive-click="deleteSkill(item)">
+                        <template #trigger>
+                          <NButton
+                            size="tiny"
+                            quaternary
+                            type="error"
+                            :loading="deletingName === item.name"
+                            @click.stop
+                          >
+                            <template #icon><icon-material-symbols-delete-outline class="text-icon" /></template>
+                          </NButton>
+                        </template>
+                        {{ $t('page.agentSkills.deleteConfirm', { name: item.name }) }}
+                      </NPopconfirm>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </button>
-          </div>
-          <NEmpty
-            v-else
-            class="py-44px"
-            :description="skills.length ? $t('page.agentSkills.noMatch') : $t('page.agentSkills.empty')"
-          />
+              <NEmpty
+                v-else
+                class="py-44px"
+                :description="skills.length ? $t('page.agentSkills.noMatch') : $t('page.agentSkills.empty')"
+              />
+            </NTabPane>
+            <NTabPane name="custom" :tab="`${$t('page.agentSkills.custom')} (${customSkills.length})`">
+              <div v-if="visibleGroupSkills.length" class="max-h-full overflow-auto pr-4px lt-lg:max-h-360px">
+                <div
+                  v-for="item in visibleGroupSkills"
+                  :key="item.name"
+                  class="group mb-8px w-full border rounded-6px px-12px py-11px text-left transition-colors last:mb-0"
+                  :class="
+                    selectedName === item.name
+                      ? 'border-primary bg-primary bg-opacity-8'
+                      : 'border-gray-200 bg-white hover:border-primary/60 dark:border-gray-700 dark:bg-#101014'
+                  "
+                  role="button"
+                  tabindex="0"
+                  @click="selectSkill(item)"
+                  @keydown.enter="selectSkill(item)"
+                >
+                  <div class="flex items-center justify-between gap-8px">
+                    <span class="min-w-0 truncate text-14px font-medium">{{ item.name }}</span>
+                    <div class="flex shrink-0 items-center gap-6px">
+                      <NSwitch
+                        size="small"
+                        :value="item.enabled"
+                        :loading="settingStatusName === item.name"
+                        :disabled="!canSetSkillStatus || Boolean(settingStatusName)"
+                        @click.stop
+                        @update:value="enabled => setSkillStatus(item, enabled)"
+                      />
+                      <NPopconfirm v-if="canDeleteSkill" @positive-click="deleteSkill(item)">
+                        <template #trigger>
+                          <NButton
+                            size="tiny"
+                            quaternary
+                            type="error"
+                            :loading="deletingName === item.name"
+                            @click.stop
+                          >
+                            <template #icon><icon-material-symbols-delete-outline class="text-icon" /></template>
+                          </NButton>
+                        </template>
+                        {{ $t('page.agentSkills.deleteConfirm', { name: item.name }) }}
+                      </NPopconfirm>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <NEmpty
+                v-else
+                class="py-44px"
+                :description="skills.length ? $t('page.agentSkills.noMatch') : $t('page.agentSkills.empty')"
+              />
+            </NTabPane>
+          </NTabs>
         </section>
 
         <section
@@ -358,7 +487,15 @@ onMounted(getData);
             <aside
               class="min-h-0 flex flex-col border-r border-gray-100 p-16px lt-lg:border-b lt-lg:border-r-0 dark:border-gray-700"
             >
-              <div class="mb-12px shrink-0 truncate text-15px font-semibold">{{ selectedSkill.name }}</div>
+              <div class="mb-4px flex shrink-0 items-center gap-8px text-15px font-semibold">
+                <span class="truncate">{{ selectedSkill.name }}</span>
+                <NTag v-if="selectedSkillReadOnly" size="small" :bordered="false">
+                  {{ $t('page.agentSkills.builtIn') }}
+                </NTag>
+              </div>
+              <div v-if="selectedSkillReadOnly" class="mb-12px shrink-0 text-12px text-gray-500">
+                {{ $t('page.agentSkills.systemReadOnlyHint') }}
+              </div>
               <div class="skill-file-tree-scroll min-h-0 flex-1 overflow-auto rounded-6px py-8px lt-lg:h-280px">
                 <NTree
                   class="skill-file-tree"
@@ -380,7 +517,7 @@ onMounted(getData);
                 </div>
                 <div class="flex shrink-0 items-center gap-8px">
                   <NButton
-                    v-if="!editing && canEditSkill && isCurrentFilePreviewable"
+                    v-if="!editing && canEditSkill && !selectedSkillReadOnly && isCurrentFilePreviewable"
                     size="small"
                     secondary
                     @click="startEdit"

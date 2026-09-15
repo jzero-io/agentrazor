@@ -309,6 +309,12 @@ func (r *appServer) startThread(ctx context.Context) (string, error) {
 	}); err != nil {
 		return "", fmt.Errorf("create conversation root: %w", err)
 	}
+	// thread/start snapshots the available skills for the new conversation.
+	// Refresh first so a recent skills/config/write takes effect before that
+	// snapshot is created, rather than only being observed by the first turn.
+	if _, err := r.enabledRequestGuard(ctx, r.workspaceHome); err != nil {
+		return "", fmt.Errorf("refresh skills before starting thread: %w", err)
+	}
 	result, err := r.request(ctx, "thread/start", map[string]any{
 		"cwd": r.threadCWD,
 	})
@@ -396,6 +402,10 @@ func (r *appServer) startTurn(ctx context.Context, threadID, prompt string, emit
 	if err != nil {
 		return StartedTurn{}, err
 	}
+	requestGuard, err := r.enabledRequestGuard(ctx, conversationDir)
+	if err != nil {
+		return StartedTurn{}, fmt.Errorf("read request guard status: %w", err)
+	}
 	execution := &appServerTurn{
 		threadID: threadID,
 		emit:     emit,
@@ -408,7 +418,7 @@ func (r *appServer) startTurn(ctx context.Context, threadID, prompt string, emit
 	params := map[string]any{
 		"threadId": threadID,
 		"cwd":      conversationDir,
-		"input":    r.turnInput(prompt),
+		"input":    r.turnInput(prompt, requestGuard),
 	}
 	result, err := r.request(ctx, "turn/start", params)
 	if err != nil {
@@ -441,18 +451,45 @@ func (r *appServer) startTurn(ctx context.Context, threadID, prompt string, emit
 	return StartedTurn{ID: turnID, StartedAt: time.Now().UTC(), Done: done}, nil
 }
 
-func (r *appServer) turnInput(prompt string) []map[string]any {
-	return []map[string]any{
+func (r *appServer) enabledRequestGuard(ctx context.Context, cwd string) (*Skill, error) {
+	result, err := r.request(ctx, "skills/list", map[string]any{
+		"cwds":        []string{cwd},
+		"forceReload": true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	skills, err := managedSkillsFromListResponse(result, filepath.Join(r.codexHome, "skills"))
+	if err != nil {
+		return nil, err
+	}
+	for index := range skills {
+		skill := &skills[index]
+		if skill.Name == requestGuardSkillName && skill.ReadOnly {
+			if !skill.Enabled {
+				return nil, nil
+			}
+			return skill, nil
+		}
+	}
+	return nil, nil
+}
+
+func (r *appServer) turnInput(prompt string, requestGuard *Skill) []map[string]any {
+	input := []map[string]any{
 		{
 			"type": "text",
 			"text": prompt,
 		},
-		{
-			"type": "skill",
-			"name": requestGuardSkillName,
-			"path": filepath.Join(r.codexHome, "skills", ".system", requestGuardSkillName, "SKILL.md"),
-		},
 	}
+	if requestGuard != nil && requestGuard.Enabled {
+		input = append(input, map[string]any{
+			"type": "skill",
+			"name": requestGuard.Name,
+			"path": requestGuard.Path,
+		})
+	}
+	return input
 }
 
 func (r *appServer) interruptTurn(threadID, turnID string) {

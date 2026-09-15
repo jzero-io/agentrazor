@@ -28,7 +28,7 @@ func (l *ListSkills) ListSkills(req *types.ListSkillsRequest) (resp *types.ListS
 	}
 	result := make([]types.Skill, 0, len(skills))
 	for _, skill := range skills {
-		result = append(result, types.Skill{Name: skill.Name})
+		result = append(result, types.Skill{Name: skill.Name, Enabled: skill.Enabled, ReadOnly: skill.ReadOnly})
 	}
 	return &types.ListSkillsResponse{Skills: result}, nil
 }

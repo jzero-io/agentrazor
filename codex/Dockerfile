@@ -1,9 +1,14 @@
-FROM alpine:latest
+FROM ubuntu:24.04
 
 ARG TARGETARCH
-ARG CODEX_VERSION=0.153.4
+ARG CODEX_VERSION=0.154.0
 
-RUN apk add --no-cache ca-certificates curl jq py3-pycryptodome python3 tar tzdata \
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       ca-certificates curl jq libtinfo6 musl python3 python3-pycryptodome tar tzdata \
+    && rm -rf /var/lib/apt/lists/* \
     && case "$TARGETARCH" in \
          amd64) codex_arch=x86_64 ;; \
          arm64) codex_arch=aarch64 ;; \

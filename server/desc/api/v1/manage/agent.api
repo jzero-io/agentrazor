@@ -69,7 +69,9 @@ type ResetUserTokenQuotaRequest {
 type ResetUserTokenQuotaResponse {}
 
 type Skill {
-	Name string `json:"name"`
+	Name     string `json:"name"`
+	Enabled  bool   `json:"enabled"`
+	ReadOnly bool   `json:"readOnly"`
 }
 
 type SkillFile {
@@ -110,6 +112,13 @@ type UpdateSkillFileRequest {
 }
 
 type UpdateSkillFileResponse {}
+
+type SetSkillStatusRequest {
+	SkillName string `path:"skill_name" validate:"required"`
+	Enabled   bool   `json:"enabled"`
+}
+
+type SetSkillStatusResponse {}
 
 type UploadSkillRequest {}
 
@@ -232,6 +241,9 @@ service server {
 
 	@handler UpdateSkillFile
 	post /manage/agent/skills/:skill_name/file (UpdateSkillFileRequest) returns (UpdateSkillFileResponse)
+
+	@handler SetSkillStatus
+	post /manage/agent/skills/:skill_name/status (SetSkillStatusRequest) returns (SetSkillStatusResponse)
 
 	@handler GetSettings
 	get /manage/agent/settings (GetSettingsRequest) returns (GetSettingsResponse)

@@ -344,6 +344,12 @@ const local: App.I18n.Schema = {
     agentSkills: {
       title: 'Skills 管理',
       installed: '已安装 Skills',
+      builtIn: '系统',
+      system: '系统',
+      custom: '自定义',
+      systemReadOnlyHint: '系统 Skill 由系统升级维护，仅支持查看。',
+      enabled: '已启用',
+      disabled: '已禁用',
       uploadArchive: 'Upload',
       searchPlaceholder: '搜索名称',
       deleteConfirm: '确认删除 {name}？',
