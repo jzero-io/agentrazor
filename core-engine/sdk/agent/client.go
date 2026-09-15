@@ -1,6 +1,6 @@
-// Package conversation provides a small client for talking to an AgentRazor
+// Package agent provides a small client for talking to an AgentRazor
 // server through its conversation API.
-package conversation
+package agent
 
 import (
 	"bytes"
