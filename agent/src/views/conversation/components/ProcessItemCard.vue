@@ -7,6 +7,7 @@ defineProps<{
   display: ProcessDisplayItem;
   displayWorkspaceProcessPath: (filePath: string) => string;
   normalizeWorkspaceFilePath: (href: string) => string;
+  loadWorkspaceImage: (path: string) => Promise<Blob>;
 }>();
 
 const emit = defineEmits<{
@@ -56,6 +57,7 @@ const emit = defineEmits<{
     :content="display.item.text"
     :streaming="display.live"
     :normalize-workspace-file-path="normalizeWorkspaceFilePath"
+    :load-workspace-image="loadWorkspaceImage"
     @open-workspace-file="path => emit('openWorkspaceFile', path)"
     @error="message => emit('error', message)"
   />

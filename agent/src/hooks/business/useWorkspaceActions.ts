@@ -65,6 +65,10 @@ export function useWorkspaceActions(options: UseWorkspaceActionsOptions) {
     return options.workspacePanel.normalizeFilePath(href) || '';
   }
 
+  function loadWorkspaceImage(path: string) {
+    return options.workspacePanel.loadImage(path);
+  }
+
   function openWorkspace(workspace: WorkspaceDescriptor) {
     options.pinnedSummaryOpen.value = false;
     options.workspacePanel.replaceWithWorkspace(workspace);
@@ -123,6 +127,7 @@ export function useWorkspaceActions(options: UseWorkspaceActionsOptions) {
     pinnedSummaryWorkspaces,
     parseAgentMessage,
     normalizeWorkspaceFilePath,
+    loadWorkspaceImage,
     openWorkspace,
     openWorkspaceFile,
     closeFilePreview,

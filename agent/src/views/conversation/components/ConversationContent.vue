@@ -55,6 +55,7 @@ defineProps<{
   composerActionIcon: string;
   copiedMessageId: string;
   normalizeWorkspaceFilePath: (href: string) => string;
+  loadWorkspaceImage: (path: string) => Promise<Blob>;
   displayWorkspaceProcessPath: (filePath: string) => string;
   openWorkspaceFile: (path: string) => void;
   setMessagePane: (el: Element | ComponentPublicInstance | null) => void;
@@ -192,6 +193,7 @@ function emitError(message: string) {
                   :display="display"
                   :display-workspace-process-path="displayWorkspaceProcessPath"
                   :normalize-workspace-file-path="normalizeWorkspaceFilePath"
+                  :load-workspace-image="loadWorkspaceImage"
                   @open-workspace-file="openWorkspaceFile"
                   @error="emitError"
                 />
@@ -215,6 +217,7 @@ function emitError(message: string) {
                   :display="display"
                   :display-workspace-process-path="displayWorkspaceProcessPath"
                   :normalize-workspace-file-path="normalizeWorkspaceFilePath"
+                  :load-workspace-image="loadWorkspaceImage"
                   @open-workspace-file="openWorkspaceFile"
                   @error="emitError"
                 />
@@ -235,6 +238,7 @@ function emitError(message: string) {
                     :content="parseAgentMessage(item.text, view.streaming).markdown"
                     :streaming="view.streaming"
                     :normalize-workspace-file-path="normalizeWorkspaceFilePath"
+                    :load-workspace-image="loadWorkspaceImage"
                     @open-workspace-file="openWorkspaceFile"
                     @error="emitError"
                   />

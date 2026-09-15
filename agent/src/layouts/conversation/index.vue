@@ -347,6 +347,7 @@ const {
   pinnedSummaryWorkspaces,
   parseAgentMessage,
   normalizeWorkspaceFilePath,
+  loadWorkspaceImage,
   openWorkspace,
   openWorkspaceFile,
   closeFilePreview,
@@ -1469,6 +1470,7 @@ watch(settingsSection, section => {
             :copy-message="copyMessage"
             :parse-agent-message="parseAgentMessage"
             :normalize-workspace-file-path="normalizeWorkspaceFilePath"
+            :load-workspace-image="loadWorkspaceImage"
             :display-workspace-process-path="displayWorkspaceProcessPath"
             :open-workspace="openWorkspace"
             :open-workspace-file="openWorkspaceFile"

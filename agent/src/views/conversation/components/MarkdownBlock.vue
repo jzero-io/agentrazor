@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUpdated, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, ref } from 'vue';
 import MarkdownIt from 'markdown-it';
 import hljs from 'highlight.js/lib/common';
 import { writeClipboardText } from '../../../utils/clipboard';
@@ -8,9 +8,11 @@ const props = withDefaults(defineProps<{
   content: string;
   streaming?: boolean;
   normalizeWorkspaceFilePath?: (href: string) => string;
+  loadWorkspaceImage?: (path: string) => Promise<Blob>;
 }>(), {
   streaming: false,
-  normalizeWorkspaceFilePath: undefined
+  normalizeWorkspaceFilePath: undefined,
+  loadWorkspaceImage: undefined
 });
 
 const emit = defineEmits<{
@@ -20,6 +22,9 @@ const emit = defineEmits<{
 
 let mermaidRenderSeq = 0;
 let mermaidModulePromise: Promise<typeof import('mermaid')> | undefined;
+const workspaceImageUrls = new Map<string, string>();
+const workspaceImageLoads = new Map<string, Promise<string>>();
+const workspaceImagePlaceholder = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="240" height="135" viewBox="0 0 240 135"%3E%3Crect width="240" height="135" rx="8" fill="%23eef1f2"/%3E%3Ctext x="120" y="72" text-anchor="middle" font-family="sans-serif" font-size="14" fill="%2375818a"%3E%E6%AD%A3%E5%9C%A8%E5%8A%A0%E8%BD%BD%E5%9B%BE%E7%89%87%3C/text%3E%3C/svg%3E';
 
 function mermaidCopyButtonHtml() {
   return '<button type="button" class="mermaid-copy-button" data-mermaid-copy>复制源码</button>';
@@ -66,6 +71,18 @@ function createMarkdown() {
     } else {
       tokens[index].attrSet('target', '_blank');
       tokens[index].attrSet('rel', 'noopener noreferrer');
+    }
+    return renderer.renderToken(tokens, index, options);
+  };
+
+  markdown.renderer.rules.image = (tokens, index, options, _env, renderer) => {
+    const src = String(tokens[index].attrGet('src') || '');
+    const path = props.normalizeWorkspaceFilePath?.(src) || '';
+    if (path) {
+      tokens[index].attrSet('src', workspaceImagePlaceholder);
+      tokens[index].attrSet('data-workspace-file', 'true');
+      tokens[index].attrSet('data-workspace-path', path);
+      tokens[index].attrSet('data-workspace-image-state', 'loading');
     }
     return renderer.renderToken(tokens, index, options);
   };
@@ -132,13 +149,51 @@ async function handleClick(event: MouseEvent) {
   await copyMermaidSource(event);
   if (event.defaultPrevented) return;
   const target = event.target instanceof HTMLElement ? event.target : null;
-  const link = target?.closest<HTMLAnchorElement>('a[data-workspace-file]');
+  const link = target?.closest<HTMLElement>('[data-workspace-file]');
   if (!link) return;
-  const path = props.normalizeWorkspaceFilePath?.(link.getAttribute('href') || '') || '';
+  const path = link.dataset.workspacePath
+    || props.normalizeWorkspaceFilePath?.(link.getAttribute('href') || link.getAttribute('src') || '')
+    || '';
   if (!path) return;
   event.preventDefault();
   event.stopPropagation();
   emit('openWorkspaceFile', path);
+}
+
+function workspaceImageUrl(path: string) {
+  const existing = workspaceImageUrls.get(path);
+  if (existing) return Promise.resolve(existing);
+  const pending = workspaceImageLoads.get(path);
+  if (pending) return pending;
+  if (!props.loadWorkspaceImage) return Promise.reject(new Error('无法加载工作区图片'));
+  const load = props.loadWorkspaceImage(path).then(blob => {
+    const url = URL.createObjectURL(blob);
+    workspaceImageUrls.set(path, url);
+    workspaceImageLoads.delete(path);
+    return url;
+  }).catch(error => {
+    workspaceImageLoads.delete(path);
+    throw error;
+  });
+  workspaceImageLoads.set(path, load);
+  return load;
+}
+
+async function renderWorkspaceImages() {
+  const images = Array.from(root.value?.querySelectorAll<HTMLImageElement>('img[data-workspace-path]') || []);
+  await Promise.all(images.map(async image => {
+    const path = image.dataset.workspacePath || '';
+    if (!path || image.dataset.workspaceImageState === 'loaded') return;
+    image.dataset.workspaceImageState = 'loading';
+    try {
+      const url = await workspaceImageUrl(path);
+      if (!image.isConnected || image.dataset.workspacePath !== path) return;
+      image.src = url;
+      image.dataset.workspaceImageState = 'loaded';
+    } catch {
+      if (image.isConnected) image.dataset.workspaceImageState = 'error';
+    }
+  }));
 }
 
 async function renderMermaidBlocks() {
@@ -175,12 +230,20 @@ async function renderMermaidBlocks() {
   }
 }
 
-function scheduleMermaidRender() {
-  void nextTick(renderMermaidBlocks);
+function scheduleRichContentRender() {
+  void nextTick(() => {
+    void renderMermaidBlocks();
+    void renderWorkspaceImages();
+  });
 }
 
-onMounted(scheduleMermaidRender);
-onUpdated(scheduleMermaidRender);
+onMounted(scheduleRichContentRender);
+onUpdated(scheduleRichContentRender);
+onBeforeUnmount(() => {
+  for (const url of workspaceImageUrls.values()) URL.revokeObjectURL(url);
+  workspaceImageUrls.clear();
+  workspaceImageLoads.clear();
+});
 </script>
 
 <template>

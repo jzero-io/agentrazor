@@ -181,8 +181,59 @@ export function safeWorkspaceFileURL(conversationId: string, relativePath: strin
     .filter(part => part && part !== '.')
     .join('/');
   if (!clean || clean.split('/').some(part => part === '..')) return '';
-  if (!/\.[a-z0-9][a-z0-9_-]*$/i.test(clean)) return '';
   return '/api/v1/conversation/' + encodeURIComponent(conversationId) + '/workspace/file?path=' + encodeURIComponent(clean);
+}
+
+export function normalizeWorkspaceFileReference(href: string, conversationId: string, origin = window.location.origin) {
+  if (!conversationId) return '';
+  const trimmed = href.trim();
+  if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) return '';
+
+  const apiPath = '/api/v1/conversation/' + encodeURIComponent(conversationId) + '/workspace/file';
+  const fromPathname = (pathname: string, search = '') => {
+    let decodedPath = pathname;
+    try {
+      decodedPath = decodeURIComponent(pathname);
+    } catch {
+      return '';
+    }
+    if (decodedPath === apiPath) {
+      return safeWorkspaceFileURL(conversationId, new URLSearchParams(search).get('path') || '');
+    }
+    const marker = `/workspace/${conversationId}/`;
+    const markerIndex = decodedPath.indexOf(marker);
+    if (markerIndex >= 0) {
+      return safeWorkspaceFileURL(conversationId, decodedPath.slice(markerIndex + marker.length));
+    }
+    return '';
+  };
+
+  if (/^[a-z][a-z\d+.-]*:/i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      if (url.protocol !== 'file:' && url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+      if (url.protocol !== 'file:' && url.origin !== origin) return '';
+      return fromPathname(url.pathname, url.search);
+    } catch {
+      return '';
+    }
+  }
+
+  if (trimmed.startsWith('/')) {
+    try {
+      const url = new URL(trimmed, origin);
+      return fromPathname(url.pathname, url.search);
+    } catch {
+      return '';
+    }
+  }
+
+  const relativePath = trimmed.split('#')[0]?.split('?')[0] || '';
+  try {
+    return safeWorkspaceFileURL(conversationId, decodeURIComponent(relativePath));
+  } catch {
+    return '';
+  }
 }
 
 export function displayWorkspaceProcessPath(filePath: string, conversationId = '') {
@@ -338,33 +389,13 @@ export function useWorkspacePanel(options: {
   }
 
   function normalizeFilePath(href: string) {
-    const conversationId = options.selectedConversationId.value;
-    if (!conversationId) return '';
-    const trimmed = href.trim();
-    if (!trimmed || trimmed.startsWith('#')) return '';
+    return normalizeWorkspaceFileReference(href, options.selectedConversationId.value);
+  }
 
-    let pathname = trimmed;
-    try {
-      const url = new URL(trimmed, window.location.origin);
-      if (url.protocol !== 'http:' && url.protocol !== 'https:' && url.protocol !== 'file:') return '';
-      if (url.protocol !== 'file:' && url.origin !== window.location.origin) return '';
-      const apiPath = '/api/v1/conversation/' + encodeURIComponent(conversationId) + '/workspace/file';
-      if (url.origin === window.location.origin && url.pathname === apiPath) {
-        return safeWorkspaceFileURL(conversationId, url.searchParams.get('path') || '');
-      }
-      pathname = decodeURIComponent(url.pathname);
-    } catch {
-      pathname = trimmed.split('#')[0]?.split('?')[0] || '';
-    }
-
-    const marker = `/workspace/${conversationId}/`;
-    const markerIndex = pathname.indexOf(marker);
-    if (markerIndex >= 0) {
-      return safeWorkspaceFileURL(conversationId, pathname.slice(markerIndex + marker.length));
-    }
-
-    if (pathname.startsWith('/')) return '';
-    return safeWorkspaceFileURL(conversationId, pathname);
+  async function loadImage(path: string) {
+    const file = await options.fetchBlob(path);
+    if (!isImageFile(file.name, file.contentType)) throw new Error('工作区文件不是受支持的图片');
+    return file.blob;
   }
 
   function previewsForConversation(conversationId: string) {
@@ -385,7 +416,8 @@ export function useWorkspacePanel(options: {
   }
 
   function fileNameFromPath(path: string) {
-    return decodeURIComponent(path.split('?')[0] || '').split('/').filter(Boolean).pop() || '文件';
+    const displayedPath = displayWorkspaceProcessPath(path, options.selectedConversationId.value);
+    return displayedPath.split('/').filter(Boolean).pop() || '文件';
   }
 
   function previewBadge(file: FilePreview) {
@@ -771,6 +803,7 @@ export function useWorkspacePanel(options: {
     previewBadge,
     panelStyle,
     normalizeFilePath,
+    loadImage,
     displayWorkspaceFilePath,
     displayWorkspaceProcessPath: (path: string) => displayWorkspaceProcessPath(path, options.selectedConversationId.value),
     openWorkspace,

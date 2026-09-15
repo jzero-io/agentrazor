@@ -1513,6 +1513,19 @@ body.is-dragging {
   margin-bottom: 0;
 }
 
+.markdown-body img[data-workspace-file] {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 8px 0 14px;
+  border-radius: 8px;
+  cursor: zoom-in;
+}
+
+.markdown-body img[data-workspace-image-state="error"] {
+  opacity: 0.65;
+}
+
 .markdown-body p,
 .markdown-body ul,
 .markdown-body ol,
