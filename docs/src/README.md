@@ -30,7 +30,7 @@ features:
 
 ## AgentRazor 是什么
 
-AgentRazor 是一个围绕 Codex app-server 协议构建的 AI Agent 平台。它不是单一聊天页面，而是一套完整的 Agent 运行和运营体系：用户在 `agent` 中发起对话，`server` 负责鉴权、会话元数据、事件流和 app-server 调度，业务插件和 Skills 为 Agent 提供领域能力，`web` 管理后台负责配置、权限和运营管理。
+AgentRazor 是一个围绕 Codex app-server 协议构建的 AI Agent 平台。它不是单一聊天页面，而是一套完整的 Agent 运行和运营体系：用户在 `agent` 中发起对话，`server` 负责鉴权、会话元数据、事件流和 app-server 调度，业务插件和 Skills 为 Agent 提供领域能力，`admin` 管理后台负责配置、权限和运营管理。
 
 ## 适合的场景
 

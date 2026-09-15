@@ -17,7 +17,7 @@ docker compose up -d --build
 
 - `server`：jzero REST 服务端。
 - `agent`：用户侧 Agent 页面。
-- `web`：管理后台。
+- `admin`：管理后台。
 - `postgres`：主数据库。
 - `redis`：缓存和辅助状态。
 
@@ -40,6 +40,6 @@ docker compose up -d --no-deps agent
 只更新管理后台：
 
 ```shell
-docker compose build web
-docker compose up -d --no-deps web
+docker compose build admin
+docker compose up -d --no-deps admin
 ```

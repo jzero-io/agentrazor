@@ -1,10 +1,8 @@
-// @ts-ignore
 import { defineUserConfig } from "vuepress";
 import theme from "./theme.js";
 
 export default defineUserConfig({
   base: "/",
-
   locales: {
     "/": {
       lang: "zh-CN",
@@ -17,6 +15,5 @@ export default defineUserConfig({
       description: "AgentRazor documentation",
     },
   },
-
   theme,
 });

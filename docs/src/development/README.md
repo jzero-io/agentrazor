@@ -15,7 +15,7 @@ cd deploy/docker-compose
 docker compose up -d --build
 ```
 
-这样可以保证 server、agent、web、PostgreSQL、Redis、Codex home 和运行配置保持一致。
+这样可以保证 server、agent、admin、PostgreSQL、Redis、Codex home 和运行配置保持一致。
 
 ## 单服务重建
 
@@ -24,7 +24,7 @@ docker compose up -d --build
 ```shell
 docker compose build server && docker compose up -d --no-deps server
 docker compose build agent && docker compose up -d --no-deps agent
-docker compose build web && docker compose up -d --no-deps web
+docker compose build admin && docker compose up -d --no-deps admin
 ```
 
 服务端运行配置、数据和日志位于 `deploy/docker-compose/server` 下。Codex app-server 会从服务端数据目录中的 Codex home 读取 `config.toml`、`models.json` 和 `auth.json`。
@@ -35,7 +35,7 @@ docker compose build web && docker compose up -d --no-deps web
 
 ## Agent 用户端开发
 
-主要代码在 `agent/src/App.vue`，过程展示抽象在 `agent/src/processDisplay.ts`。修改会话流式展示时，要特别注意刷新、切换会话和 SSE 断线重连。
+主要代码在 `agent/src/App.vue`，过程展示抽象在 `agent/src/utils/processDisplay.ts`。修改会话流式展示时，要特别注意刷新、切换会话和 SSE 断线重连。
 
 ## 管理后台开发
 
@@ -48,7 +48,7 @@ docker compose build web && docker compose up -d --no-deps web
 ```shell
 cd server && go test ./...
 cd agent && npm run build
-cd web && npm run build
+cd admin && npm run build
 ```
 
 ## 生成文件约定

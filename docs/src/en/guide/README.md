@@ -21,7 +21,7 @@ The `agent` application provides:
 
 ## Admin Console
 
-The `web` application provides:
+The `admin` application provides:
 
 - User, role, menu, and API permission management.
 - Agent Skills upload, browse, edit, and delete.

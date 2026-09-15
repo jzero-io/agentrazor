@@ -30,4 +30,4 @@ features:
 
 ## What is AgentRazor
 
-AgentRazor is an AI Agent platform built around the Codex app-server protocol. It is more than a chat page: users talk to Agents in `agent`, `server` manages auth, conversation metadata, event streams, and app-server scheduling, business plugins and Skills provide domain capabilities, and `web` provides configuration, permission, and operations management.
+AgentRazor is an AI Agent platform built around the Codex app-server protocol. It is more than a chat page: users talk to Agents in `agent`, `server` manages auth, conversation metadata, event streams, and app-server scheduling, business plugins and Skills provide domain capabilities, and `admin` provides configuration, permission, and operations management.

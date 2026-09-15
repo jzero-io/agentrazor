@@ -17,7 +17,7 @@ docker compose up -d --build
 
 - `server`: jzero REST server.
 - `agent`: Agent chat UI.
-- `web`: admin console.
+- `admin`: admin console.
 - `postgres`: primary database.
 - `redis`: cache and auxiliary state.
 
@@ -40,6 +40,6 @@ docker compose up -d --no-deps agent
 Admin console only:
 
 ```shell
-docker compose build web
-docker compose up -d --no-deps web
+docker compose build admin
+docker compose up -d --no-deps admin
 ```
