@@ -12,15 +12,6 @@ if [ -d /dist/defaults ]; then
 fi
 rm -f "$CODEX_SOCKET"
 cd "$CODEX_HOME"
-if [ -d /etc/codex/skills ]; then
-  for default_skill in /etc/codex/skills/*; do
-    [ -d "$default_skill" ] || continue
-    skill_name=$(basename "$default_skill")
-    rm -rf "$system_skills_home/$skill_name"
-    cp -a "$default_skill" "$system_skills_home/$skill_name"
-  done
-  rm -rf /etc/codex/skills
-fi
 
 codex-app-server --listen "unix://$CODEX_SOCKET" &
 app_server_pid=$!
@@ -45,7 +36,14 @@ while [ ! -S "$CODEX_SOCKET" ]; do
   fi
   sleep 0.1
 done
-
+if [ -d /etc/codex/skills ]; then
+  for default_skill in /etc/codex/skills/*; do
+    [ -d "$default_skill" ] || continue
+    skill_name=$(basename "$default_skill")
+    rm -rf "$system_skills_home/$skill_name"
+    cp -a "$default_skill" "$system_skills_home/$skill_name"
+  done
+fi
 
 status=0
 wait "$app_server_pid" || status=$?
