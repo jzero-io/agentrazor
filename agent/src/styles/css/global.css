@@ -4676,7 +4676,7 @@ html[data-theme="dark"] body.sidebar-resizing .sidebar-resize-handle::after {
   z-index: 1;
   padding: 0 14px 0 0;
   color: var(--muted-strong);
-  background: transparent !important;
+  background: var(--panel-bg);
   font-variant-numeric: tabular-nums;
   text-align: right;
   user-select: none;

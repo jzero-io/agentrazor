@@ -483,7 +483,7 @@ function dropTab(event: DragEvent, tabId: string) {
                     <Icon icon="solar:file-corrupted-linear" />
                     <span>此文件暂不支持预览</span>
                   </div>
-                  <div v-else class="file-preview-code-view">
+                  <div v-else :key="`${activeFileTabId}:${reloadVersion}`" class="file-preview-code-view">
                     <div v-if="filePreviewTruncated" class="file-preview-limit-notice">
                       文件较大，为避免页面卡顿，仅显示前 1,000 行或 100,000 个字符
                     </div>
