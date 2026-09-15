@@ -64,7 +64,6 @@ const pinnedSummaryOpen = ref(false);
 const workspacePanel = useWorkspacePanel({
   selectedConversationId,
   draftConversationId: DRAFT_CONVERSATION_ID,
-  fetchFile: path => conversationApi.fetchWorkspaceFile(path),
   fetchBlob: path => conversationApi.fetchWorkspaceBlob(path),
   fetchEntries: conversationId => conversationApi.workspaceFiles(conversationId),
   containerRef: mainPanel

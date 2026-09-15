@@ -260,7 +260,6 @@ export function displayWorkspaceProcessPath(filePath: string, conversationId = '
 export function useWorkspacePanel(options: {
   selectedConversationId: Ref<string>;
   draftConversationId: string;
-  fetchFile: (path: string) => Promise<WorkspaceFileContent>;
   fetchBlob: (path: string) => Promise<WorkspaceFileBlob>;
   fetchEntries: (conversationId: string) => Promise<WorkspaceEntry[]>;
   containerRef?: Ref<HTMLElement | null>;
@@ -519,11 +518,10 @@ export function useWorkspacePanel(options: {
     if (loadingFilePaths.has(path)) return;
     loadingFilePaths.add(path);
     try {
-      const name = fileNameFromPath(path);
-      if (isImageFile(name)) {
-        const file = await options.fetchBlob(path);
-        if (options.selectedConversationId.value !== conversationId) return;
-        revokeFilePreview(conversationId, path);
+      const file = await options.fetchBlob(path);
+      if (options.selectedConversationId.value !== conversationId) return;
+      revokeFilePreview(conversationId, path);
+      if (isImageFile(file.name, file.contentType)) {
         previewsForConversation(conversationId).set(path, {
           path: file.path,
           name: file.name,
@@ -538,15 +536,18 @@ export function useWorkspacePanel(options: {
         return;
       }
 
-      const file = await options.fetchFile(path);
-      if (options.selectedConversationId.value !== conversationId) return;
-      revokeFilePreview(conversationId, path);
       const textFile = isTextFile(file.name, file.contentType);
+      const content = textFile ? await file.blob.text() : '';
+      if (options.selectedConversationId.value !== conversationId) return;
       previewsForConversation(conversationId).set(path, {
-        ...file,
+        path: file.path,
+        name: file.name,
+        content,
+        contentType: file.contentType,
         kind: textFile ? 'text' : 'unsupported',
         language: languageFromFilename(file.name, file.contentType),
-        markdown: /\.md(?:own)?$/i.test(file.name)
+        markdown: /\.md(?:own)?$/i.test(file.name),
+        size: file.blob.size
       });
     } catch (error) {
       if (options.selectedConversationId.value === conversationId) {

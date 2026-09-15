@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
 	"path/filepath"
 	"sort"
@@ -262,7 +263,14 @@ func (s *Service) ReadWorkspaceFile(ctx context.Context, conversationID, filePat
 	if err != nil {
 		return File{}, err
 	}
-	return File{ContentType: http.DetectContentType(data), Data: data}, nil
+	return File{ContentType: workspaceFileContentType(filePath, data), Data: data}, nil
+}
+
+func workspaceFileContentType(filePath string, data []byte) string {
+	if contentType := mime.TypeByExtension(strings.ToLower(filepath.Ext(filePath))); contentType != "" {
+		return contentType
+	}
+	return http.DetectContentType(data)
 }
 
 func (s *Service) ReadGeneratedImage(ctx context.Context, conversationID, savedPath string) (File, error) {
