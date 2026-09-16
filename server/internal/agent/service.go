@@ -50,6 +50,11 @@ type ActiveTurn struct {
 	CreatedAt time.Time
 }
 
+type TurnInput struct {
+	Text        string
+	Attachments []MessageAttachment
+}
+
 type TokenUsageBreakdown struct {
 	InputTokens           int64
 	CachedInputTokens     int64
@@ -288,13 +293,13 @@ func (s *Service) SetArchived(ctx context.Context, threadID string, archived boo
 	return err
 }
 
-func (s *Service) Send(threadID, prompt string) (StartedTurn, error) {
+func (s *Service) Send(threadID string, input TurnInput) (StartedTurn, error) {
 	if err := validateThreadID(threadID); err != nil {
 		return StartedTurn{}, err
 	}
-	prompt = strings.TrimSpace(prompt)
-	if prompt == "" {
-		return StartedTurn{}, errors.New("message content is required")
+	input.Text = strings.TrimSpace(input.Text)
+	if input.Text == "" && len(input.Attachments) == 0 {
+		return StartedTurn{}, errors.New("message content or attachment is required")
 	}
 
 	s.mu.Lock()
@@ -330,7 +335,7 @@ func (s *Service) Send(threadID, prompt string) (StartedTurn, error) {
 		s.events.publish(threadID, turnID, eventType, streamPosition, event)
 	}
 
-	started, err := server.runTurn(ctx, threadID, prompt, emit)
+	started, err := server.runTurn(ctx, threadID, input, emit)
 	if err != nil {
 		idleTimer.Stop()
 		cancel()

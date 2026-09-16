@@ -368,7 +368,7 @@ onMounted(getData);
             <div
               v-for="item in filteredSkills"
               :key="item.name"
-              class="group mb-8px w-full border rounded-6px px-12px py-11px text-left transition-colors last:mb-0"
+              class="skill-list-item group mb-8px w-full border rounded-6px px-12px py-11px text-left transition-colors last:mb-0"
               :class="
                 selectedName === item.name
                   ? 'border-primary bg-primary bg-opacity-8'
@@ -379,9 +379,9 @@ onMounted(getData);
               @click="selectSkill(item)"
               @keydown.enter="selectSkill(item)"
             >
-              <div class="flex items-center justify-between gap-8px">
-                <span class="min-w-0 truncate text-14px font-medium">{{ item.name }}</span>
-                <div class="flex shrink-0 items-center gap-6px">
+              <div class="skill-list-row">
+                <span class="skill-list-name">{{ item.name }}</span>
+                <div class="skill-list-actions">
                   <NSwitch
                     size="small"
                     :value="item.enabled"
@@ -392,7 +392,15 @@ onMounted(getData);
                   />
                   <NPopconfirm v-if="canDeleteSkill" @positive-click="deleteSkill(item)">
                     <template #trigger>
-                      <NButton size="tiny" quaternary type="error" :loading="deletingName === item.name" @click.stop>
+                      <NButton
+                        class="skill-delete-button"
+                        size="small"
+                        quaternary
+                        type="error"
+                        :loading="deletingName === item.name"
+                        :title="$t('common.delete')"
+                        @click.stop
+                      >
                         <template #icon><icon-material-symbols-delete-outline class="text-icon" /></template>
                       </NButton>
                     </template>
@@ -500,6 +508,60 @@ onMounted(getData);
   display: flex;
   flex: 1;
   flex-direction: column;
+}
+
+.skill-list-item {
+  min-height: 58px;
+}
+
+.skill-list-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.skill-list-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: rgb(var(--base-text-color));
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-list-actions {
+  display: flex;
+  min-height: 36px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.skill-delete-button {
+  --n-icon-size: 21px !important;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+}
+
+@media (max-width: 420px) {
+  .skill-list-row {
+    gap: 8px;
+  }
+
+  .skill-list-actions {
+    gap: 8px;
+  }
 }
 
 .skill-editor {

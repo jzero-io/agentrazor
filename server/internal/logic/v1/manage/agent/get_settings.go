@@ -51,8 +51,13 @@ func (l *GetSettings) GetSettings(req *types.GetSettingsRequest) (resp *types.Ge
 	if err != nil {
 		return nil, err
 	}
+	defaultSystemPrompt, err := l.svcCtx.AgentService.DefaultSystemPrompt(l.ctx)
+	if err != nil {
+		return nil, err
+	}
 	return &types.GetSettingsResponse{
 		ActiveProvider: settings.ActiveProvider(), Model: settings.Model(), ReasoningEffort: settings.ReasoningEffort(),
-		Providers: providers, Account: toAccountStatus(account), Runtime: types.RuntimeStatus{Running: l.svcCtx.AgentService.Running()},
+		DefaultSystemPrompt: defaultSystemPrompt,
+		Providers:           providers, Account: toAccountStatus(account),
 	}, nil
 }

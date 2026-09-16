@@ -2,7 +2,9 @@ package agent
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"mime"
@@ -13,8 +15,11 @@ import (
 )
 
 const (
-	maxFileSize       = 10 << 20
-	maxConfigFileSize = 4 << 20
+	maxFileSize           = 10 << 20
+	maxConfigFileSize     = 4 << 20
+	MaxAttachmentSize     = maxFileSize
+	MaxMessageAttachments = 10
+	attachmentDirectory   = "attachments"
 )
 
 type WorkspaceEntry struct {
@@ -27,6 +32,15 @@ type WorkspaceEntry struct {
 type File struct {
 	ContentType string
 	Data        []byte
+}
+
+type MessageAttachment struct {
+	Name        string
+	Path        string
+	ContentType string
+	Size        int64
+	Kind        string
+	LocalPath   string
 }
 
 type directoryEntry struct {
@@ -271,6 +285,125 @@ func workspaceFileContentType(filePath string, data []byte) string {
 		return contentType
 	}
 	return http.DetectContentType(data)
+}
+
+func (s *Service) SaveWorkspaceAttachment(ctx context.Context, conversationID, fileName string, data []byte) (MessageAttachment, error) {
+	if err := validateThreadID(conversationID); err != nil {
+		return MessageAttachment{}, err
+	}
+	if len(data) == 0 {
+		return MessageAttachment{}, errors.New("attachment is empty")
+	}
+	if len(data) > MaxAttachmentSize {
+		return MessageAttachment{}, fmt.Errorf("attachment is larger than %d bytes", MaxAttachmentSize)
+	}
+	root, err := safeChild(s.workspace, conversationID)
+	if err != nil {
+		return MessageAttachment{}, err
+	}
+	id, err := attachmentID()
+	if err != nil {
+		return MessageAttachment{}, err
+	}
+	name := safeAttachmentName(fileName)
+	relative := filepath.Join(attachmentDirectory, id, name)
+	target, err := safeChild(root, relative)
+	if err != nil {
+		return MessageAttachment{}, err
+	}
+	if err := s.createDirectory(ctx, filepath.Dir(target)); err != nil {
+		return MessageAttachment{}, err
+	}
+	if err := s.writeFile(ctx, target, data); err != nil {
+		return MessageAttachment{}, err
+	}
+	contentType := workspaceFileContentType(name, data)
+	return MessageAttachment{
+		Name: name, Path: filepath.ToSlash(relative), ContentType: contentType,
+		Size: int64(len(data)), Kind: attachmentKind(name, contentType), LocalPath: target,
+	}, nil
+}
+
+func (s *Service) ResolveWorkspaceAttachments(ctx context.Context, conversationID string, paths []string) ([]MessageAttachment, error) {
+	if err := validateThreadID(conversationID); err != nil {
+		return nil, err
+	}
+	if len(paths) > MaxMessageAttachments {
+		return nil, fmt.Errorf("a message supports at most %d attachments", MaxMessageAttachments)
+	}
+	root, err := safeChild(s.workspace, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]MessageAttachment, 0, len(paths))
+	seen := make(map[string]bool, len(paths))
+	for _, rawPath := range paths {
+		relative := filepath.Clean(filepath.FromSlash(strings.TrimSpace(rawPath)))
+		if relative == attachmentDirectory || !strings.HasPrefix(relative, attachmentDirectory+string(filepath.Separator)) {
+			return nil, errors.New("attachment path is invalid")
+		}
+		target, err := safeChild(root, relative)
+		if err != nil {
+			return nil, err
+		}
+		if seen[target] {
+			continue
+		}
+		seen[target] = true
+		metadata, err := s.metadata(ctx, target)
+		if err != nil {
+			return nil, err
+		}
+		if metadata.IsSymlink || !metadata.IsFile {
+			return nil, errors.New("attachment is not a supported regular file")
+		}
+		data, err := s.readFile(ctx, target, MaxAttachmentSize)
+		if err != nil {
+			return nil, err
+		}
+		if len(data) == 0 {
+			return nil, errors.New("attachment is empty")
+		}
+		name := filepath.Base(target)
+		contentType := workspaceFileContentType(name, data)
+		result = append(result, MessageAttachment{
+			Name: name, Path: filepath.ToSlash(relative), ContentType: contentType,
+			Size: int64(len(data)), Kind: attachmentKind(name, contentType), LocalPath: target,
+		})
+	}
+	return result, nil
+}
+
+func attachmentID() (string, error) {
+	value := make([]byte, 12)
+	if _, err := rand.Read(value); err != nil {
+		return "", fmt.Errorf("create attachment id: %w", err)
+	}
+	return hex.EncodeToString(value), nil
+}
+
+func safeAttachmentName(value string) string {
+	value = filepath.Base(strings.ReplaceAll(strings.TrimSpace(value), "\\", "/"))
+	value = strings.Map(func(r rune) rune {
+		if r < 32 || r == 127 || r == '`' {
+			return '_'
+		}
+		return r
+	}, value)
+	if value == "" || value == "." || value == ".." {
+		return "attachment"
+	}
+	return value
+}
+
+func attachmentKind(name, contentType string) string {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".png", ".jpg", ".jpeg", ".webp", ".gif":
+		if strings.HasPrefix(strings.ToLower(contentType), "image/") {
+			return "image"
+		}
+	}
+	return "file"
 }
 
 func (s *Service) ReadGeneratedImage(ctx context.Context, conversationID, savedPath string) (File, error) {

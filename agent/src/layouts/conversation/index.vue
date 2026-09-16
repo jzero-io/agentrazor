@@ -891,6 +891,9 @@ const conversationComposer = useConversationComposer({
   showError
 });
 const {
+  attachments: composerAttachments,
+  addAttachments: addComposerAttachments,
+  removeAttachment: removeComposerAttachment,
   canSend,
   composerActionPending,
   composerActionDisabled,
@@ -1473,6 +1476,7 @@ watch(settingsSection, section => {
             :composer-action-disabled="composerActionDisabled"
             :composer-action-label="composerActionLabel"
             :composer-action-icon="composerActionIcon"
+            :composer-attachments="composerAttachments"
             :copied-message-id="copiedMessageId"
             :set-message-pane="setMessagePane"
             :handle-message-scroll="handleMessageScroll"
@@ -1504,6 +1508,8 @@ watch(settingsSection, section => {
             :format-conversation-date="formatConversationDate"
             @composer-keydown="handleComposerKeydown"
             @composer-action="handleComposerAction"
+            @composer-add-attachments="addComposerAttachments"
+            @composer-remove-attachment="removeComposerAttachment"
             @error="toast.error"
             @set-appearance="setAppearance"
             @delete-all-archived="confirmDeleteAllArchived"

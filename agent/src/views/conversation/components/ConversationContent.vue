@@ -12,6 +12,7 @@ import type { WorkspaceDescriptor } from '../../../hooks/business/useWorkspacePa
 import ComposerBox from '../../../layouts/modules/composer-box/index.vue';
 import MarkdownBlock from './MarkdownBlock.vue';
 import ProcessItemCard from './ProcessItemCard.vue';
+import WorkspaceAttachmentThumbnail from './WorkspaceAttachmentThumbnail.vue';
 
 interface TurnView {
   renderKey: string;
@@ -36,7 +37,7 @@ interface ParsedAgentMessage {
   workspaces: WorkspaceDescriptor[];
 }
 
-defineProps<{
+const props = defineProps<{
   selectedConversationId: string;
   isNewChat: boolean;
   newChatGroupName: string;
@@ -53,6 +54,13 @@ defineProps<{
   composerActionDisabled: boolean;
   composerActionLabel: string;
   composerActionIcon: string;
+  composerAttachments: Array<{
+    id: string;
+    name: string;
+    size: number;
+    kind: 'image' | 'file';
+    previewUrl?: string;
+  }>;
   copiedMessageId: string;
   normalizeWorkspaceFilePath: (href: string) => string;
   loadWorkspaceImage: (path: string) => Promise<Blob>;
@@ -79,11 +87,57 @@ const emit = defineEmits<{
   'update:hoveredPreviewMessageId': [value: string];
   composerKeydown: [event: KeyboardEvent];
   composerAction: [];
+  composerAddAttachments: [files: File[]];
+  composerRemoveAttachment: [id: string];
   error: [message: string];
 }>();
 
 function emitError(message: string) {
   emit('error', message);
+}
+function workspaceAttachmentPath(path: string) {
+  const relativePath = props.displayWorkspaceProcessPath(path);
+  return props.normalizeWorkspaceFilePath(relativePath);
+}
+
+
+function userItemAttachments(item: ThreadItem) {
+  if (!Array.isArray(item.content)) return [];
+  const result: Array<{ key: string; name: string; kind: 'image' | 'file'; path: string; previewUrl?: string }> = [];
+  for (const part of item.content) {
+    if (typeof part !== 'object' || !part) continue;
+    if (part.type === 'localImage' || part.type === 'image') {
+      const path = part.path || '';
+      const name = part.name || path.split(/[\\/]/).pop() || '图片';
+      result.push({
+        key: `image:${path || part.url || name}`,
+        name,
+        kind: 'image',
+        path: workspaceAttachmentPath(path),
+        previewUrl: part.url
+      });
+      continue;
+    }
+    if (part.type === 'file') {
+      const path = part.path || '';
+      const name = part.name || path.split(/[\\/]/).pop() || '文件';
+      result.push({ key: `file:${path || name}`, name, kind: 'file', path: workspaceAttachmentPath(path) });
+      continue;
+    }
+    if (part.type !== 'text' || !part.text) continue;
+    for (const line of part.text.split('\n')) {
+      const match = /^- `(attachments\/.+)` \((.+)\)$/.exec(line.trim());
+      if (match) {
+        result.push({
+          key: `file:${match[1]}`,
+          name: match[2],
+          kind: 'file',
+          path: workspaceAttachmentPath(match[1])
+        });
+      }
+    }
+  }
+  return result;
 }
 </script>
 
@@ -110,9 +164,12 @@ function emitError(message: string) {
       :disabled="composerActionDisabled"
       :label="composerActionLabel"
       :icon="composerActionIcon"
+      :attachments="composerAttachments"
       @update:model-value="value => emit('update:draft', value)"
       @keydown="event => emit('composerKeydown', event)"
       @action="emit('composerAction')"
+      @add-attachments="files => emit('composerAddAttachments', files)"
+      @remove-attachment="id => emit('composerRemoveAttachment', id)"
     />
   </template>
 
@@ -155,7 +212,34 @@ function emitError(message: string) {
               class="message user"
             >
               <div class="message-stack">
-                <div class="message-content">{{ userItemText(item) }}</div>
+                <div v-if="userItemAttachments(item).length" class="user-message-attachments">
+                  <div
+                    v-for="attachment in userItemAttachments(item)"
+                    :key="attachment.key"
+                    class="user-message-attachment-group"
+                  >
+                    <div v-if="attachment.kind === 'image'" class="user-message-attachment-preview">
+                      <WorkspaceAttachmentThumbnail
+                        :name="attachment.name"
+                        :path="attachment.path"
+                        :preview-url="attachment.previewUrl"
+                        :load-workspace-image="loadWorkspaceImage"
+                      />
+                      <Icon class="user-message-attachment-image-fallback" icon="solar:gallery-linear" />
+                    </div>
+                    <button
+                      type="button"
+                      class="user-message-attachment"
+                      :disabled="!attachment.path"
+                      :title="`在右侧打开 ${attachment.name}`"
+                      @click="openWorkspaceFile(attachment.path)"
+                    >
+                      <Icon :icon="attachment.kind === 'image' ? 'solar:gallery-linear' : 'solar:file-linear'" />
+                      <span>{{ attachment.name }}</span>
+                    </button>
+                  </div>
+                </div>
+                <div v-if="userItemText(item)" class="message-content">{{ userItemText(item) }}</div>
                 <div class="message-meta">
                   <time v-if="formatMessageTime(view.turn.startedAt)" class="message-time" :datetime="view.turn.startedAt">
                     {{ formatMessageTime(view.turn.startedAt) }}
@@ -300,9 +384,12 @@ function emitError(message: string) {
       :disabled="composerActionDisabled"
       :label="composerActionLabel"
       :icon="composerActionIcon"
+      :attachments="composerAttachments"
       @update:model-value="value => emit('update:draft', value)"
       @keydown="event => emit('composerKeydown', event)"
       @action="emit('composerAction')"
+      @add-attachments="files => emit('composerAddAttachments', files)"
+      @remove-attachment="id => emit('composerRemoveAttachment', id)"
     />
   </template>
 

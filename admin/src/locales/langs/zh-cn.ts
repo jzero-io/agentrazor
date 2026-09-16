@@ -277,12 +277,23 @@ const local: App.I18n.Schema = {
       reasoningEffort: '推理强度',
       defaultReasoningEffort: '使用模型默认值',
       save: '保存',
+      defaultSystemPrompt: {
+        title: '默认系统提示词',
+        description: '用于约束 Agent 的默认行为，内容保存在 Codex 的 AGENTS.md 中。',
+        effectScope: '保存后无需重启；新建会话立即生效，已有会话继续使用创建时加载的提示词。',
+        placeholder: '留空则不附加默认系统提示词',
+        preview: '预览',
+        edit: '编辑',
+        emptyPreview: '暂无默认系统提示词',
+        save: '保存'
+      },
       status: {
         unknown: '未知',
         running: '运行中',
         stopped: '未运行',
         inUse: '正在使用',
         configured: '已配置',
+        pendingSave: '待保存',
         pending: '待配置'
       },
       effort: {
@@ -297,9 +308,12 @@ const local: App.I18n.Schema = {
         selectProviderModel: '请选择供应商并填写模型',
         providerApiKeyRequired: '请输入 {provider} API Key',
         applied: '模型配置已应用',
+        defaultSystemPromptSaved: '默认系统提示词已保存',
         openAIApiKeyRequired: '请输入 OpenAI API Key',
         openAIApiKeySaved: 'OpenAI API Key 已保存',
+        openAIApiKeyVerified: 'OpenAI API Key 验证成功，请点击保存以应用模型配置',
         chatGPTLoginSuccess: 'ChatGPT 账号登录成功',
+        chatGPTLoginVerified: 'ChatGPT 账号验证成功，请点击保存以应用模型配置',
         openAILogoutSuccess: '已退出 OpenAI 账号'
       },
       openAI: {
@@ -315,7 +329,7 @@ const local: App.I18n.Schema = {
         clearApiKeyConfirm: '确认清除当前 OpenAI API Key？',
         loginChatGPT: '登录 ChatGPT',
         useApiKey: '使用 API Key',
-        saveAndUse: '保存并使用',
+        verifyApiKey: '验证 API Key',
         backToChatGPT: '返回 ChatGPT 登录'
       },
       external: {

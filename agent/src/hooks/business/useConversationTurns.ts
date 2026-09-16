@@ -48,11 +48,18 @@ interface UseConversationTurnsOptions {
   upsertConversationListItem: (conversation: Conversation) => void;
 }
 
+const attachedFilesMarker = '# Files mentioned by the user:';
+
 export function userItemText(item: ThreadItem) {
   if (!Array.isArray(item.content)) return '';
   return item.content
     .filter(part => typeof part === 'object' && part?.type === 'text')
-    .map(part => typeof part === 'object' ? part.text || '' : '')
+    .map(part => {
+      if (typeof part !== 'object') return '';
+      const value = part.text || '';
+      const markerIndex = value.indexOf(attachedFilesMarker);
+      return markerIndex >= 0 ? value.slice(0, markerIndex).trim() : value;
+    })
     .filter(Boolean)
     .join('\n');
 }
@@ -443,8 +450,21 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
     });
   }
 
-  function createOptimisticTurn(content: string): Turn {
+  function createOptimisticTurn(
+    content: string,
+    attachments: Array<{ name: string; kind: 'image' | 'file'; previewUrl?: string }> = []
+  ): Turn {
     const pendingId = `pending-${Date.now()}`;
+    const parts: Array<{ type: string; text?: string; url?: string; path?: string; name?: string }> = [];
+    if (content) parts.push({ type: 'text', text: content });
+    for (const attachment of attachments) {
+      parts.push({
+        type: attachment.kind === 'image' ? 'localImage' : 'file',
+        path: '',
+        name: attachment.name,
+        url: attachment.previewUrl
+      });
+    }
     return {
       id: pendingId,
       status: 'pending',
@@ -452,7 +472,7 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
       items: [{
         id: `local-user-${pendingId}`,
         type: 'userMessage',
-        content: [{ type: 'text', text: content }]
+        content: parts
       }]
     };
   }

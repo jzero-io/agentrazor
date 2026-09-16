@@ -41,12 +41,12 @@ type GetSettingsRequest struct {
 }
 
 type GetSettingsResponse struct {
-	ActiveProvider  string          `json:"activeProvider"`
-	Model           string          `json:"model"`
-	ReasoningEffort string          `json:"reasoningEffort"`
-	Providers       []ModelProvider `json:"providers"`
-	Account         AccountStatus   `json:"account"`
-	Runtime         RuntimeStatus   `json:"runtime"`
+	ActiveProvider      string          `json:"activeProvider"`
+	Model               string          `json:"model"`
+	ReasoningEffort     string          `json:"reasoningEffort"`
+	DefaultSystemPrompt string          `json:"defaultSystemPrompt"`
+	Providers           []ModelProvider `json:"providers"`
+	Account             AccountStatus   `json:"account"`
 }
 
 type GetTokenQuotaGlobalRequest struct {
@@ -120,26 +120,15 @@ type ResetUserTokenQuotaRequest struct {
 type ResetUserTokenQuotaResponse struct {
 }
 
-type RuntimeStatus struct {
-	Running bool `json:"running"`
+type SaveSettingsRequest struct {
+	ProviderId          string `json:"providerId" validate:"required"`
+	Model               string `json:"model" validate:"required"`
+	ReasoningEffort     string `json:"reasoningEffort,optional"`
+	ProviderApiKey      string `json:"providerApiKey,optional"`
+	DefaultSystemPrompt string `json:"defaultSystemPrompt" validate:"max=262144"`
 }
 
-type SaveProviderApiKeyRequest struct {
-	ProviderId string `json:"providerId" validate:"required"`
-	ApiKey     string `json:"apiKey" validate:"required"`
-}
-
-type SaveProviderApiKeyResponse struct {
-	HasApiKey bool `json:"hasApiKey"`
-}
-
-type SaveSelectionRequest struct {
-	ProviderId      string `json:"providerId" validate:"required"`
-	Model           string `json:"model" validate:"required"`
-	ReasoningEffort string `json:"reasoningEffort,optional"`
-}
-
-type SaveSelectionResponse struct {
+type SaveSettingsResponse struct {
 }
 
 type SaveTokenQuotaGlobalRequest struct {

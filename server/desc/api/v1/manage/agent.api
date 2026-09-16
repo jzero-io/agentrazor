@@ -158,30 +158,23 @@ type GetAccountStatusResponse {
 type GetSettingsRequest {}
 
 type GetSettingsResponse {
-	ActiveProvider  string          `json:"activeProvider"`
-	Model           string          `json:"model"`
-	ReasoningEffort string          `json:"reasoningEffort"`
-	Providers       []ModelProvider `json:"providers"`
-	Account         AccountStatus   `json:"account"`
-	Runtime         RuntimeStatus   `json:"runtime"`
+	ActiveProvider      string          `json:"activeProvider"`
+	Model               string          `json:"model"`
+	ReasoningEffort     string          `json:"reasoningEffort"`
+	DefaultSystemPrompt string          `json:"defaultSystemPrompt"`
+	Providers           []ModelProvider `json:"providers"`
+	Account             AccountStatus   `json:"account"`
 }
 
-type SaveSelectionRequest {
-	ProviderId      string `json:"providerId" validate:"required"`
-	Model           string `json:"model" validate:"required"`
-	ReasoningEffort string `json:"reasoningEffort,optional"`
+type SaveSettingsRequest {
+	ProviderId          string `json:"providerId" validate:"required"`
+	Model               string `json:"model" validate:"required"`
+	ReasoningEffort     string `json:"reasoningEffort,optional"`
+	ProviderApiKey      string `json:"providerApiKey,optional"`
+	DefaultSystemPrompt string `json:"defaultSystemPrompt" validate:"max=262144"`
 }
 
-type SaveSelectionResponse {}
-
-type SaveProviderApiKeyRequest {
-	ProviderId string `json:"providerId" validate:"required"`
-	ApiKey     string `json:"apiKey" validate:"required"`
-}
-
-type SaveProviderApiKeyResponse {
-	HasApiKey bool `json:"hasApiKey"`
-}
+type SaveSettingsResponse {}
 
 type LoginApiKeyRequest {
 	ApiKey string `json:"apiKey" validate:"required"`
@@ -203,10 +196,6 @@ type StartChatGPTLoginResponse {
 type LogoutRequest {}
 
 type LogoutResponse {}
-
-type RuntimeStatus {
-	Running bool `json:"running"`
-}
 
 type HomeOverviewRequest {}
 
@@ -248,14 +237,11 @@ service server {
 	@handler GetSettings
 	get /manage/agent/settings (GetSettingsRequest) returns (GetSettingsResponse)
 
+	@handler SaveSettings
+	post /manage/agent/settings (SaveSettingsRequest) returns (SaveSettingsResponse)
+
 	@handler GetAccountStatus
 	get /manage/agent/auth/status (GetAccountStatusRequest) returns (GetAccountStatusResponse)
-
-	@handler SaveSelection
-	post /manage/agent/settings/selection (SaveSelectionRequest) returns (SaveSelectionResponse)
-
-	@handler SaveProviderApiKey
-	post /manage/agent/auth/provider-api-key (SaveProviderApiKeyRequest) returns (SaveProviderApiKeyResponse)
 
 	@handler LoginApiKey
 	post /manage/agent/auth/api-key (LoginApiKeyRequest) returns (LoginApiKeyResponse)

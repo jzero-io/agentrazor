@@ -323,34 +323,21 @@ declare namespace Api {
       loggedIn: boolean;
     };
 
-    type AgentRuntimeStatus = {
-      running: boolean;
-    };
-
     type AgentSettings = {
       activeProvider: string;
       model: string;
       reasoningEffort: string;
+      defaultSystemPrompt: string;
       providers: AgentModelProvider[];
       account: AgentAccountStatus;
-      runtime: AgentRuntimeStatus;
     };
 
-    type SaveAgentSelectionRequest = {
+    type SaveAgentSettingsRequest = {
       providerId: string;
       model: string;
       reasoningEffort: string;
-    };
-
-    type SaveAgentSelectionResponse = Record<string, never>;
-
-    type SaveAgentProviderApiKeyRequest = {
-      providerId: string;
-      apiKey: string;
-    };
-
-    type SaveAgentProviderApiKeyResponse = {
-      hasApiKey: boolean;
+      providerApiKey: string;
+      defaultSystemPrompt: string;
     };
 
     type AgentDeviceLogin = {

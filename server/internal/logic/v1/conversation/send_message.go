@@ -34,13 +34,17 @@ func NewSendMessage(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Req
 }
 
 func (l *SendMessage) SendMessage(req *types.SendMessageRequest) (resp *types.StartedTurn, err error) {
-	return sendMessage(l.ctx, l.svcCtx, req.ConversationId, req.Content)
+	paths := make([]string, 0, len(req.Attachments))
+	for _, attachment := range req.Attachments {
+		paths = append(paths, attachment.Path)
+	}
+	return sendMessage(l.ctx, l.svcCtx, req.ConversationId, req.Content, paths)
 }
 
-func sendMessage(ctx context.Context, svcCtx *svc.ServiceContext, conversationID, content string) (*types.StartedTurn, error) {
+func sendMessage(ctx context.Context, svcCtx *svc.ServiceContext, conversationID, content string, attachmentPaths []string) (*types.StartedTurn, error) {
 	content = strings.TrimSpace(content)
-	if content == "" {
-		return nil, errors.New("message content is required")
+	if content == "" && len(attachmentPaths) == 0 {
+		return nil, errors.New("message content or attachment is required")
 	}
 
 	conversationID = strings.TrimSpace(conversationID)
@@ -68,7 +72,13 @@ func sendMessage(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 		}
 	}
 
-	turn, err := svcCtx.AgentService.Send(thread.ID, content)
+	attachments, err := svcCtx.AgentService.ResolveWorkspaceAttachments(ctx, conversationID, attachmentPaths)
+	if err != nil {
+		return nil, err
+	}
+	turn, err := svcCtx.AgentService.Send(thread.ID, agentdomain.TurnInput{
+		Text: content, Attachments: attachments,
+	})
 	if err != nil {
 		return nil, err
 	}

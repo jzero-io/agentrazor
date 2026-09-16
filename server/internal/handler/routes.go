@@ -152,6 +152,12 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					{
 
 						Method:  http.MethodPost,
+						Path:    "/conversation/:conversation_id/attachments",
+						Handler: v1conversation.UploadAttachment(serverCtx),
+					},
+					{
+
+						Method:  http.MethodPost,
 						Path:    "/conversation/:conversation_id/messages",
 						Handler: v1conversation.SendMessage(serverCtx),
 					},
@@ -299,11 +305,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 						Handler: v1manageagent.Logout(serverCtx),
 					},
 					{
-						Method:  http.MethodPost,
-						Path:    "/manage/agent/auth/provider-api-key",
-						Handler: v1manageagent.SaveProviderApiKey(serverCtx),
-					},
-					{
 						Method:  http.MethodGet,
 						Path:    "/manage/agent/auth/status",
 						Handler: v1manageagent.GetAccountStatus(serverCtx),
@@ -315,8 +316,8 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					},
 					{
 						Method:  http.MethodPost,
-						Path:    "/manage/agent/settings/selection",
-						Handler: v1manageagent.SaveSelection(serverCtx),
+						Path:    "/manage/agent/settings",
+						Handler: v1manageagent.SaveSettings(serverCtx),
 					},
 					{
 						Method:  http.MethodGet,

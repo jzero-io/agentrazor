@@ -103,6 +103,25 @@ func Delete(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
+// 上传消息附件到会话工作区
+func UploadAttachment(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req types.UploadAttachmentRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+			return
+		}
+
+		l := conversation.NewUploadAttachment(r.Context(), svcCtx, r)
+		resp, err := l.UploadAttachment(&req)
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.OkJsonCtx(r.Context(), w, resp)
+		}
+	}
+}
+
 // 发送消息
 func SendMessage(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -169,12 +188,12 @@ func WorkspaceFile(svcCtx *svc.ServiceContext) http.HandlerFunc {
 			return
 		}
 
-		l := conversation.NewWorkspaceFile(r.Context(), svcCtx, r)
-		resp, err := l.WorkspaceFile(&req)
+		l := conversation.NewWorkspaceFile(r.Context(), svcCtx, r, w)
+		err := l.WorkspaceFile(&req)
 		if err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 		} else {
-			httpx.OkJsonCtx(r.Context(), w, resp)
+			httpx.Ok(w)
 		}
 	}
 }

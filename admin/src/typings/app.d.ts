@@ -287,12 +287,23 @@ declare namespace App {
       reasoningEffort: string;
       defaultReasoningEffort: string;
       save: string;
+      defaultSystemPrompt: {
+        title: string;
+        description: string;
+        effectScope: string;
+        placeholder: string;
+        preview: string;
+        edit: string;
+        emptyPreview: string;
+        save: string;
+      };
       status: {
         unknown: string;
         running: string;
         stopped: string;
         inUse: string;
         configured: string;
+        pendingSave: string;
         pending: string;
       };
       effort: {
@@ -307,9 +318,12 @@ declare namespace App {
         selectProviderModel: string;
         providerApiKeyRequired: string;
         applied: string;
+        defaultSystemPromptSaved: string;
         openAIApiKeyRequired: string;
         openAIApiKeySaved: string;
+        openAIApiKeyVerified: string;
         chatGPTLoginSuccess: string;
+        chatGPTLoginVerified: string;
         openAILogoutSuccess: string;
       };
       openAI: {
@@ -325,7 +339,7 @@ declare namespace App {
         clearApiKeyConfirm: string;
         loginChatGPT: string;
         useApiKey: string;
-        saveAndUse: string;
+        verifyApiKey: string;
         backToChatGPT: string;
       };
       external: {

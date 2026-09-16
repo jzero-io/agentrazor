@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import Vditor from 'vditor';
+import 'vditor/dist/index.css';
 import Clipboard from 'clipboard';
 import { NAlert, NButton, NCard, NForm, NFormItem, NInput, NModal, NPopconfirm, NSelect, NTag } from 'naive-ui';
 import {
@@ -7,20 +9,25 @@ import {
   GetAgentSettings,
   LoginAgentWithApiKey,
   LogoutAgentAccount,
-  SaveAgentProviderApiKey,
-  SaveAgentSelection,
+  SaveAgentSettings,
   StartAgentChatGPTLogin
 } from '@/service/api';
 import { useAuth } from '@/hooks/business/auth';
 import { $t } from '@/locales';
+import { useThemeStore } from '@/store/modules/theme';
 const { hasAuth } = useAuth();
+const themeStore = useThemeStore();
 
-const canSaveSelection = computed(() => hasAuth('v1:manage:agent:saveSelection'));
+const canSaveSettings = computed(() => hasAuth('v1:manage:agent:saveSettings'));
 const canLoginApiKey = computed(() => hasAuth('v1:manage:agent:loginApiKey'));
 const canStartChatGPTLogin = computed(() => hasAuth('v1:manage:agent:startChatGPTLogin'));
 const canLogout = computed(() => hasAuth('v1:manage:agent:logout'));
 
-const savingSelection = ref(false);
+const savingSettings = ref(false);
+const defaultSystemPrompt = ref('');
+const savedDefaultSystemPrompt = ref('');
+const editingDefaultSystemPrompt = ref(false);
+const defaultSystemPromptPreview = ref<HTMLDivElement | null>(null);
 const apiKey = ref('');
 const apiKeyLoading = ref(false);
 const providerApiKey = ref('');
@@ -30,6 +37,7 @@ const providerId = ref('');
 const model = ref('');
 const reasoningEffort = ref('');
 const openAIAuthView = ref<'chatgpt' | 'apikey'>('chatgpt');
+const openAIAuthPendingSave = ref(false);
 const loginModalVisible = ref(false);
 const deviceLogin = ref<Api.Manage.AgentDeviceLogin | null>(null);
 const deviceLoginRemainingSeconds = ref(0);
@@ -66,6 +74,7 @@ const effortLabels = computed<Record<string, string>>(() => ({
   max: $t('page.agentConfig.effort.max'),
   ultra: $t('page.agentConfig.effort.ultra')
 }));
+const defaultSystemPromptDirty = computed(() => defaultSystemPrompt.value !== savedDefaultSystemPrompt.value);
 const selectionDirty = computed(() => {
   if (!settings.value) return false;
   return (
@@ -75,6 +84,9 @@ const selectionDirty = computed(() => {
     (providerId.value !== 'openai' && providerApiKey.value.trim() !== '')
   );
 });
+const hasPendingChanges = computed(
+  () => selectionDirty.value || defaultSystemPromptDirty.value || openAIAuthPendingSave.value
+);
 const effortOptions = computed(() => {
   const values = selectedModel.value?.reasoningEfforts?.length
     ? selectedModel.value.reasoningEfforts
@@ -83,14 +95,6 @@ const effortOptions = computed(() => {
     label: effortLabels.value[value] || value,
     value
   }));
-});
-const runtimeText = computed(() => {
-  if (!settings.value) return $t('page.agentConfig.status.unknown');
-  return settings.value.runtime.running ? $t('page.agentConfig.status.running') : $t('page.agentConfig.status.stopped');
-});
-const runtimeType = computed(() => {
-  if (!settings.value) return 'default';
-  return settings.value.runtime.running ? 'success' : 'error';
 });
 
 async function refreshSettings(syncForm = true) {
@@ -106,6 +110,8 @@ async function refreshSettings(syncForm = true) {
     providerId.value = data.activeProvider || data.providers[0]?.id || '';
     model.value = data.model;
     reasoningEffort.value = data.reasoningEffort;
+    defaultSystemPrompt.value = data.defaultSystemPrompt;
+    savedDefaultSystemPrompt.value = data.defaultSystemPrompt;
     providerApiKey.value = '';
   }
 }
@@ -123,11 +129,11 @@ function changeModel() {
   }
 }
 
-async function saveSelection() {
-  if (!canSaveSelection.value) return;
+async function persistSettings(): Promise<boolean> {
+  if (!canSaveSettings.value || !hasPendingChanges.value) return false;
   if (!providerId.value || !model.value.trim()) {
     window.$message?.warning($t('page.agentConfig.message.selectProviderModel'));
-    return;
+    return false;
   }
   const provider = activeProvider.value;
   const stagedApiKey = providerApiKey.value.trim();
@@ -137,30 +143,27 @@ async function saveSelection() {
         provider: provider?.id || $t('page.agentConfig.supplier')
       })
     );
-    return;
+    return false;
   }
-  savingSelection.value = true;
-  if (providerId.value !== 'openai' && stagedApiKey) {
-    const { error: keyError } = await SaveAgentProviderApiKey({
-      providerId: providerId.value,
-      apiKey: stagedApiKey
-    });
-    if (keyError) {
-      savingSelection.value = false;
-      return;
-    }
-  }
-  const { error } = await SaveAgentSelection({
+  savingSettings.value = true;
+  const { error } = await SaveAgentSettings({
     providerId: providerId.value,
     model: model.value.trim(),
-    reasoningEffort: reasoningEffort.value
+    reasoningEffort: reasoningEffort.value,
+    providerApiKey: providerId.value === 'openai' ? '' : stagedApiKey,
+    defaultSystemPrompt: defaultSystemPrompt.value
   });
-  savingSelection.value = false;
-  if (!error) {
-    providerApiKey.value = '';
-    window.$message?.success($t('page.agentConfig.message.applied'));
-    await refreshSettings();
-  }
+  savingSettings.value = false;
+  if (error) return false;
+  providerApiKey.value = '';
+  openAIAuthPendingSave.value = false;
+  window.$message?.success($t('page.agentConfig.message.applied'));
+  await refreshSettings();
+  return true;
+}
+
+async function saveSettings() {
+  await persistSettings();
 }
 
 async function loginApiKey() {
@@ -171,12 +174,15 @@ async function loginApiKey() {
   }
   apiKeyLoading.value = true;
   const { error } = await LoginAgentWithApiKey(apiKey.value.trim());
-  apiKeyLoading.value = false;
-  if (!error) {
-    apiKey.value = '';
-    window.$message?.success($t('page.agentConfig.message.openAIApiKeySaved'));
-    await refreshSettings(false);
+  if (error) {
+    apiKeyLoading.value = false;
+    return;
   }
+  apiKey.value = '';
+  await refreshSettings(false);
+  openAIAuthPendingSave.value = true;
+  apiKeyLoading.value = false;
+  window.$message?.success($t('page.agentConfig.message.openAIApiKeyVerified'));
 }
 
 async function startChatGPTLogin() {
@@ -205,7 +211,9 @@ function startLoginPolling() {
     if (!error && data.account.loggedIn) {
       stopLoginPolling();
       loginModalVisible.value = false;
-      window.$message?.success($t('page.agentConfig.message.chatGPTLoginSuccess'));
+      await refreshSettings(false);
+      openAIAuthPendingSave.value = true;
+      window.$message?.success($t('page.agentConfig.message.chatGPTLoginVerified'));
       return;
     }
     if (!deviceLoginExpired.value) loginTimer = window.setTimeout(poll, 2500);
@@ -245,12 +253,40 @@ async function logout() {
   const { error } = await LogoutAgentAccount();
   if (!error) {
     openAIAuthView.value = 'chatgpt';
+    openAIAuthPendingSave.value = false;
     window.$message?.success($t('page.agentConfig.message.openAILogoutSuccess'));
     await refreshSettings(false);
   }
 }
 
-onMounted(() => refreshSettings());
+async function renderDefaultSystemPrompt() {
+  if (editingDefaultSystemPrompt.value) return;
+  await nextTick();
+  if (!defaultSystemPromptPreview.value) return;
+  if (!defaultSystemPrompt.value.trim()) {
+    defaultSystemPromptPreview.value.textContent = $t('page.agentConfig.defaultSystemPrompt.emptyPreview');
+    return;
+  }
+  try {
+    await Vditor.preview(defaultSystemPromptPreview.value, defaultSystemPrompt.value, {
+      mode: themeStore.darkMode ? 'dark' : 'light',
+      lang: 'zh_CN',
+      anchor: 0,
+      theme: { current: themeStore.darkMode ? 'dark' : 'light' },
+      hljs: { style: themeStore.darkMode ? 'native' : 'github' }
+    });
+  } catch {
+    defaultSystemPromptPreview.value.textContent = defaultSystemPrompt.value;
+  }
+}
+
+watch([defaultSystemPrompt, editingDefaultSystemPrompt, () => themeStore.darkMode], renderDefaultSystemPrompt, {
+  flush: 'post'
+});
+
+onMounted(() => {
+  refreshSettings();
+});
 onBeforeUnmount(stopLoginPolling);
 </script>
 
@@ -259,14 +295,19 @@ onBeforeUnmount(stopLoginPolling);
     <NCard :bordered="false" size="small" class="hero-card card-wrapper">
       <div class="hero-top">
         <div class="hero-heading">
-          <div class="hero-icon"><SvgIcon icon="carbon:settings-adjust" /></div>
           <h2>{{ $t('page.agentConfig.title') }}</h2>
         </div>
         <div class="hero-actions">
-          <NTag :type="runtimeType" round size="small">
-            <span class="status-dot" :class="{ 'status-dot--running': settings?.runtime.running }"></span>
-            {{ runtimeText }}
-          </NTag>
+          <NButton
+            v-if="canSaveSettings"
+            type="primary"
+            :loading="savingSettings"
+            :disabled="!hasPendingChanges"
+            @click="saveSettings"
+          >
+            <template #icon><SvgIcon icon="carbon:checkmark" /></template>
+            {{ $t('page.agentConfig.save') }}
+          </NButton>
         </div>
       </div>
 
@@ -307,21 +348,25 @@ onBeforeUnmount(stopLoginPolling);
           </div>
           <NTag
             :type="
-              settings?.account.loggedIn && settings.activeProvider === 'openai'
-                ? 'success'
-                : settings?.account.loggedIn
-                  ? 'info'
-                  : 'warning'
+              openAIAuthPendingSave
+                ? 'warning'
+                : settings?.account.loggedIn && settings.activeProvider === 'openai'
+                  ? 'success'
+                  : settings?.account.loggedIn
+                    ? 'info'
+                    : 'warning'
             "
             round
             class="provider-status"
           >
             {{
-              settings?.account.loggedIn && settings.activeProvider === 'openai'
-                ? $t('page.agentConfig.status.inUse')
-                : settings?.account.loggedIn
-                  ? $t('page.agentConfig.status.configured')
-                  : $t('page.agentConfig.status.pending')
+              openAIAuthPendingSave
+                ? $t('page.agentConfig.status.pendingSave')
+                : settings?.account.loggedIn && settings.activeProvider === 'openai'
+                  ? $t('page.agentConfig.status.inUse')
+                  : settings?.account.loggedIn
+                    ? $t('page.agentConfig.status.configured')
+                    : $t('page.agentConfig.status.pending')
             }}
           </NTag>
         </div>
@@ -381,7 +426,13 @@ onBeforeUnmount(stopLoginPolling);
 
           <template v-else-if="openAIAuthView === 'chatgpt'">
             <div class="auth-action-row">
-              <NButton v-if="canStartChatGPTLogin" size="large" type="primary" :loading="chatGPTLoading" @click="startChatGPTLogin">
+              <NButton
+                v-if="canStartChatGPTLogin"
+                size="large"
+                type="primary"
+                :loading="chatGPTLoading"
+                @click="startChatGPTLogin"
+              >
                 <template #icon><SvgIcon icon="carbon:login" /></template>
                 {{ $t('page.agentConfig.openAI.loginChatGPT') }}
               </NButton>
@@ -409,8 +460,14 @@ onBeforeUnmount(stopLoginPolling);
                 >
                   <template #prefix><SvgIcon icon="carbon:password" /></template>
                 </NInput>
-                <NButton v-if="canLoginApiKey" size="large" type="primary" :loading="apiKeyLoading" @click="loginApiKey">
-                  {{ $t('page.agentConfig.openAI.saveAndUse') }}
+                <NButton
+                  v-if="canLoginApiKey"
+                  size="large"
+                  type="primary"
+                  :loading="apiKeyLoading"
+                  @click="loginApiKey"
+                >
+                  {{ $t('page.agentConfig.openAI.verifyApiKey') }}
                 </NButton>
               </div>
             </div>
@@ -485,7 +542,7 @@ onBeforeUnmount(stopLoginPolling);
                 name: 'agent-provider-credential',
                 class: 'api-key-input-element'
               }"
-              :disabled="savingSelection"
+              :disabled="savingSettings"
               :placeholder="
                 activeProvider.hasApiKey
                   ? $t('page.agentConfig.external.replaceKey')
@@ -493,26 +550,42 @@ onBeforeUnmount(stopLoginPolling);
                       provider: activeProvider.id
                     })
               "
-              @keyup.enter="saveSelection"
+              @keyup.enter="saveSettings"
             >
               <template #prefix><SvgIcon icon="carbon:password" /></template>
             </NInput>
           </div>
         </div>
       </section>
-      <div class="form-actions">
-        <NButton
-          v-if="canSaveSelection"
-          type="primary"
-          size="large"
-          :loading="savingSelection"
-          :disabled="!selectionDirty"
-          @click="saveSelection"
-        >
-          <template #icon><SvgIcon icon="carbon:checkmark" /></template>
-          {{ $t('page.agentConfig.save') }}
-        </NButton>
-      </div>
+      <section class="system-prompt-section">
+        <div class="system-prompt-heading">
+          <h3>{{ $t('page.agentConfig.defaultSystemPrompt.title') }}</h3>
+          <NButton
+            v-if="canSaveSettings"
+            size="small"
+            secondary
+            type="primary"
+            @click="editingDefaultSystemPrompt = !editingDefaultSystemPrompt"
+          >
+            <template #icon>
+              <SvgIcon :icon="editingDefaultSystemPrompt ? 'carbon:view' : 'carbon:edit'" />
+            </template>
+            {{
+              editingDefaultSystemPrompt
+                ? $t('page.agentConfig.defaultSystemPrompt.preview')
+                : $t('page.agentConfig.defaultSystemPrompt.edit')
+            }}
+          </NButton>
+        </div>
+        <NInput
+          v-if="editingDefaultSystemPrompt"
+          v-model:value="defaultSystemPrompt"
+          type="textarea"
+          :autosize="{ minRows: 8, maxRows: 12 }"
+          :placeholder="$t('page.agentConfig.defaultSystemPrompt.placeholder')"
+        />
+        <div v-else ref="defaultSystemPromptPreview" class="system-prompt-preview"></div>
+      </section>
     </NCard>
 
     <NModal
@@ -580,7 +653,12 @@ onBeforeUnmount(stopLoginPolling);
         </div>
 
         <div class="device-login-footer">
-          <NButton v-if="deviceLoginExpired && canStartChatGPTLogin" type="primary" :loading="chatGPTLoading" @click="startChatGPTLogin">
+          <NButton
+            v-if="deviceLoginExpired && canStartChatGPTLogin"
+            type="primary"
+            :loading="chatGPTLoading"
+            @click="startChatGPTLogin"
+          >
             {{ $t('page.agentConfig.login.retry') }}
           </NButton>
           <span v-else>{{ $t('page.agentConfig.login.waiting') }}</span>
@@ -609,12 +687,12 @@ onBeforeUnmount(stopLoginPolling);
 }
 
 .hero-card {
-  flex: 1;
-  overflow: hidden;
+  flex: none;
+  overflow: visible;
 }
 
 .hero-card :deep(.n-card__content) {
-  padding: 22px 24px 20px;
+  padding: 14px 18px 16px;
 }
 
 .hero-top,
@@ -628,7 +706,7 @@ onBeforeUnmount(stopLoginPolling);
 
 .hero-top {
   justify-content: space-between;
-  gap: 24px;
+  gap: 16px;
 }
 
 .hero-heading {
@@ -636,22 +714,10 @@ onBeforeUnmount(stopLoginPolling);
   gap: 12px;
 }
 
-.hero-icon {
-  display: grid;
-  width: 40px;
-  height: 40px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: 10px;
-  color: rgb(var(--primary-color));
-  background: var(--config-primary-soft);
-  font-size: 21px;
-}
-
 .hero-heading h2 {
   margin: 0;
   color: var(--config-text);
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 700;
   line-height: 1.35;
 }
@@ -661,23 +727,10 @@ onBeforeUnmount(stopLoginPolling);
   gap: 10px;
 }
 
-.status-dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 5px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.status-dot--running {
-  box-shadow: 0 0 0 3px color-mix(in srgb, rgb(var(--success-color)) 16%, transparent);
-}
-
 .configuration-form {
   display: flex;
-  margin-top: 22px;
-  padding-top: 20px;
+  margin-top: 12px;
+  padding-top: 12px;
   border-top: 1px solid var(--config-divider);
   flex-direction: column;
 }
@@ -692,9 +745,37 @@ onBeforeUnmount(stopLoginPolling);
   margin-bottom: 0;
 }
 
+.system-prompt-section {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--config-divider);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--config-text) 1.5%, var(--config-surface));
+}
+
+.system-prompt-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.system-prompt-heading h3 {
+  margin: 0;
+  color: var(--config-text);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.system-prompt-section :deep(textarea) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  line-height: 1.6;
+}
+
 .provider-section {
-  margin-top: 22px;
-  padding-top: 22px;
+  margin-top: 12px;
+  padding-top: 12px;
   border-top: 1px solid var(--config-divider);
 }
 
@@ -704,17 +785,17 @@ onBeforeUnmount(stopLoginPolling);
 
 .provider-name {
   color: var(--config-text);
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
 }
 
 .provider-guide {
-  margin-top: 14px;
+  margin-top: 8px;
 }
 
 .auth-panel {
-  margin-top: 18px;
-  padding: 18px;
+  margin-top: 10px;
+  padding: 12px 14px;
   border: 1px solid var(--config-divider);
   border-radius: 12px;
   background: color-mix(in srgb, var(--config-text) 2.5%, var(--config-surface));
@@ -757,7 +838,7 @@ onBeforeUnmount(stopLoginPolling);
 .account-summary {
   display: grid;
   max-width: 760px;
-  margin-top: 18px;
+  margin-top: 10px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
@@ -841,7 +922,7 @@ onBeforeUnmount(stopLoginPolling);
   display: grid;
   margin-top: 18px;
   grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.1fr);
-  gap: 18px;
+  gap: 12px;
 }
 
 .external-config-field {
@@ -890,7 +971,7 @@ onBeforeUnmount(stopLoginPolling);
   display: flex;
   margin-top: 20px;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
 }
 
 .device-login-step {
@@ -1052,12 +1133,6 @@ onBeforeUnmount(stopLoginPolling);
     padding: 16px 14px;
   }
 
-  .hero-icon {
-    width: 36px;
-    height: 36px;
-    font-size: 19px;
-  }
-
   .hero-heading h2 {
     font-size: 18px;
   }
@@ -1078,7 +1153,7 @@ onBeforeUnmount(stopLoginPolling);
   }
 
   .auth-panel {
-    margin-top: 14px;
+    margin-top: 8px;
     padding: 14px;
   }
 
@@ -1088,7 +1163,7 @@ onBeforeUnmount(stopLoginPolling);
   }
 
   .account-summary {
-    margin-top: 14px;
+    margin-top: 8px;
     gap: 8px;
   }
 
@@ -1150,7 +1225,7 @@ onBeforeUnmount(stopLoginPolling);
   }
 }
 
-/* Visual refresh: turn the flat form into a focused control surface. */
+/* Compact visual refinement: preserve density while restoring hierarchy. */
 .config-page {
   position: relative;
   isolation: isolate;
@@ -1159,51 +1234,56 @@ onBeforeUnmount(stopLoginPolling);
 .config-page::before {
   position: absolute;
   z-index: -1;
-  top: -40px;
-  right: 4%;
-  width: 360px;
-  height: 240px;
+  top: -28px;
+  right: 5%;
+  width: 300px;
+  height: 190px;
   border-radius: 50%;
-  background: color-mix(in srgb, rgb(var(--primary-color)) 8%, transparent);
-  filter: blur(70px);
-  content: "";
+  background: color-mix(in srgb, rgb(var(--primary-color)) 7%, transparent);
+  filter: blur(64px);
+  content: '';
   pointer-events: none;
 }
 
 .hero-card {
   border: 1px solid var(--config-divider);
-  border-radius: 18px;
+  border-radius: 16px;
   background: var(--config-surface);
-  box-shadow: 0 18px 50px color-mix(in srgb, var(--config-text) 7%, transparent);
+  box-shadow: 0 14px 42px color-mix(in srgb, var(--config-text) 6%, transparent);
 }
 
 .hero-card :deep(.n-card__content) {
-  padding: 0 28px 28px;
+  padding: 0 20px 20px;
 }
 
 .hero-top {
   position: relative;
   overflow: hidden;
-  margin: 0 -28px;
-  padding: 30px 32px;
+  margin: 0 -20px;
+  padding: 16px 22px;
   border-bottom: 1px solid color-mix(in srgb, rgb(var(--primary-color)) 13%, transparent);
-  background:
-    radial-gradient(circle at 84% 12%, color-mix(in srgb, rgb(var(--primary-color)) 18%, transparent), transparent 34%),
-    linear-gradient(120deg, color-mix(in srgb, rgb(var(--primary-color)) 9%, var(--config-surface)), var(--config-surface) 62%);
+  background: radial-gradient(
+      circle at 84% 0%,
+      color-mix(in srgb, rgb(var(--primary-color)) 13%, transparent),
+      transparent 30%
+    ),
+    linear-gradient(
+      115deg,
+      color-mix(in srgb, rgb(var(--primary-color)) 7%, var(--config-surface)),
+      var(--config-surface) 66%
+    );
 }
 
 .hero-top::after {
   position: absolute;
-  top: -72px;
-  right: 20%;
-  width: 170px;
-  height: 170px;
-  border: 1px solid color-mix(in srgb, rgb(var(--primary-color)) 14%, transparent);
+  top: -62px;
+  right: 18%;
+  width: 128px;
+  height: 128px;
+  border: 1px solid color-mix(in srgb, rgb(var(--primary-color)) 11%, transparent);
   border-radius: 50%;
-  box-shadow:
-    0 0 0 30px color-mix(in srgb, rgb(var(--primary-color)) 4%, transparent),
-    0 0 0 62px color-mix(in srgb, rgb(var(--primary-color)) 3%, transparent);
-  content: "";
+  box-shadow: 0 0 0 24px color-mix(in srgb, rgb(var(--primary-color)) 3%, transparent);
+  content: '';
   pointer-events: none;
 }
 
@@ -1213,39 +1293,31 @@ onBeforeUnmount(stopLoginPolling);
   z-index: 1;
 }
 
-.hero-icon {
-  width: 48px;
-  height: 48px;
-  border: 1px solid color-mix(in srgb, rgb(var(--primary-color)) 18%, transparent);
-  border-radius: 14px;
-  background: color-mix(in srgb, rgb(var(--primary-color)) 13%, var(--config-surface));
-  box-shadow: 0 8px 22px color-mix(in srgb, rgb(var(--primary-color)) 14%, transparent);
-  font-size: 24px;
-}
-
 .hero-heading h2 {
-  font-size: 22px;
+  font-size: 20px;
   letter-spacing: -0.02em;
 }
 
-.hero-actions {
-  padding: 10px 14px;
-  border: 1px solid var(--config-divider);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--config-surface) 84%, transparent);
-  box-shadow: 0 8px 24px color-mix(in srgb, var(--config-text) 5%, transparent);
-  backdrop-filter: blur(10px);
+.hero-actions :deep(.n-button) {
+  min-width: 112px;
+  border-radius: 9px;
+  box-shadow: 0 7px 16px color-mix(in srgb, rgb(var(--primary-color)) 18%, transparent);
 }
 
 .configuration-form,
-.provider-section {
+.provider-section,
+.system-prompt-section {
   position: relative;
-  margin-top: 22px;
-  padding: 24px;
+  margin-top: 14px;
+  padding: 16px;
   border: 1px solid var(--config-divider);
   border-radius: 14px;
-  background: linear-gradient(145deg, color-mix(in srgb, var(--config-text) 2.4%, var(--config-surface)), var(--config-surface));
-  box-shadow: 0 5px 18px color-mix(in srgb, var(--config-text) 3.5%, transparent);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--config-text) 1.8%, var(--config-surface)),
+    var(--config-surface)
+  );
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--config-text) 3.5%, transparent);
 }
 
 .configuration-form {
@@ -1255,12 +1327,16 @@ onBeforeUnmount(stopLoginPolling);
 
 .configuration-form::before {
   display: block;
-  width: 38px;
+  width: 34px;
   height: 4px;
-  margin-bottom: 20px;
-  border-radius: 4px;
-  background: linear-gradient(90deg, rgb(var(--primary-color)), color-mix(in srgb, rgb(var(--primary-color)) 20%, transparent));
-  content: "";
+  margin-bottom: 14px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgb(var(--primary-color)),
+    color-mix(in srgb, rgb(var(--primary-color)) 18%, transparent)
+  );
+  content: '';
 }
 
 .model-form-grid :deep(.n-form-item-label) {
@@ -1268,13 +1344,19 @@ onBeforeUnmount(stopLoginPolling);
   font-weight: 650;
 }
 
-.model-form-grid :deep(.n-base-selection) {
+.model-form-grid :deep(.n-base-selection),
+.external-config-grid :deep(.n-input),
+.system-prompt-section :deep(.n-input) {
   --n-border-radius: 9px !important;
 }
 
-.model-form-grid :deep(.n-base-selection-label) {
-  min-height: 42px;
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--config-text) 4%, transparent);
+.model-form-grid :deep(.n-base-selection-label),
+.external-config-grid :deep(.n-input-wrapper) {
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--config-text) 5%, transparent);
+}
+
+.provider-section {
+  border-top: 1px solid var(--config-divider);
 }
 
 .provider-heading {
@@ -1283,18 +1365,19 @@ onBeforeUnmount(stopLoginPolling);
 
 .provider-name {
   position: relative;
-  padding-left: 15px;
+  padding-left: 14px;
+  font-size: 16px;
 }
 
 .provider-name::before {
   position: absolute;
   top: 50%;
   left: 0;
-  width: 5px;
+  width: 4px;
   height: 20px;
-  border-radius: 4px;
+  border-radius: 999px;
   background: rgb(var(--primary-color));
-  content: "";
+  content: '';
   transform: translateY(-50%);
 }
 
@@ -1302,99 +1385,98 @@ onBeforeUnmount(stopLoginPolling);
   font-weight: 650;
 }
 
-.auth-panel {
-  padding: 22px;
-  border-color: color-mix(in srgb, rgb(var(--primary-color)) 10%, var(--config-divider));
-  border-radius: 12px;
-  background: color-mix(in srgb, rgb(var(--primary-color)) 2.5%, var(--config-surface));
-}
-
-.auth-option-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  box-shadow: 0 6px 14px color-mix(in srgb, var(--config-text) 5%, transparent);
-}
-
-.account-summary {
-  max-width: none;
-}
-
-.account-detail-card {
-  min-height: 70px;
-  justify-content: center;
-  border-radius: 11px;
-  box-shadow: 0 5px 16px color-mix(in srgb, var(--config-text) 4%, transparent);
-}
-
-.account-detail-card strong {
-  font-size: 15px;
-}
-
-.form-actions {
-  justify-content: flex-end;
-  margin-top: 22px;
-  padding: 18px 20px;
-  border: 1px solid var(--config-divider);
-  border-radius: 14px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--config-text) 2%, var(--config-surface)), var(--config-surface));
-}
-
-.form-actions :deep(.n-button) {
-  min-width: 150px;
+.endpoint-value {
   border-radius: 9px;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--config-text) 5%, transparent);
 }
 
-.form-actions :deep(.n-button--primary-type) {
-  box-shadow: 0 8px 18px color-mix(in srgb, rgb(var(--primary-color)) 20%, transparent);
+.system-prompt-heading h3 {
+  position: relative;
+  padding-left: 14px;
+  font-size: 16px;
+}
+
+.system-prompt-heading h3::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 4px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgb(var(--primary-color));
+  content: '';
+  transform: translateY(-50%);
+}
+
+.system-prompt-section :deep(.n-input) {
+  background: color-mix(in srgb, var(--config-surface) 96%, rgb(var(--primary-color)));
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--config-text) 4%, transparent);
 }
 
 @media (max-width: 760px) {
   .hero-card :deep(.n-card__content) {
-    padding: 0 18px 18px;
+    padding: 0 14px 14px;
   }
 
   .hero-top {
-    margin: 0 -18px;
-    padding: 24px 20px;
+    margin: 0 -14px;
+    padding: 15px 16px;
   }
 
   .hero-actions {
     width: auto;
   }
-
-  .configuration-form,
-  .provider-section {
-    padding: 18px;
-  }
 }
 
 @media (max-width: 560px) {
-  .hero-card :deep(.n-card__content) {
-    padding: 0 12px 12px;
-  }
-
-  .hero-top {
-    margin: 0 -12px;
-    padding: 20px 16px;
-  }
-
-  .hero-actions {
-    padding: 9px 11px;
-  }
-
   .configuration-form,
-  .provider-section {
-    margin-top: 12px;
-    padding: 15px;
+  .provider-section,
+  .system-prompt-section {
+    margin-top: 10px;
+    padding: 13px;
   }
 
-  .form-actions {
+  .hero-actions :deep(.n-button) {
+    min-width: 96px;
+  }
+}
+
+.system-prompt-preview {
+  min-height: 248px;
+  max-height: 480px;
+  overflow: auto;
+  padding: 16px 18px;
+  border: 1px solid var(--config-border);
+  border-radius: 9px;
+  color: var(--config-text);
+  background: color-mix(in srgb, var(--config-surface) 96%, rgb(var(--primary-color)));
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--config-text) 4%, transparent);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.system-prompt-preview :deep(.vditor-reset) {
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.system-prompt-preview :deep(.vditor-reset > :first-child) {
+  margin-top: 0;
+}
+
+.system-prompt-preview :deep(.vditor-copy) {
+  display: block;
+}
+
+.system-prompt-preview :deep(pre) {
+  border-radius: 8px;
+}
+
+@media (max-width: 560px) {
+  .system-prompt-preview {
+    min-height: 220px;
     padding: 14px;
-  }
-
-  .form-actions :deep(.n-button) {
-    min-width: 0;
   }
 }
 </style>

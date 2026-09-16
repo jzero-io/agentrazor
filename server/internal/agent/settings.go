@@ -60,6 +60,22 @@ func (s *Service) SaveProviderAPIKey(ctx context.Context, providerID, apiKey str
 	return settings.saveProviderAPIKey(providerID, apiKey)
 }
 
+func (s *Service) SaveSettings(ctx context.Context, providerID, model, effort, apiKey, defaultSystemPrompt string) error {
+	if len([]byte(defaultSystemPrompt)) > maxDefaultSystemPromptSize {
+		return fmt.Errorf("default system prompt is larger than %d bytes", maxDefaultSystemPromptSize)
+	}
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
+	settings, err := s.loadSettings(ctx)
+	if err != nil {
+		return err
+	}
+	if err := settings.saveConfiguration(providerID, model, effort, apiKey); err != nil {
+		return err
+	}
+	return s.SaveDefaultSystemPrompt(ctx, defaultSystemPrompt)
+}
+
 func (s *Service) loadSettings(ctx context.Context) (*Settings, error) {
 	content, err := s.readConfigFile(ctx, "config.toml")
 	if err != nil {
@@ -250,6 +266,56 @@ func (s *Settings) saveProviderAPIKey(providerID, apiKey string) error {
 	return s.service.writeConfigValues(s.ctx, map[string]any{
 		"model_providers." + providerID + ".experimental_bearer_token": apiKey,
 	})
+}
+
+func (s *Settings) saveConfiguration(providerID, model, effort, apiKey string) error {
+	providerID = strings.TrimSpace(providerID)
+	model = strings.TrimSpace(model)
+	effort = strings.TrimSpace(effort)
+	apiKey = strings.TrimSpace(apiKey)
+	catalogModels, err := s.catalogModels()
+	if err != nil {
+		return err
+	}
+	if !catalogModels.hasProvider(providerID) {
+		return fmt.Errorf("unsupported provider %q", providerID)
+	}
+	if !containsModel(catalogModels.forProvider(providerID), model) {
+		return fmt.Errorf("model %q does not belong to provider %q", model, providerID)
+	}
+	values := map[string]any{"model_provider": providerID, "model": model}
+	if effort == "" {
+		values["model_reasoning_effort"] = nil
+	} else {
+		values["model_reasoning_effort"] = effort
+	}
+	if providerID != "openai" {
+		providers, ok := s.config["model_providers"].(map[string]any)
+		if !ok {
+			return errors.New("model_providers is missing from config.toml")
+		}
+		provider, ok := providers[providerID].(map[string]any)
+		if !ok {
+			return fmt.Errorf("provider %q does not support a config API key", providerID)
+		}
+		if apiKey == "" && configString(provider, "experimental_bearer_token") == "" {
+			return errors.New("provider API key is required")
+		}
+		if apiKey != "" {
+			values["model_providers."+providerID+".experimental_bearer_token"] = apiKey
+		}
+	}
+	if err := s.service.writeConfigValues(s.ctx, values); err != nil {
+		return err
+	}
+	effective, err := s.service.readEffectiveConfig(s.ctx)
+	if err != nil {
+		return fmt.Errorf("verify Codex config: %w", err)
+	}
+	if configString(effective, "model_provider") != providerID || configString(effective, "model") != model || configString(effective, "model_reasoning_effort") != effort {
+		return errors.New("Codex config did not apply the selected model")
+	}
+	return nil
 }
 
 func configString(values map[string]any, key string) string {

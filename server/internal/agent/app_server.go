@@ -19,7 +19,6 @@ import (
 const (
 	defaultWorkspaceHome   = "workspace"
 	defaultAppServerSocket = "/var/run/codex-app-server.sock"
-	requestGuardSkillName  = "request-guard"
 
 	// Bounds socket connection, initialization and short workspace operations.
 	appServerTimeout = 15 * time.Second
@@ -287,7 +286,7 @@ func (r *appServer) cachedAccountStatus() (AccountStatus, bool) {
 	return r.account, r.accountKnown
 }
 
-func (r *appServer) runTurn(ctx context.Context, threadID, prompt string, emit eventHandler) (StartedTurn, error) {
+func (r *appServer) runTurn(ctx context.Context, threadID string, input TurnInput, emit eventHandler) (StartedTurn, error) {
 	if threadID == "" {
 		return StartedTurn{}, errors.New("thread id is required")
 	}
@@ -300,7 +299,7 @@ func (r *appServer) runTurn(ctx context.Context, threadID, prompt string, emit e
 			"threadId": threadID,
 		}, r.currentStreamPosition())
 	}
-	return r.startTurn(ctx, threadID, prompt, emit)
+	return r.startTurn(ctx, threadID, input, emit)
 }
 
 func (r *appServer) startThread(ctx context.Context) (string, error) {
@@ -308,12 +307,6 @@ func (r *appServer) startThread(ctx context.Context) (string, error) {
 		"path": r.workspaceHome, "recursive": true,
 	}); err != nil {
 		return "", fmt.Errorf("create conversation root: %w", err)
-	}
-	// thread/start snapshots the available skills for the new conversation.
-	// Refresh first so a recent skills/config/write takes effect before that
-	// snapshot is created, rather than only being observed by the first turn.
-	if _, err := r.enabledRequestGuard(ctx, r.workspaceHome); err != nil {
-		return "", fmt.Errorf("refresh skills before starting thread: %w", err)
 	}
 	result, err := r.request(ctx, "thread/start", map[string]any{
 		"cwd": r.threadCWD,
@@ -397,14 +390,10 @@ func (r *appServer) ensureThread(ctx context.Context, threadID string) (bool, er
 	return err == nil, err
 }
 
-func (r *appServer) startTurn(ctx context.Context, threadID, prompt string, emit eventHandler) (StartedTurn, error) {
+func (r *appServer) startTurn(ctx context.Context, threadID string, input TurnInput, emit eventHandler) (StartedTurn, error) {
 	conversationDir, err := r.conversationDir(threadID)
 	if err != nil {
 		return StartedTurn{}, err
-	}
-	requestGuard, err := r.enabledRequestGuard(ctx, conversationDir)
-	if err != nil {
-		return StartedTurn{}, fmt.Errorf("read request guard status: %w", err)
 	}
 	execution := &appServerTurn{
 		threadID: threadID,
@@ -418,7 +407,7 @@ func (r *appServer) startTurn(ctx context.Context, threadID, prompt string, emit
 	params := map[string]any{
 		"threadId": threadID,
 		"cwd":      conversationDir,
-		"input":    r.turnInput(prompt, requestGuard),
+		"input":    r.turnInput(input),
 	}
 	result, err := r.request(ctx, "turn/start", params)
 	if err != nil {
@@ -451,43 +440,41 @@ func (r *appServer) startTurn(ctx context.Context, threadID, prompt string, emit
 	return StartedTurn{ID: turnID, StartedAt: time.Now().UTC(), Done: done}, nil
 }
 
-func (r *appServer) enabledRequestGuard(ctx context.Context, cwd string) (*Skill, error) {
-	result, err := r.request(ctx, "skills/list", map[string]any{
-		"cwds":        []string{cwd},
-		"forceReload": true,
-	})
-	if err != nil {
-		return nil, err
-	}
-	skills, err := managedSkillsFromListResponse(result, filepath.Join(r.codexHome, "skills"))
-	if err != nil {
-		return nil, err
-	}
-	expectedPath := filepath.Join(r.codexHome, "skills", requestGuardSkillName, "SKILL.md")
-	for index := range skills {
-		skill := &skills[index]
-		if skill.Name == requestGuardSkillName && filepath.Clean(skill.Path) == expectedPath {
-			if !skill.Enabled {
-				return nil, nil
-			}
-			return skill, nil
+func (r *appServer) turnInput(turn TurnInput) []map[string]any {
+	text := strings.TrimSpace(turn.Text)
+	files := make([]MessageAttachment, 0, len(turn.Attachments))
+	for _, attachment := range turn.Attachments {
+		if attachment.Kind == "file" {
+			files = append(files, attachment)
 		}
 	}
-	return nil, nil
-}
-
-func (r *appServer) turnInput(prompt string, requestGuard *Skill) []map[string]any {
-	input := []map[string]any{
-		{
-			"type": "text",
-			"text": prompt,
-		},
+	if len(files) > 0 {
+		var references strings.Builder
+		if text != "" {
+			references.WriteString(text)
+			references.WriteString("\n\n")
+		}
+		references.WriteString("# Files mentioned by the user:\n")
+		for _, attachment := range files {
+			fmt.Fprintf(&references, "- `%s` (%s)\n", attachment.Path, attachment.Name)
+		}
+		text = strings.TrimSpace(references.String())
 	}
-	if requestGuard != nil && requestGuard.Enabled {
+
+	input := make([]map[string]any, 0, len(turn.Attachments)+2)
+	if text != "" {
 		input = append(input, map[string]any{
-			"type": "skill",
-			"name": requestGuard.Name,
-			"path": requestGuard.Path,
+			"type": "text",
+			"text": text,
+		})
+	}
+	for _, attachment := range turn.Attachments {
+		if attachment.Kind != "image" {
+			continue
+		}
+		input = append(input, map[string]any{
+			"type": "localImage",
+			"path": attachment.LocalPath,
 		})
 	}
 	return input

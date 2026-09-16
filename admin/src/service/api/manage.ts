@@ -227,17 +227,9 @@ export function GetAgentSettings() {
   return request<Api.Manage.AgentSettings>({ url: '/api/v1/manage/agent/settings', method: 'get' });
 }
 
-export function SaveAgentSelection(data: Api.Manage.SaveAgentSelectionRequest) {
-  return request<Api.Manage.SaveAgentSelectionResponse>({
-    url: '/api/v1/manage/agent/settings/selection',
-    method: 'post',
-    data
-  });
-}
-
-export function SaveAgentProviderApiKey(data: Api.Manage.SaveAgentProviderApiKeyRequest) {
-  return request<Api.Manage.SaveAgentProviderApiKeyResponse>({
-    url: '/api/v1/manage/agent/auth/provider-api-key',
+export function SaveAgentSettings(data: Api.Manage.SaveAgentSettingsRequest) {
+  return request<Record<string, never>>({
+    url: '/api/v1/manage/agent/settings',
     method: 'post',
     data
   });

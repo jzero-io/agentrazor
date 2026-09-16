@@ -277,12 +277,24 @@ const local: App.I18n.Schema = {
       reasoningEffort: 'Reasoning effort',
       defaultReasoningEffort: 'Use model default',
       save: 'Save',
+      defaultSystemPrompt: {
+        title: 'Default system prompt',
+        description: 'Defines the Agent default behavior and is stored in the Codex AGENTS.md file.',
+        effectScope:
+          'No restart is required after saving. New conversations use it immediately; existing conversations keep the prompt loaded when they were created.',
+        placeholder: 'Leave blank to add no default system prompt',
+        preview: 'Preview',
+        edit: 'Edit',
+        emptyPreview: 'No default system prompt',
+        save: 'Save'
+      },
       status: {
         unknown: 'Unknown',
         running: 'Running',
         stopped: 'Stopped',
         inUse: 'In use',
         configured: 'Configured',
+        pendingSave: 'Pending save',
         pending: 'Not configured'
       },
       effort: {
@@ -297,9 +309,12 @@ const local: App.I18n.Schema = {
         selectProviderModel: 'Select a provider and model',
         providerApiKeyRequired: 'Enter the {provider} API Key',
         applied: 'Model configuration applied',
+        defaultSystemPromptSaved: 'Default system prompt saved',
         openAIApiKeyRequired: 'Enter an OpenAI API Key',
         openAIApiKeySaved: 'OpenAI API Key saved',
+        openAIApiKeyVerified: 'OpenAI API Key verified. Save to apply the model configuration.',
         chatGPTLoginSuccess: 'ChatGPT account connected',
+        chatGPTLoginVerified: 'ChatGPT account verified. Save to apply the model configuration.',
         openAILogoutSuccess: 'OpenAI account disconnected'
       },
       openAI: {
@@ -315,7 +330,7 @@ const local: App.I18n.Schema = {
         clearApiKeyConfirm: 'Clear the current OpenAI API Key?',
         loginChatGPT: 'Log in with ChatGPT',
         useApiKey: 'Use API Key',
-        saveAndUse: 'Save and use',
+        verifyApiKey: 'Verify API Key',
         backToChatGPT: 'Back to ChatGPT login'
       },
       external: {

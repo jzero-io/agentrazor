@@ -168,10 +168,21 @@ type (
 		ConversationId string `path:"conversation_id" validate:"required"`
 		FilePath       string `form:"path" validate:"required"`
 	}
-	WorkspaceFileResponse {
+	MessageAttachment {
 		Name        string `json:"name"`
+		Path        string `json:"path"`
 		ContentType string `json:"contentType"`
-		DataBase64  string `json:"dataBase64"`
+		Size        int64  `json:"size"`
+		Kind        string `json:"kind"`
+	}
+	MessageAttachmentRef {
+		Path string `json:"path" validate:"required"`
+	}
+	UploadAttachmentRequest {
+		ConversationId string `path:"conversation_id" validate:"required"`
+	}
+	UploadAttachmentResponse {
+		Attachment MessageAttachment `json:"attachment"`
 	}
 	UpdateRequest {
 		ConversationId string  `path:"conversation_id" validate:"required"`
@@ -199,8 +210,9 @@ type (
 		QuotaResetAt *string          `json:"quotaResetAt,omitempty"`
 	}
 	SendMessageRequest {
-		ConversationId string `path:"conversation_id" validate:"required"`
-		Content        string `json:"content" validate:"required"`
+		ConversationId string                 `path:"conversation_id" validate:"required"`
+		Content        string                 `json:"content,optional"`
+		Attachments    []MessageAttachmentRef `json:"attachments,optional"`
 	}
 )
 
@@ -247,6 +259,10 @@ service server {
 	@handler SendMessage
 	post /conversation/:conversation_id/messages (SendMessageRequest) returns (StartedTurn)
 
+	@doc "上传消息附件到会话工作区"
+	@handler UploadAttachment
+	post /conversation/:conversation_id/attachments (UploadAttachmentRequest) returns (UploadAttachmentResponse)
+
 	@doc "获取会话元信息"
 	@handler Metadata
 	get /conversation/:conversation_id/metadata (PathRequest) returns (MetadataResponse)
@@ -261,7 +277,7 @@ service server {
 
 	@doc "读取会话工作区文件"
 	@handler WorkspaceFile
-	get /conversation/:conversation_id/workspace/file (WorkspaceFileRequest) returns (WorkspaceFileResponse)
+	get /conversation/:conversation_id/workspace/file (WorkspaceFileRequest)
 
 	@doc "修改会话"
 	@handler Update

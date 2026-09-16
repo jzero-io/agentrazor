@@ -64,24 +64,6 @@ func Logout(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
-func SaveProviderApiKey(svcCtx *svc.ServiceContext) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.SaveProviderApiKeyRequest
-		if err := httpx.Parse(r, &req); err != nil {
-			httpx.ErrorCtx(r.Context(), w, err)
-			return
-		}
-
-		l := agent.NewSaveProviderApiKey(r.Context(), svcCtx, r)
-		resp, err := l.SaveProviderApiKey(&req)
-		if err != nil {
-			httpx.ErrorCtx(r.Context(), w, err)
-		} else {
-			httpx.OkJsonCtx(r.Context(), w, resp)
-		}
-	}
-}
-
 func GetAccountStatus(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req types.GetAccountStatusRequest
@@ -118,16 +100,16 @@ func GetSettings(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
-func SaveSelection(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func SaveSettings(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.SaveSelectionRequest
+		var req types.SaveSettingsRequest
 		if err := httpx.Parse(r, &req); err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 			return
 		}
 
-		l := agent.NewSaveSelection(r.Context(), svcCtx, r)
-		resp, err := l.SaveSelection(&req)
+		l := agent.NewSaveSettings(r.Context(), svcCtx, r)
+		resp, err := l.SaveSettings(&req)
 		if err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 		} else {

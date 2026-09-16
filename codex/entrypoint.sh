@@ -3,6 +3,10 @@ set -eu
 
 umask 077
 mkdir -p "$CODEX_HOME" "$CODEX_HOME/skills" "$CODEX_HOME/workspace" "$(dirname "$CODEX_SOCKET")"
+rm -rf "$CODEX_HOME/skills/request-guard" "$CODEX_HOME/skills/.system/request-guard"
+if [ -f /etc/codex/AGENTS.md ] && [ ! -f "$CODEX_HOME/AGENTS.md" ]; then
+  cp /etc/codex/AGENTS.md "$CODEX_HOME/AGENTS.md"
+fi
 if [ -d /dist/defaults ]; then
   cp -r --update=none /dist/defaults/. "$CODEX_HOME/"
   rm -rf /dist/defaults
@@ -33,18 +37,6 @@ while [ ! -S "$CODEX_SOCKET" ]; do
   fi
   sleep 0.1
 done
-if [ -d /etc/codex/skills ]; then
-  for default_skill in /etc/codex/skills/*; do
-    [ -d "$default_skill" ] || continue
-    skill_name=$(basename "$default_skill")
-    rm -rf "$CODEX_HOME/skills/.system/$skill_name"
-    target_skill="$CODEX_HOME/skills/$skill_name"
-    if [ ! -e "$target_skill" ] && [ ! -L "$target_skill" ]; then
-      cp -a "$default_skill" "$target_skill"
-    fi
-  done
-fi
-
 status=0
 wait "$app_server_pid" || status=$?
 trap - INT TERM

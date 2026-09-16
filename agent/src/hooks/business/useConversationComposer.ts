@@ -1,5 +1,19 @@
-import { computed, nextTick, type ComputedRef, type Ref } from 'vue';
-import { conversationApi, type ConversationDetail, type Turn } from '../../service/api';
+import { computed, nextTick, onBeforeUnmount, reactive, type ComputedRef, type Ref } from 'vue';
+import { conversationApi, type ConversationDetail, type MessageAttachment, type Turn } from '../../service/api';
+
+const MAX_ATTACHMENTS = 10;
+const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+
+export interface ComposerAttachment {
+  id: string;
+  file: File;
+  name: string;
+  size: number;
+  kind: 'image' | 'file';
+  previewUrl?: string;
+  uploaded?: MessageAttachment;
+  uploadedConversationId?: string;
+}
 
 interface UseConversationComposerOptions {
   selectedConversationId: Ref<string>;
@@ -18,7 +32,7 @@ interface UseConversationComposerOptions {
   isConversationRunning: (id: string) => boolean;
   setConversationProcessing: (id: string, processing: boolean) => void;
   locallyStoppedConversationIds: Set<string>;
-  createOptimisticTurn: (content: string) => Turn;
+  createOptimisticTurn: (content: string, attachments?: Array<{ name: string; kind: 'image' | 'file'; previewUrl?: string }>) => Turn;
   showOptimisticTurn: (conversationId: string, turn: Turn) => void;
   moveOptimisticTurn: (fromConversationId: string, toConversationId: string, turnId: string) => void;
   discardOptimisticTurn: (conversationId: string, turnId: string) => boolean;
@@ -41,8 +55,11 @@ interface UseConversationComposerOptions {
 }
 
 export function useConversationComposer(options: UseConversationComposerOptions) {
+  const attachmentsByConversation = reactive(new Map<string, ComposerAttachment[]>());
+  const attachments = computed(() => attachmentsByConversation.get(options.selectedConversationId.value) || []);
+
   const canSend = computed(() => Boolean(
-    options.draftValue.value.trim()
+    (options.draftValue.value.trim() || attachments.value.length)
     && options.selectedConversationId.value
     && !options.creatingConversation.value
     && !options.sendingRequest.value
@@ -63,12 +80,88 @@ export function useConversationComposer(options: UseConversationComposerOptions)
     return 'solar:arrow-up-linear';
   });
 
+  function addAttachments(files: File[]) {
+    const conversationId = options.selectedConversationId.value;
+    if (!conversationId || files.length === 0) return;
+    const current = [...attachments.value];
+    for (const file of files) {
+      if (current.length >= MAX_ATTACHMENTS) {
+        options.showError(`每条消息最多添加 ${MAX_ATTACHMENTS} 个附件`);
+        break;
+      }
+      if (file.size <= 0) {
+        options.showError(`${file.name || '附件'} 是空文件`);
+        continue;
+      }
+      if (file.size > MAX_ATTACHMENT_SIZE) {
+        options.showError(`${file.name} 超过 10 MB`);
+        continue;
+      }
+      const duplicate = current.some(item =>
+        item.name === file.name && item.size === file.size && item.file.lastModified === file.lastModified
+      );
+      if (duplicate) continue;
+      const kind = file.type.startsWith('image/') ? 'image' : 'file';
+      current.push({
+        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `attachment-${Date.now()}-${current.length}`,
+        file,
+        name: file.name || 'attachment',
+        size: file.size,
+        kind,
+        previewUrl: kind === 'image' ? URL.createObjectURL(file) : undefined
+      });
+    }
+    attachmentsByConversation.set(conversationId, current);
+  }
+
+  function revokeAttachment(attachment: ComposerAttachment) {
+    if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+  }
+
+  function removeAttachment(id: string) {
+    const conversationId = options.selectedConversationId.value;
+    const current = attachments.value;
+    const target = current.find(item => item.id === id);
+    if (target) revokeAttachment(target);
+    const next = current.filter(item => item.id !== id);
+    if (next.length) attachmentsByConversation.set(conversationId, next);
+    else attachmentsByConversation.delete(conversationId);
+  }
+
+  function moveAttachments(fromConversationId: string, toConversationId: string) {
+    const current = attachmentsByConversation.get(fromConversationId);
+    if (!current?.length || fromConversationId === toConversationId) return;
+    attachmentsByConversation.delete(fromConversationId);
+    attachmentsByConversation.set(toConversationId, current);
+  }
+
+  function clearAttachments(conversationId: string) {
+    const current = attachmentsByConversation.get(conversationId) || [];
+    current.forEach(revokeAttachment);
+    attachmentsByConversation.delete(conversationId);
+  }
+
+  async function uploadAttachments(conversationId: string, values: ComposerAttachment[]) {
+    const uploaded: MessageAttachment[] = [];
+    for (const attachment of values) {
+      if (attachment.uploaded && attachment.uploadedConversationId === conversationId) {
+        uploaded.push(attachment.uploaded);
+        continue;
+      }
+      attachment.uploaded = await conversationApi.uploadAttachment(conversationId, attachment.file);
+      attachment.uploadedConversationId = conversationId;
+      uploaded.push(attachment.uploaded);
+    }
+    return uploaded;
+  }
+
   async function sendMessage() {
     const draftKey = options.selectedConversationId.value;
     const content = options.draftValue.value.trim();
-    if (!content || options.sendingRequest.value) return;
+    const messageAttachments = [...attachments.value];
+    if ((!content && messageAttachments.length === 0) || options.sendingRequest.value) return;
 
-    const optimisticTurn = options.createOptimisticTurn(content);
+    const optimisticTurn = options.createOptimisticTurn(content, messageAttachments);
 
     options.sendingRequest.value = true;
     options.enableAutoScroll();
@@ -92,6 +185,7 @@ export function useConversationComposer(options: UseConversationComposerOptions)
 
         options.draftConversationGroupId.value = '';
         options.moveOptimisticTurn(draftKey, conversationId, optimisticTurn.id);
+        moveAttachments(draftKey, conversationId);
         options.selectedConversationId.value = conversationId;
         options.syncConversationUrl(conversationId);
         const draftDetail = options.detail.value?.conversation.id === draftKey ? options.detail.value : null;
@@ -107,7 +201,9 @@ export function useConversationComposer(options: UseConversationComposerOptions)
       }
 
       await options.ensureConversationStream(conversationId);
-      const sent = await conversationApi.send(conversationId, content);
+      const uploadedAttachments = await uploadAttachments(conversationId, messageAttachments);
+      const sent = await conversationApi.send(conversationId, content, uploadedAttachments);
+      clearAttachments(conversationId);
 
       if (createdConversation) options.scheduleConversationTitleRefresh(conversationId, createdConversation);
 
@@ -127,6 +223,7 @@ export function useConversationComposer(options: UseConversationComposerOptions)
       }
     } catch (error) {
       if (options.activeTurnError(error)) {
+        clearAttachments(conversationId);
         options.setConversationProcessing(conversationId, true);
         options.ensureConversationStream(conversationId);
         if (options.selectedConversationId.value === conversationId) await options.refreshDetail();
@@ -200,7 +297,15 @@ export function useConversationComposer(options: UseConversationComposerOptions)
     void sendMessage();
   }
 
+  onBeforeUnmount(() => {
+    for (const values of attachmentsByConversation.values()) values.forEach(revokeAttachment);
+    attachmentsByConversation.clear();
+  });
+
   return {
+    attachments,
+    addAttachments,
+    removeAttachment,
     canSend,
     composerActionPending,
     composerActionDisabled,

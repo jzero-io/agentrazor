@@ -2255,7 +2255,7 @@ body.is-dragging {
   position: relative;
   width: min(820px, 100%);
   margin: 0 auto;
-  padding: 13px 58px 13px 14px;
+  padding: 13px 98px 13px 14px;
   border: 1px solid #dfe2e4;
   border-radius: 21px;
   background: #fff;
@@ -2289,6 +2289,236 @@ body.is-dragging {
   bottom: 12px;
   display: flex;
   align-items: center;
+}
+
+.composer-file-input {
+  display: none;
+}
+
+.composer.is-dragging {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--panel-bg));
+}
+
+.composer-attachments {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 0 2px 10px;
+}
+
+.composer-attachment {
+  display: grid;
+  grid-template-columns: 38px minmax(80px, 150px) 24px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 170px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+
+.composer-attachment > img,
+.composer-attachment-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+}
+
+.composer-attachment > img {
+  object-fit: cover;
+}
+
+.composer-attachment-icon {
+  display: grid;
+  place-items: center;
+  background: var(--panel-bg);
+  color: var(--muted-strong);
+  font-size: 20px;
+}
+
+.composer-attachment-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.composer-attachment-copy strong {
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-attachment-copy small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.composer-attachment-remove {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  place-items: center;
+}
+
+.composer-attachment-remove:hover {
+  background: var(--hover);
+  color: var(--text-strong);
+}
+
+.composer-footer {
+  gap: 6px;
+}
+
+.composer-attach-button {
+  color: var(--muted-strong);
+}
+
+.user-message-attachments {
+  display: flex;
+  max-width: min(72vw, 720px);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.user-message-attachment {
+  display: flex;
+  max-width: 260px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-soft);
+  color: var(--text-strong);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.user-message-attachment:hover,
+.user-message-attachment:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+  background: var(--accent-soft);
+  outline: none;
+}
+
+.user-message-attachment:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.user-message-attachment img {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.user-message-attachment-group {
+  display: flex;
+  max-width: min(360px, 72vw);
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.user-message-attachment-preview {
+  display: grid;
+  width: min(360px, 72vw);
+  min-height: 132px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel-soft);
+  place-items: center;
+}
+
+.user-message-attachment-preview-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 360px;
+  object-fit: contain;
+  cursor: zoom-in;
+}
+
+.user-message-attachment-preview .user-message-attachment-image-fallback {
+  grid-area: 1 / 1;
+  color: var(--muted-strong);
+  font-size: 28px;
+}
+
+.user-message-attachment-preview .user-message-attachment-preview-image {
+  grid-area: 1 / 1;
+  z-index: 1;
+}
+
+.user-message-attachment-preview .user-message-attachment-preview-image + .user-message-attachment-image-fallback {
+  display: none;
+}
+
+.attachment-image-lightbox {
+  position: fixed;
+  z-index: 10000;
+  inset: 0;
+  display: grid;
+  padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
+    max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  background: rgb(0 0 0 / 82%);
+  place-items: center;
+}
+
+.attachment-image-lightbox img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 12px;
+  object-fit: contain;
+  box-shadow: 0 24px 64px rgb(0 0 0 / 45%);
+}
+
+.attachment-image-lightbox-close {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  display: grid;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 999px;
+  background: rgb(20 20 20 / 72%);
+  color: #fff;
+  cursor: pointer;
+  font: 28px/1 sans-serif;
+  place-items: center;
+}
+
+.user-message-attachment svg {
+  flex: 0 0 auto;
+  font-size: 20px;
+}
+
+.user-message-attachment span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .composer-action-button {
@@ -4006,6 +4236,7 @@ html[data-theme="dark"] body.sidebar-resizing .sidebar-resize-handle::after {
   width: 100%;
   height: 46px;
   align-items: center;
+  justify-content: center;
   gap: 12px;
   padding: 0 14px;
   border: 0;
@@ -4015,7 +4246,7 @@ html[data-theme="dark"] body.sidebar-resizing .sidebar-resize-handle::after {
   cursor: pointer;
   font: inherit;
   font-size: 15px;
-  text-align: left;
+  text-align: center;
 }
 
 .workspace-panel-launcher-item:hover,
@@ -4901,7 +5132,16 @@ html[data-theme="dark"] body.sidebar-resizing .sidebar-resize-handle::after {
   background: var(--accent-soft);
 }
 
-.message-column,
+.message-column {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: calc(var(--content-width) + var(--content-gutter));
+  margin-right: auto;
+  margin-left: auto;
+  padding-right: calc(var(--content-gutter) / 2);
+  padding-left: calc(var(--content-gutter) / 2);
+}
+
 .composer {
   width: min(var(--content-width), calc(100% - var(--content-gutter)));
 }
@@ -5108,10 +5348,14 @@ html[data-theme="dark"] body.sidebar-resizing .sidebar-resize-handle::after {
     font-size: 32px;
   }
 
-  .topbar-inner,
-  .message-column,
+  .message-column {
+    width: 100%;
+    padding-right: var(--mobile-edge-right, 16px);
+    padding-left: var(--mobile-edge-left, 16px);
+  }
+
   .composer {
-    width: calc(100% - 28px);
+    width: 100%;
   }
 }
 /* Main content tone hierarchy */

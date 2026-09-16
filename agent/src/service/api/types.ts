@@ -23,7 +23,7 @@ export interface ThreadItem {
   type: string;
   text?: string;
   phase?: string | null;
-  content?: Array<{ type?: string; text?: string; url?: string; path?: string }> | string[];
+  content?: Array<{ type?: string; text?: string; url?: string; path?: string; name?: string }> | string[];
   summary?: string[];
   command?: string;
   aggregatedOutput?: string | null;
@@ -95,6 +95,14 @@ export interface EventsResponse {
 export interface StartedTurn {
   id: string;
   startedAt: string;
+}
+
+export interface MessageAttachment {
+  name: string;
+  path: string;
+  contentType: string;
+  size: number;
+  kind: 'image' | 'file';
 }
 
 export interface TokenQuotaWindow {

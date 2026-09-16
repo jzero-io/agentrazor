@@ -248,6 +248,11 @@ export function displayWorkspaceProcessPath(filePath: string, workspaceDir = '')
   } catch {
     // Keep the original path when it contains malformed escape sequences.
   }
+  const normalizedPath = decodedPath.split(String.fromCharCode(92)).join('/');
+  const attachmentIndex = normalizedPath.lastIndexOf('/attachments/');
+  if (attachmentIndex >= 0) {
+    return normalizedPath.slice(attachmentIndex + 1);
+  }
   const workspacePath = workspaceDir.split(String.fromCharCode(92)).join('/').replace(/[/]+$/, '');
   if (workspacePath && decodedPath.startsWith(workspacePath + '/')) {
     return decodedPath.slice(workspacePath.length + 1);

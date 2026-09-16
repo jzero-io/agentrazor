@@ -72,6 +72,18 @@ type ListResponse struct {
 	Conversations []Conversation `json:"conversations"`
 }
 
+type MessageAttachment struct {
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	ContentType string `json:"contentType"`
+	Size        int64  `json:"size"`
+	Kind        string `json:"kind"`
+}
+
+type MessageAttachmentRef struct {
+	Path string `json:"path" validate:"required"`
+}
+
 type MetadataResponse struct {
 	Id           string `json:"id"`
 	Title        string `json:"title"`
@@ -95,8 +107,9 @@ type PathRequest struct {
 }
 
 type SendMessageRequest struct {
-	ConversationId string `path:"conversation_id" validate:"required"`
-	Content        string `json:"content" validate:"required"`
+	ConversationId string                 `path:"conversation_id" validate:"required"`
+	Content        string                 `json:"content,optional"`
+	Attachments    []MessageAttachmentRef `json:"attachments,optional"`
 }
 
 type StartedTurn struct {
@@ -224,6 +237,14 @@ type UpdateRequest struct {
 	GroupId        *string `json:"groupId,optional"`
 }
 
+type UploadAttachmentRequest struct {
+	ConversationId string `path:"conversation_id" validate:"required"`
+}
+
+type UploadAttachmentResponse struct {
+	Attachment MessageAttachment `json:"attachment"`
+}
+
 type WorkspaceEntry struct {
 	Name     string           `json:"name"`
 	Path     string           `json:"path"`
@@ -234,12 +255,6 @@ type WorkspaceEntry struct {
 type WorkspaceFileRequest struct {
 	ConversationId string `path:"conversation_id" validate:"required"`
 	FilePath       string `form:"path" validate:"required"`
-}
-
-type WorkspaceFileResponse struct {
-	Name        string `json:"name"`
-	ContentType string `json:"contentType"`
-	DataBase64  string `json:"dataBase64"`
 }
 
 type WorkspaceFilesResponse struct {

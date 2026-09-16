@@ -1,19 +1,5 @@
 import { apiBase, expireSession, getToken, isEnvelope, refreshAccessToken, request } from './request';
-import type { Conversation, ConversationDetail, ConversationMetadata, Envelope, EventsResponse, StartedTurn, StreamEvent, TokenQuotaStatus, WorkspaceEntry, WorkspaceFileBlob, WorkspaceFileContent } from './types';
-interface WorkspaceFilePayload {
-  name: string;
-  contentType: string;
-  dataBase64: string;
-}
-
-function decodeBase64(value: string) {
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-  return bytes;
-}
-
-
+import type { Conversation, ConversationDetail, ConversationMetadata, Envelope, EventsResponse, MessageAttachment, StartedTurn, StreamEvent, TokenQuotaStatus, WorkspaceEntry, WorkspaceFileBlob } from './types';
 export const conversationApi = {
   async list(): Promise<Conversation[]> {
     const result = await request<{ conversations: Conversation[] }>('/api/v1/conversation');
@@ -40,11 +26,22 @@ export const conversationApi = {
       body: JSON.stringify({ groupId: groupId || undefined })
     });
   },
-  send(conversationId: string, content: string) {
+  send(conversationId: string, content: string, attachments: MessageAttachment[] = []) {
     return request<StartedTurn>(`/api/v1/conversation/${encodeURIComponent(conversationId)}/messages`, {
       method: 'POST',
-      body: JSON.stringify({ content })
+      body: JSON.stringify({
+        content,
+        attachments: attachments.map(attachment => ({ path: attachment.path }))
+      })
     });
+  },
+  uploadAttachment(conversationId: string, file: File) {
+    const body = new FormData();
+    body.append('file', file, file.name);
+    return request<{ attachment: MessageAttachment }>(
+      `/api/v1/conversation/${encodeURIComponent(conversationId)}/attachments`,
+      { method: 'POST', body }
+    ).then(result => result.attachment);
   },
   tokenQuota() {
     return request<TokenQuotaStatus>('/api/v1/conversation/token-quota');
@@ -56,22 +53,37 @@ export const conversationApi = {
     const result = await request<{ files: WorkspaceEntry[] }>(`/api/v1/conversation/${encodeURIComponent(id)}/workspace/files`);
     return result.files;
   },
-  async fetchWorkspacePayload(path: string): Promise<{ payload: WorkspaceFilePayload; pathname: string }> {
-    const pathname = path.startsWith('/') ? path : '/' + path;
-    const payload = await request<WorkspaceFilePayload>(pathname, { cache: 'no-store' });
-    return { payload, pathname };
-  },
-  async fetchWorkspaceFile(path: string): Promise<WorkspaceFileContent> {
-    const { payload, pathname } = await this.fetchWorkspacePayload(path);
-    const content = new TextDecoder().decode(decodeBase64(payload.dataBase64));
-    return { path: pathname, name: payload.name, content, contentType: payload.contentType };
-  },
   async fetchWorkspaceBlob(path: string): Promise<WorkspaceFileBlob> {
-    const { payload, pathname } = await this.fetchWorkspacePayload(path);
-    const bytes = decodeBase64(payload.dataBase64);
-    const data = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-    const blob = new Blob([data], { type: payload.contentType });
-    return { path: pathname, name: payload.name, blob, contentType: payload.contentType || blob.type };
+    const pathname = path.startsWith("/") ? path : "/" + path;
+    const fetchFile = async (retried = false): Promise<Response> => {
+      const token = getToken();
+      const response = await fetch(`${apiBase}${pathname}`, {
+        cache: "no-store",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined
+      });
+      if (response.status === 401) {
+        if (!retried) {
+          const refreshResult = await refreshAccessToken();
+          if (refreshResult === "refreshed") return fetchFile(true);
+          if (refreshResult === "failed") throw new Error("登录续期失败，请稍后重试");
+        }
+        expireSession();
+        throw new Error("登录已过期，请重新登录");
+      }
+      if (!response.ok) {
+        const body = await response.clone().json().catch(() => null) as Envelope<unknown> | null;
+        const message = body && isEnvelope<unknown>(body) ? body.msg : "";
+        throw new Error(message || `文件读取失败（${response.status}）`);
+      }
+      return response;
+    };
+
+    const response = await fetchFile();
+    const blob = await response.blob();
+    const requestedPath = new URL(pathname, window.location.origin).searchParams.get("path") || "";
+    const name = requestedPath.split("\\").join("/").split("/").filter(Boolean).pop() || "文件";
+    const contentType = response.headers.get("content-type") || blob.type || "application/octet-stream";
+    return { path: pathname, name, blob, contentType };
   },
   subscribe(
     id: string,

@@ -28,8 +28,8 @@ ENV PATH="/opt/codex/bin:/opt/codex/codex-path:$PATH" \
     CODEX_HOME=/dist/data \
     CODEX_SOCKET=/var/run/codex-app-server.sock
 
-COPY codex/skills/ /etc/codex/skills/
-COPY codex/config/ /dist/defaults/
+COPY codex/AGENTS.md /etc/codex/AGENTS.md
+COPY codex/config.toml codex/models.json /dist/defaults/
 COPY --chmod=0755 codex/entrypoint.sh /usr/local/bin/agentrazor-codex-entrypoint
 
 ENTRYPOINT ["agentrazor-codex-entrypoint"]
