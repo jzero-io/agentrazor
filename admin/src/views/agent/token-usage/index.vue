@@ -213,9 +213,7 @@ function handleQuotaPreviewShow(show: boolean, account: TokenUsageAccount) {
 function handleQuotaUpdated() {
   const userUuid = quotaUser.value?.uuid;
   if (!userUuid) return;
-  quotaPreviews.value = Object.fromEntries(
-    Object.entries(quotaPreviews.value).filter(([key]) => key !== userUuid)
-  );
+  quotaPreviews.value = Object.fromEntries(Object.entries(quotaPreviews.value).filter(([key]) => key !== userUuid));
   quotaPreviewFailed.value = Object.fromEntries(
     Object.entries(quotaPreviewFailed.value).filter(([key]) => key !== userUuid)
   );
@@ -527,10 +525,7 @@ watch(() => appStore.locale, refreshChart);
                     </div>
                     <NSpin :show="quotaPreviewLoading[account.userUuid]" size="small">
                       <div v-if="quotaPreviews[account.userUuid]" class="quota-preview-windows">
-                        <div
-                          v-if="quotaPreviews[account.userUuid].effectiveFiveHourLimit"
-                          class="quota-preview-window"
-                        >
+                        <div v-if="quotaPreviews[account.userUuid].effectiveFiveHourLimit" class="quota-preview-window">
                           <div class="quota-preview-label">
                             <span>5 小时</span>
                             <strong>
@@ -698,12 +693,12 @@ watch(() => appStore.locale, refreshChart);
                           <tr>
                             <th class="turn-id-col">{{ $t('page.agentTokenUsage.turnId') }}</th>
                             <th class="time-col">{{ $t('page.agentTokenUsage.time') }}</th>
+                            <th class="number total-col">{{ $t('page.agentTokenUsage.totalToken') }}</th>
                             <th class="number">{{ $t('page.agentTokenUsage.input') }}</th>
                             <th class="number">{{ $t('page.agentTokenUsage.cachedInput') }}</th>
                             <th class="number">{{ $t('page.agentTokenUsage.cacheWrite') }}</th>
                             <th class="number">{{ $t('page.agentTokenUsage.output') }}</th>
                             <th class="number">{{ $t('page.agentTokenUsage.reasoningOutput') }}</th>
-                            <th class="number total-col">{{ $t('page.agentTokenUsage.totalToken') }}</th>
                             <th class="number context-col">{{ $t('page.agentTokenUsage.contextWindow') }}</th>
                           </tr>
                         </thead>
@@ -713,12 +708,12 @@ watch(() => appStore.locale, refreshChart);
                               <code :title="turn.turnId">{{ turn.turnId }}</code>
                             </td>
                             <td class="time-cell">{{ formatTime(turn.updatedAt) }}</td>
+                            <td class="number total-cell">{{ formatToken(turn.totalTokens) }}</td>
                             <td class="number">{{ formatToken(turn.inputTokens) }}</td>
                             <td class="number">{{ formatToken(turn.cachedInputTokens) }}</td>
                             <td class="number">{{ formatToken(turn.cacheWriteInputTokens) }}</td>
                             <td class="number">{{ formatToken(turn.outputTokens) }}</td>
                             <td class="number">{{ formatToken(turn.reasoningOutputTokens) }}</td>
-                            <td class="number total-cell">{{ formatToken(turn.totalTokens) }}</td>
                             <td class="number context-cell">
                               {{ turn.modelContextWindow ? formatToken(turn.modelContextWindow) : '-' }}
                             </td>
@@ -793,7 +788,9 @@ watch(() => appStore.locale, refreshChart);
                   :consistent-menu-width="false"
                 />
               </NInputGroup>
-              <span class="global-quota-input-help">即 {{ formatToken(quotaForm.fiveHourLimitTokens || 0) }} Token</span>
+              <span class="global-quota-input-help">
+                即 {{ formatToken(quotaForm.fiveHourLimitTokens || 0) }} Token
+              </span>
             </div>
           </NFormItem>
           <NFormItem :label="$t('page.agentTokenUsage.sevenDayQuota')">
@@ -814,7 +811,9 @@ watch(() => appStore.locale, refreshChart);
                   :consistent-menu-width="false"
                 />
               </NInputGroup>
-              <span class="global-quota-input-help">即 {{ formatToken(quotaForm.sevenDayLimitTokens || 0) }} Token</span>
+              <span class="global-quota-input-help">
+                即 {{ formatToken(quotaForm.sevenDayLimitTokens || 0) }} Token
+              </span>
             </div>
           </NFormItem>
         </div>
