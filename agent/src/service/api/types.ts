@@ -14,6 +14,7 @@ export interface Conversation {
 export interface ConversationMetadata {
   id: string;
   title: string;
+  workspaceDir: string;
   updatedAt: string;
 }
 

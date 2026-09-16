@@ -59,9 +59,12 @@ const requestedConversationId = computed(() => conversationIdFromPath(route.path
 const isSettingsRoute = computed(() => route.path.startsWith('/settings'));
 
 const selectedConversationId = ref('');
+const workspaceDirsByConversation = reactive(new Map<string, string>());
+const selectedWorkspaceDir = computed(() => workspaceDirsByConversation.get(selectedConversationId.value) || '');
 const mainPanel = ref<HTMLElement | null>(null);
 const pinnedSummaryOpen = ref(false);
 const workspacePanel = useWorkspacePanel({
+  workspaceDir: selectedWorkspaceDir,
   selectedConversationId,
   draftConversationId: DRAFT_CONVERSATION_ID,
   fetchBlob: path => conversationApi.fetchWorkspaceBlob(path),
@@ -491,7 +494,10 @@ function revealConversationSection(item: Conversation) {
   conversationsExpanded.value = true;
 }
 
-function syncConversationMetadata(metadata: ConversationMetadata) {
+function syncConversationMetadata(metadata: Conversation | ConversationMetadata) {
+  if ('workspaceDir' in metadata && metadata.workspaceDir) {
+    workspaceDirsByConversation.set(metadata.id, metadata.workspaceDir);
+  }
   const item = conversations.value.find(conversation => conversation.id === metadata.id);
   if (item) replaceConversation({ ...item, ...metadata });
   const currentDetail = detailsByConversation.get(metadata.id);
@@ -504,6 +510,14 @@ function syncConversationMetadata(metadata: ConversationMetadata) {
       updatedAt: metadata.updatedAt
     }
   });
+}
+
+async function refreshConversationWorkspaceDir(id: string) {
+  try {
+    syncConversationMetadata(await conversationApi.metadata(id));
+  } catch {
+    // Workspace metadata is retried when the conversation is selected again.
+  }
 }
 
 const { scheduleConversationTitleRefresh, stopAllConversationTitleRefresh } = useConversationTitleRefresh({
@@ -1041,6 +1055,7 @@ function discardDeletedConversationState(ids: string[]) {
   ids.forEach(id => {
     clearConversationDetail(id);
     workspacePanel.removeConversation(id);
+    workspaceDirsByConversation.delete(id);
     closeConversationStream(id);
   });
   clearConversationProcessing(ids);
@@ -1260,6 +1275,7 @@ watch(selectedConversationId, id => {
     && performance.getEntriesByType('navigation').some(entry => (entry as PerformanceNavigationTiming).type === 'reload');
   initialConversationSelection = false;
   if (id) {
+    if (id !== DRAFT_CONVERSATION_ID && !workspaceDirsByConversation.has(id)) void refreshConversationWorkspaceDir(id);
     if (restorePanel) workspacePanel.restore(id);
     else workspacePanel.collapse();
   } else {

@@ -73,9 +73,10 @@ type ListResponse struct {
 }
 
 type MetadataResponse struct {
-	Id        string `json:"id"`
-	Title     string `json:"title"`
-	UpdatedAt string `json:"updatedAt"`
+	Id           string `json:"id"`
+	Title        string `json:"title"`
+	WorkspaceDir string `json:"workspaceDir"`
+	UpdatedAt    string `json:"updatedAt"`
 }
 
 type PageRequest struct {

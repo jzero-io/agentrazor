@@ -184,7 +184,7 @@ export function safeWorkspaceFileURL(conversationId: string, relativePath: strin
   return '/api/v1/conversation/' + encodeURIComponent(conversationId) + '/workspace/file?path=' + encodeURIComponent(clean);
 }
 
-export function normalizeWorkspaceFileReference(href: string, conversationId: string, origin = window.location.origin) {
+export function normalizeWorkspaceFileReference(href: string, conversationId: string, workspaceDir: string, origin = window.location.origin) {
   if (!conversationId) return '';
   const trimmed = href.trim();
   if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) return '';
@@ -200,10 +200,9 @@ export function normalizeWorkspaceFileReference(href: string, conversationId: st
     if (decodedPath === apiPath) {
       return safeWorkspaceFileURL(conversationId, new URLSearchParams(search).get('path') || '');
     }
-    const marker = `/workspace/${conversationId}/`;
-    const markerIndex = decodedPath.indexOf(marker);
-    if (markerIndex >= 0) {
-      return safeWorkspaceFileURL(conversationId, decodedPath.slice(markerIndex + marker.length));
+    const workspacePath = workspaceDir.split(String.fromCharCode(92)).join('/').replace(/[/]+$/, '');
+    if (workspacePath && decodedPath.startsWith(workspacePath + '/')) {
+      return safeWorkspaceFileURL(conversationId, decodedPath.slice(workspacePath.length + 1));
     }
     return '';
   };
@@ -236,7 +235,7 @@ export function normalizeWorkspaceFileReference(href: string, conversationId: st
   }
 }
 
-export function displayWorkspaceProcessPath(filePath: string, conversationId = '') {
+export function displayWorkspaceProcessPath(filePath: string, workspaceDir = '') {
   const queryIndex = filePath.indexOf('?');
   if (queryIndex >= 0) {
     const requestedPath = new URLSearchParams(filePath.slice(queryIndex + 1)).get('path');
@@ -249,17 +248,17 @@ export function displayWorkspaceProcessPath(filePath: string, conversationId = '
   } catch {
     // Keep the original path when it contains malformed escape sequences.
   }
-  if (conversationId) {
-    const marker = `/workspace/${conversationId}/`;
-    const index = decodedPath.indexOf(marker);
-    if (index >= 0) return decodedPath.slice(index + marker.length);
+  const workspacePath = workspaceDir.split(String.fromCharCode(92)).join('/').replace(/[/]+$/, '');
+  if (workspacePath && decodedPath.startsWith(workspacePath + '/')) {
+    return decodedPath.slice(workspacePath.length + 1);
   }
-  return decodedPath.replace(/^.*\/workspace\/[^/]+\//, '');
+  return decodedPath;
 }
 
 export function useWorkspacePanel(options: {
   selectedConversationId: Ref<string>;
   draftConversationId: string;
+  workspaceDir: Ref<string>;
   fetchBlob: (path: string) => Promise<WorkspaceFileBlob>;
   fetchEntries: (conversationId: string) => Promise<WorkspaceEntry[]>;
   containerRef?: Ref<HTMLElement | null>;
@@ -388,7 +387,7 @@ export function useWorkspacePanel(options: {
   }
 
   function normalizeFilePath(href: string) {
-    return normalizeWorkspaceFileReference(href, options.selectedConversationId.value);
+    return normalizeWorkspaceFileReference(href, options.selectedConversationId.value, options.workspaceDir.value);
   }
 
   async function loadImage(path: string) {
@@ -415,7 +414,7 @@ export function useWorkspacePanel(options: {
   }
 
   function fileNameFromPath(path: string) {
-    const displayedPath = displayWorkspaceProcessPath(path, options.selectedConversationId.value);
+    const displayedPath = displayWorkspaceProcessPath(path, options.workspaceDir.value);
     return displayedPath.split('/').filter(Boolean).pop() || '文件';
   }
 
@@ -729,7 +728,7 @@ export function useWorkspacePanel(options: {
   }
 
   function displayWorkspaceFilePath(file: FilePreview) {
-    return displayWorkspaceProcessPath(file.path, options.selectedConversationId.value);
+    return displayWorkspaceProcessPath(file.path, options.workspaceDir.value);
   }
 
   function startResize(event: PointerEvent) {
@@ -806,7 +805,7 @@ export function useWorkspacePanel(options: {
     normalizeFilePath,
     loadImage,
     displayWorkspaceFilePath,
-    displayWorkspaceProcessPath: (path: string) => displayWorkspaceProcessPath(path, options.selectedConversationId.value),
+    displayWorkspaceProcessPath: (path: string) => displayWorkspaceProcessPath(path, options.workspaceDir.value),
     openWorkspace,
     replaceWithWorkspace,
     showLauncher,

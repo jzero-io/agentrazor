@@ -41,9 +41,14 @@ func (l *Metadata) Metadata(req *types.PathRequest) (resp *types.MetadataRespons
 		}
 		return nil, err
 	}
+	workspaceDir, err := l.svcCtx.AgentService.WorkspaceDir(req.ConversationId)
+	if err != nil {
+		return nil, err
+	}
 	return &types.MetadataResponse{
-		Id:        thread.ID,
-		Title:     strings.TrimSpace(thread.Name),
-		UpdatedAt: formatTime(thread.UpdatedAt),
+		Id:           thread.ID,
+		Title:        strings.TrimSpace(thread.Name),
+		WorkspaceDir: workspaceDir,
+		UpdatedAt:    formatTime(thread.UpdatedAt),
 	}, nil
 }

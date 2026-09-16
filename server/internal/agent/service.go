@@ -170,6 +170,14 @@ func (s *Service) List(ctx context.Context) ([]StoredThread, error) {
 	return append(active, archived...), nil
 }
 
+func (s *Service) WorkspaceDir(conversationID string) (string, error) {
+	server, err := s.currentServer()
+	if err != nil {
+		return "", err
+	}
+	return server.conversationDir(conversationID)
+}
+
 func (s *Service) Metadata(ctx context.Context, threadID string) (StoredThread, error) {
 	if err := validateThreadID(threadID); err != nil {
 		return StoredThread{}, err
