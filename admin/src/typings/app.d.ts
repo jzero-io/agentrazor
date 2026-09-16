@@ -355,10 +355,6 @@ declare namespace App {
     type AgentSkillsSchema = {
       title: string;
       installed: string;
-      builtIn: string;
-      system: string;
-      custom: string;
-      systemReadOnlyHint: string;
       enabled: string;
       disabled: string;
       uploadArchive: string;

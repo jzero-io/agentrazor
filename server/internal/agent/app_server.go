@@ -463,9 +463,10 @@ func (r *appServer) enabledRequestGuard(ctx context.Context, cwd string) (*Skill
 	if err != nil {
 		return nil, err
 	}
+	expectedPath := filepath.Join(r.codexHome, "skills", requestGuardSkillName, "SKILL.md")
 	for index := range skills {
 		skill := &skills[index]
-		if skill.Name == requestGuardSkillName && skill.ReadOnly {
+		if skill.Name == requestGuardSkillName && filepath.Clean(skill.Path) == expectedPath {
 			if !skill.Enabled {
 				return nil, nil
 			}

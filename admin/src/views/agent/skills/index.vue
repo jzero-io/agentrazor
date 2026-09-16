@@ -1,6 +1,6 @@
 <script setup lang="tsx">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { NButton, NCard, NEmpty, NInput, NPopconfirm, NSwitch, NTabPane, NTabs, NTag, NTree, NUpload } from 'naive-ui';
+import { NButton, NCard, NEmpty, NInput, NPopconfirm, NSwitch, NTree, NUpload } from 'naive-ui';
 import type { TreeOption, TreeOverrideNodeClickBehavior, UploadCustomRequestOptions } from 'naive-ui';
 import Vditor from 'vditor';
 import 'vditor/dist/index.css';
@@ -32,7 +32,6 @@ const saving = ref(false);
 const settingStatusName = ref('');
 const editContent = ref('');
 const searchKeyword = ref('');
-const activeSkillGroup = ref<'system' | 'custom'>('system');
 const selectedName = ref('');
 const selectedFile = ref('');
 const expandedKeys = ref<string[]>([]);
@@ -54,11 +53,6 @@ const filteredSkills = computed(() => {
 
   return skills.value.filter(item => item.name.toLowerCase().includes(keyword));
 });
-const systemSkills = computed(() => filteredSkills.value.filter(item => item.readOnly));
-const customSkills = computed(() => filteredSkills.value.filter(item => !item.readOnly));
-const visibleGroupSkills = computed(() =>
-  activeSkillGroup.value === 'system' ? systemSkills.value : customSkills.value
-);
 const visibleFiles = computed(() => normalizeTreeFiles(selectedDetail.value?.files ?? []));
 const treeData = computed<TreeOption[]>(() => buildTreeOptions(visibleFiles.value));
 
@@ -173,17 +167,15 @@ async function getData() {
   if (selectedName.value) {
     const next = skills.value.find(item => item.name === selectedName.value);
     if (next) {
-      activeSkillGroup.value = next.readOnly ? 'system' : 'custom';
       await selectSkill(next, selectedFile.value);
       return;
     }
   }
 
-  const preferred = visibleGroupSkills.value[0];
+  const preferred = filteredSkills.value[0];
   const fallback = skills.value[0];
   const next = preferred ?? fallback;
   if (next) {
-    activeSkillGroup.value = next.readOnly ? 'system' : 'custom';
     await selectSkill(next);
     return;
   }
@@ -192,7 +184,6 @@ async function getData() {
 }
 
 async function selectSkill(skill: Api.Manage.AgentSkill, file = '') {
-  activeSkillGroup.value = skill.readOnly ? 'system' : 'custom';
   selectedName.value = skill.name;
   selectedFile.value = file;
   detailLoading.value = true;
@@ -242,7 +233,6 @@ async function uploadSkill(options: UploadCustomRequestOptions) {
   await getData();
   const next = skills.value.find(item => item.name === data.name);
   if (next) {
-    activeSkillGroup.value = 'custom';
     await selectSkill(next);
   }
 }
@@ -333,9 +323,9 @@ watch([visibleContent, currentFile, editing, detailLoading, () => themeStore.dar
   flush: 'post'
 });
 
-watch([activeSkillGroup, visibleGroupSkills], async () => {
-  if (visibleGroupSkills.value.some(item => item.name === selectedName.value)) return;
-  const first = visibleGroupSkills.value[0];
+watch(filteredSkills, async () => {
+  if (filteredSkills.value.some(item => item.name === selectedName.value)) return;
+  const first = filteredSkills.value[0];
   if (first) {
     await selectSkill(first);
     return;
@@ -371,110 +361,52 @@ onMounted(getData);
             <template #prefix><icon-ic-round-search class="text-icon text-gray-400" /></template>
           </NInput>
 
-          <NTabs v-model:value="activeSkillGroup" type="segment" class="skills-tabs mt-12px min-h-0 flex-1">
-            <NTabPane name="system" :tab="`${$t('page.agentSkills.system')} (${systemSkills.length})`">
-              <div v-if="visibleGroupSkills.length" class="max-h-full overflow-auto pr-4px lt-lg:max-h-360px">
-                <div
-                  v-for="item in visibleGroupSkills"
-                  :key="item.name"
-                  class="group mb-8px w-full border rounded-6px px-12px py-11px text-left transition-colors last:mb-0"
-                  :class="
-                    selectedName === item.name
-                      ? 'border-primary bg-primary bg-opacity-8'
-                      : 'border-gray-200 bg-white hover:border-primary/60 dark:border-gray-700 dark:bg-#101014'
-                  "
-                  role="button"
-                  tabindex="0"
-                  @click="selectSkill(item)"
-                  @keydown.enter="selectSkill(item)"
-                >
-                  <div class="flex items-center justify-between gap-8px">
-                    <span class="min-w-0 truncate text-14px font-medium">{{ item.name }}</span>
-                    <div class="flex shrink-0 items-center gap-6px">
-                      <NSwitch
-                        size="small"
-                        :value="item.enabled"
-                        :loading="settingStatusName === item.name"
-                        :disabled="!canSetSkillStatus || Boolean(settingStatusName)"
-                        @click.stop
-                        @update:value="enabled => setSkillStatus(item, enabled)"
-                      />
-                      <NPopconfirm v-if="canDeleteSkill && !item.readOnly" @positive-click="deleteSkill(item)">
-                        <template #trigger>
-                          <NButton
-                            size="tiny"
-                            quaternary
-                            type="error"
-                            :loading="deletingName === item.name"
-                            @click.stop
-                          >
-                            <template #icon><icon-material-symbols-delete-outline class="text-icon" /></template>
-                          </NButton>
-                        </template>
-                        {{ $t('page.agentSkills.deleteConfirm', { name: item.name }) }}
-                      </NPopconfirm>
-                    </div>
-                  </div>
+          <div
+            v-if="filteredSkills.length"
+            class="mt-12px max-h-full min-h-0 flex-1 overflow-auto pr-4px lt-lg:max-h-360px"
+          >
+            <div
+              v-for="item in filteredSkills"
+              :key="item.name"
+              class="group mb-8px w-full border rounded-6px px-12px py-11px text-left transition-colors last:mb-0"
+              :class="
+                selectedName === item.name
+                  ? 'border-primary bg-primary bg-opacity-8'
+                  : 'border-gray-200 bg-white hover:border-primary/60 dark:border-gray-700 dark:bg-#101014'
+              "
+              role="button"
+              tabindex="0"
+              @click="selectSkill(item)"
+              @keydown.enter="selectSkill(item)"
+            >
+              <div class="flex items-center justify-between gap-8px">
+                <span class="min-w-0 truncate text-14px font-medium">{{ item.name }}</span>
+                <div class="flex shrink-0 items-center gap-6px">
+                  <NSwitch
+                    size="small"
+                    :value="item.enabled"
+                    :loading="settingStatusName === item.name"
+                    :disabled="!canSetSkillStatus || Boolean(settingStatusName)"
+                    @click.stop
+                    @update:value="enabled => setSkillStatus(item, enabled)"
+                  />
+                  <NPopconfirm v-if="canDeleteSkill" @positive-click="deleteSkill(item)">
+                    <template #trigger>
+                      <NButton size="tiny" quaternary type="error" :loading="deletingName === item.name" @click.stop>
+                        <template #icon><icon-material-symbols-delete-outline class="text-icon" /></template>
+                      </NButton>
+                    </template>
+                    {{ $t('page.agentSkills.deleteConfirm', { name: item.name }) }}
+                  </NPopconfirm>
                 </div>
               </div>
-              <NEmpty
-                v-else
-                class="py-44px"
-                :description="skills.length ? $t('page.agentSkills.noMatch') : $t('page.agentSkills.empty')"
-              />
-            </NTabPane>
-            <NTabPane name="custom" :tab="`${$t('page.agentSkills.custom')} (${customSkills.length})`">
-              <div v-if="visibleGroupSkills.length" class="max-h-full overflow-auto pr-4px lt-lg:max-h-360px">
-                <div
-                  v-for="item in visibleGroupSkills"
-                  :key="item.name"
-                  class="group mb-8px w-full border rounded-6px px-12px py-11px text-left transition-colors last:mb-0"
-                  :class="
-                    selectedName === item.name
-                      ? 'border-primary bg-primary bg-opacity-8'
-                      : 'border-gray-200 bg-white hover:border-primary/60 dark:border-gray-700 dark:bg-#101014'
-                  "
-                  role="button"
-                  tabindex="0"
-                  @click="selectSkill(item)"
-                  @keydown.enter="selectSkill(item)"
-                >
-                  <div class="flex items-center justify-between gap-8px">
-                    <span class="min-w-0 truncate text-14px font-medium">{{ item.name }}</span>
-                    <div class="flex shrink-0 items-center gap-6px">
-                      <NSwitch
-                        size="small"
-                        :value="item.enabled"
-                        :loading="settingStatusName === item.name"
-                        :disabled="!canSetSkillStatus || Boolean(settingStatusName)"
-                        @click.stop
-                        @update:value="enabled => setSkillStatus(item, enabled)"
-                      />
-                      <NPopconfirm v-if="canDeleteSkill" @positive-click="deleteSkill(item)">
-                        <template #trigger>
-                          <NButton
-                            size="tiny"
-                            quaternary
-                            type="error"
-                            :loading="deletingName === item.name"
-                            @click.stop
-                          >
-                            <template #icon><icon-material-symbols-delete-outline class="text-icon" /></template>
-                          </NButton>
-                        </template>
-                        {{ $t('page.agentSkills.deleteConfirm', { name: item.name }) }}
-                      </NPopconfirm>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <NEmpty
-                v-else
-                class="py-44px"
-                :description="skills.length ? $t('page.agentSkills.noMatch') : $t('page.agentSkills.empty')"
-              />
-            </NTabPane>
-          </NTabs>
+            </div>
+          </div>
+          <NEmpty
+            v-else
+            class="py-44px"
+            :description="skills.length ? $t('page.agentSkills.noMatch') : $t('page.agentSkills.empty')"
+          />
         </section>
 
         <section
@@ -489,12 +421,6 @@ onMounted(getData);
             >
               <div class="mb-4px flex shrink-0 items-center gap-8px text-15px font-semibold">
                 <span class="truncate">{{ selectedSkill.name }}</span>
-                <NTag v-if="selectedSkillReadOnly" size="small" :bordered="false">
-                  {{ $t('page.agentSkills.builtIn') }}
-                </NTag>
-              </div>
-              <div v-if="selectedSkillReadOnly" class="mb-12px shrink-0 text-12px text-gray-500">
-                {{ $t('page.agentSkills.systemReadOnlyHint') }}
               </div>
               <div class="skill-file-tree-scroll min-h-0 flex-1 overflow-auto rounded-6px py-8px lt-lg:h-280px">
                 <NTree

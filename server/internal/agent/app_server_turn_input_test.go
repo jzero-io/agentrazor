@@ -10,10 +10,9 @@ func TestAppServerTurnInputKeepsSkillSeparateFromPrompt(t *testing.T) {
 	server := &appServer{codexHome: "/codex-home"}
 	prompt := "answer the ticket"
 	requestGuard := &Skill{
-		Name:     requestGuardSkillName,
-		Path:     filepath.Join("/codex-home", "skills", ".system", requestGuardSkillName, "SKILL.md"),
-		Enabled:  true,
-		ReadOnly: true,
+		Name:    requestGuardSkillName,
+		Path:    filepath.Join("/codex-home", "skills", requestGuardSkillName, "SKILL.md"),
+		Enabled: true,
 	}
 
 	got := server.turnInput(prompt, requestGuard)
@@ -25,7 +24,7 @@ func TestAppServerTurnInputKeepsSkillSeparateFromPrompt(t *testing.T) {
 		{
 			"type": "skill",
 			"name": requestGuardSkillName,
-			"path": filepath.Join("/codex-home", "skills", ".system", requestGuardSkillName, "SKILL.md"),
+			"path": filepath.Join("/codex-home", "skills", requestGuardSkillName, "SKILL.md"),
 		},
 	}
 
@@ -37,10 +36,9 @@ func TestAppServerTurnInputKeepsSkillSeparateFromPrompt(t *testing.T) {
 func TestAppServerTurnInputOmitsDisabledRequestGuard(t *testing.T) {
 	server := &appServer{codexHome: "/codex-home"}
 	requestGuard := &Skill{
-		Name:     requestGuardSkillName,
-		Path:     filepath.Join("/codex-home", "skills", ".system", requestGuardSkillName, "SKILL.md"),
-		Enabled:  false,
-		ReadOnly: true,
+		Name:    requestGuardSkillName,
+		Path:    filepath.Join("/codex-home", "skills", requestGuardSkillName, "SKILL.md"),
+		Enabled: false,
 	}
 
 	got := server.turnInput("answer the ticket", requestGuard)

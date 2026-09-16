@@ -344,10 +344,6 @@ const local: App.I18n.Schema = {
     agentSkills: {
       title: 'Skills',
       installed: 'Installed Skills',
-      builtIn: 'System',
-      system: 'System',
-      custom: 'Custom',
-      systemReadOnlyHint: 'System skills are maintained by upgrades and are view-only.',
       enabled: 'Enabled',
       disabled: 'Disabled',
       uploadArchive: 'Upload',

@@ -3,9 +3,6 @@ set -eu
 
 umask 077
 mkdir -p "$CODEX_HOME" "$CODEX_HOME/skills" "$CODEX_HOME/workspace" "$(dirname "$CODEX_SOCKET")"
-system_skills_home="$CODEX_HOME/skills/.system"
-mkdir -p "$system_skills_home"
-
 if [ -d /dist/defaults ]; then
   cp -r --update=none /dist/defaults/. "$CODEX_HOME/"
   rm -rf /dist/defaults
@@ -13,7 +10,7 @@ fi
 rm -f "$CODEX_SOCKET"
 cd "$CODEX_HOME"
 
-codex-app-server --listen "unix://$CODEX_SOCKET" &
+codex-app-server -c skills.bundled.enabled=false --listen "unix://$CODEX_SOCKET" &
 app_server_pid=$!
 
 forward_signal() {
@@ -40,8 +37,11 @@ if [ -d /etc/codex/skills ]; then
   for default_skill in /etc/codex/skills/*; do
     [ -d "$default_skill" ] || continue
     skill_name=$(basename "$default_skill")
-    rm -rf "$system_skills_home/$skill_name"
-    cp -a "$default_skill" "$system_skills_home/$skill_name"
+    rm -rf "$CODEX_HOME/skills/.system/$skill_name"
+    target_skill="$CODEX_HOME/skills/$skill_name"
+    if [ ! -e "$target_skill" ] && [ ! -L "$target_skill" ]; then
+      cp -a "$default_skill" "$target_skill"
+    fi
   done
 fi
 

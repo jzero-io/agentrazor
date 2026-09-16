@@ -393,10 +393,6 @@ func (s *Service) installSkillEntries(ctx context.Context, name string, entries 
 	return s.installSkillEntriesAt(ctx, filepath.Join(s.codexHome, "skills"), name, entries)
 }
 
-func (s *Service) installSystemSkillEntries(ctx context.Context, name string, entries []archiveEntry) (Skill, error) {
-	return s.installSkillEntriesAt(ctx, filepath.Join(s.codexHome, "skills", ".system"), name, entries)
-}
-
 func (s *Service) installSkillEntriesAt(ctx context.Context, root, name string, entries []archiveEntry) (Skill, error) {
 	hasManifest := false
 	for _, entry := range entries {
@@ -479,7 +475,7 @@ func (s *Service) SyncPluginSkills(ctx context.Context, pluginsRoot string) (Plu
 		if err != nil {
 			return result, fmt.Errorf("package plugin skill %q: %w", item.Name, err)
 		}
-		skill, err := s.installSystemSkillEntries(ctx, item.Name, entries)
+		skill, err := s.installSkillEntries(ctx, item.Name, entries)
 		if err != nil {
 			return result, fmt.Errorf("install plugin skill %q: %w", item.Name, err)
 		}
