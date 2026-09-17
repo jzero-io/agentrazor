@@ -13,6 +13,7 @@ import (
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 
 	"github.com/jzero-io/agentrazor/core-engine/config"
+	"github.com/jzero-io/agentrazor/core-engine/helper/auth"
 	"github.com/jzero-io/agentrazor/core-engine/i18n"
 )
 
@@ -22,6 +23,7 @@ type ServiceContext struct {
 	Redis          *redis.Redis
 	Cache          cache.Cache
 	CasbinEnforcer *casbin.Enforcer
+	AuthSessions   *auth.SessionStore
 	Trans          *i18n.Translator
 	Middleware
 }
@@ -52,6 +54,7 @@ func NewServiceContext(c config.Config, route2code func(r *http.Request) string,
 
 	svcCtx.Cache = cache.NewRedisNode(svcCtx.Redis, errors.New("cache not found"), cache.WithExpiry(time.Duration(5)*time.Second))
 	svcCtx.CasbinEnforcer = MustCasbinEnforcer(svcCtx)
+	svcCtx.AuthSessions = auth.NewSessionStore(svcCtx.Redis)
 	svcCtx.Trans = i18n.NewTranslator(c.I18n)
 	svcCtx.Middleware = NewMiddleware(svcCtx, route2code)
 	return svcCtx

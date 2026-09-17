@@ -12,19 +12,21 @@ import (
 type AuthxMiddleware struct {
 	CasbinEnforcer *casbin.Enforcer
 	Route2CodeFunc func(r *http.Request) string
+	SessionChecker SessionChecker
 }
 
-func NewAuthxMiddleware(casbinEnforcer *casbin.Enforcer, route2codeFunc func(r *http.Request) string) *AuthxMiddleware {
+func NewAuthxMiddleware(casbinEnforcer *casbin.Enforcer, route2codeFunc func(r *http.Request) string, sessionChecker SessionChecker) *AuthxMiddleware {
 	return &AuthxMiddleware{
 		CasbinEnforcer: casbinEnforcer,
 		Route2CodeFunc: route2codeFunc,
+		SessionChecker: sessionChecker,
 	}
 }
 
 func (m *AuthxMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+	authorize := func(w http.ResponseWriter, r *http.Request) {
 		authInfo, err := auth.Info(r.Context())
-		if err != nil {
+		if err != nil || authInfo.Uuid == "" {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -42,6 +44,8 @@ func (m *AuthxMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 
 		next(w, r.WithContext(rctx))
 	}
+
+	return NewJwtSessionMiddleware(m.SessionChecker).Handle(authorize)
 }
 
 func batchCheck(cbn *casbin.Enforcer, subs []string, obj string) bool {

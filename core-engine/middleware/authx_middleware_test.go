@@ -1,0 +1,127 @@
+package middleware
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/alicebob/miniredis/v2"
+	"github.com/casbin/casbin/v2"
+	casbinmodel "github.com/casbin/casbin/v2/model"
+	"github.com/golang-jwt/jwt/v4"
+	"github.com/zeromicro/go-zero/core/stores/redis"
+	"github.com/zeromicro/go-zero/rest/handler"
+
+	"github.com/jzero-io/agentrazor/core-engine/helper/auth"
+)
+
+const testCasbinModel = `[request_definition]
+r = sub, obj
+
+[policy_definition]
+p = sub, obj
+
+[policy_effect]
+e = some(where (p.eft == allow))
+
+[matchers]
+m = r.sub == p.sub && r.obj == p.obj`
+
+func TestAuthxChecksJwtSessionBeforeCasbin(t *testing.T) {
+	redisServer := miniredis.RunT(t)
+	sessions := auth.NewSessionStore(redis.New(redisServer.Addr()))
+	enforcer := newTestEnforcer(t)
+	if _, err := enforcer.AddPolicy("role-1", "route-1"); err != nil {
+		t.Fatalf("add policy: %v", err)
+	}
+
+	const (
+		secret   = "test-secret"
+		userUUID = "user-1"
+	)
+	token := signedToken(t, secret, userUUID, []string{"role-1"})
+	if err := sessions.Save(context.Background(), userUUID, token, 30); err != nil {
+		t.Fatalf("save session: %v", err)
+	}
+
+	nextCalled := false
+	authx := NewAuthxMiddleware(enforcer, func(*http.Request) string { return "route-1" }, sessions)
+	protected := handler.Authorize(secret)(authx.Handle(func(w http.ResponseWriter, _ *http.Request) {
+		nextCalled = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", http.NoBody)
+	req.Header.Set("Authorization", "Bearer "+token)
+	res := httptest.NewRecorder()
+	protected.ServeHTTP(res, req)
+	if res.Code != http.StatusNoContent || !nextCalled {
+		t.Fatalf("registered session status=%d next=%v, want 204/true", res.Code, nextCalled)
+	}
+
+	if err := sessions.Delete(context.Background(), userUUID, token); err != nil {
+		t.Fatalf("delete session: %v", err)
+	}
+	nextCalled = false
+	res = httptest.NewRecorder()
+	protected.ServeHTTP(res, req)
+	if res.Code != http.StatusUnauthorized || nextCalled {
+		t.Fatalf("revoked session status=%d next=%v, want 401/false", res.Code, nextCalled)
+	}
+}
+
+func TestAuthxReturnsForbiddenWhenSessionExistsWithoutPolicy(t *testing.T) {
+	redisServer := miniredis.RunT(t)
+	sessions := auth.NewSessionStore(redis.New(redisServer.Addr()))
+	enforcer := newTestEnforcer(t)
+	const (
+		secret   = "test-secret"
+		userUUID = "user-1"
+	)
+	token := signedToken(t, secret, userUUID, []string{"role-1"})
+	if err := sessions.Save(context.Background(), userUUID, token, 30); err != nil {
+		t.Fatalf("save session: %v", err)
+	}
+
+	authx := NewAuthxMiddleware(enforcer, func(*http.Request) string { return "route-1" }, sessions)
+	protected := handler.Authorize(secret)(authx.Handle(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("unauthorized role must not reach next handler")
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/protected", http.NoBody)
+	req.Header.Set("Authorization", "Bearer "+token)
+	res := httptest.NewRecorder()
+
+	protected.ServeHTTP(res, req)
+	if res.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", res.Code, http.StatusForbidden)
+	}
+}
+
+func newTestEnforcer(t *testing.T) *casbin.Enforcer {
+	t.Helper()
+	model, err := casbinmodel.NewModelFromString(testCasbinModel)
+	if err != nil {
+		t.Fatalf("create model: %v", err)
+	}
+	enforcer, err := casbin.NewEnforcer(model)
+	if err != nil {
+		t.Fatalf("create enforcer: %v", err)
+	}
+	return enforcer
+}
+
+func signedToken(t *testing.T, secret, userUUID string, roles []string) string {
+	t.Helper()
+	value, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"uuid":       userUUID,
+		"username":   "alice",
+		"role_uuids": roles,
+		"exp":        time.Now().Add(time.Minute).Unix(),
+	}).SignedString([]byte(secret))
+	if err != nil {
+		t.Fatalf("sign token: %v", err)
+	}
+	return value
+}
