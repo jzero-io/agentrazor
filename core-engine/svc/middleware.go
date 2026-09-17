@@ -19,7 +19,8 @@ type Middleware struct {
 }
 
 func NewMiddleware(svcCtx *ServiceContext, route2code func(r *http.Request) string) Middleware {
-	authx := middleware.NewAuthxMiddleware(svcCtx.CasbinEnforcer, route2code, svcCtx.Config.Jwt.AccessSecret, svcCtx.AuthSessions)
+	authx := middleware.NewAuthxMiddleware(svcCtx.CasbinEnforcer, route2code, svcCtx.Config.Jwt.AccessSecret, svcCtx.Redis)
+	svcCtx.AuthxMiddleware = authx
 	return Middleware{
 		Error:             middleware.NewErrorMiddleware().Handle,
 		Ok:                middleware.NewOkMiddleware().Handle,

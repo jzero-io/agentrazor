@@ -30,7 +30,6 @@ m = r.sub == p.sub && r.obj == p.obj`
 
 func TestAuthxAuthenticatesJWTAndRedisBeforeCasbin(t *testing.T) {
 	redisServer := miniredis.RunT(t)
-	sessions := auth.NewSessionStore(redis.New(redisServer.Addr()))
 	enforcer := newTestEnforcer(t)
 	if _, err := enforcer.AddPolicy("role-1", "route-1"); err != nil {
 		t.Fatalf("add policy: %v", err)
@@ -41,12 +40,12 @@ func TestAuthxAuthenticatesJWTAndRedisBeforeCasbin(t *testing.T) {
 		userUUID = "user-1"
 	)
 	token := signedToken(t, secret, userUUID, []string{"role-1"})
-	if err := sessions.Save(context.Background(), userUUID, token, 30); err != nil {
-		t.Fatalf("save session: %v", err)
+	authx := NewAuthxMiddleware(enforcer, func(*http.Request) string { return "route-1" }, secret, redis.New(redisServer.Addr()))
+	if err := authx.Save(context.Background(), userUUID, token, 30); err != nil {
+		t.Fatalf("save JWT auth entry: %v", err)
 	}
 
 	nextCalled := false
-	authx := NewAuthxMiddleware(enforcer, func(*http.Request) string { return "route-1" }, secret, sessions)
 	protected := authx.Handle(func(w http.ResponseWriter, r *http.Request) {
 		nextCalled = true
 		info, err := auth.Info(r.Context())
@@ -61,34 +60,33 @@ func TestAuthxAuthenticatesJWTAndRedisBeforeCasbin(t *testing.T) {
 	res := httptest.NewRecorder()
 	protected.ServeHTTP(res, req)
 	if res.Code != http.StatusNoContent || !nextCalled {
-		t.Fatalf("registered session status=%d next=%v, want 204/true", res.Code, nextCalled)
+		t.Fatalf("registered JWT status=%d next=%v, want 204/true", res.Code, nextCalled)
 	}
 
-	if err := sessions.Delete(context.Background(), userUUID, token); err != nil {
-		t.Fatalf("delete session: %v", err)
+	if err := authx.Delete(context.Background(), userUUID, token); err != nil {
+		t.Fatalf("delete JWT auth entry: %v", err)
 	}
 	nextCalled = false
 	res = httptest.NewRecorder()
 	protected.ServeHTTP(res, req)
 	if res.Code != http.StatusUnauthorized || nextCalled {
-		t.Fatalf("revoked session status=%d next=%v, want 401/false", res.Code, nextCalled)
+		t.Fatalf("revoked JWT status=%d next=%v, want 401/false", res.Code, nextCalled)
 	}
 }
 
-func TestAuthxReturnsForbiddenWhenSessionExistsWithoutPolicy(t *testing.T) {
+func TestAuthxReturnsForbiddenWhenJWTExistsWithoutPolicy(t *testing.T) {
 	redisServer := miniredis.RunT(t)
-	sessions := auth.NewSessionStore(redis.New(redisServer.Addr()))
 	enforcer := newTestEnforcer(t)
 	const (
 		secret   = "test-secret"
 		userUUID = "user-1"
 	)
 	token := signedToken(t, secret, userUUID, []string{"role-1"})
-	if err := sessions.Save(context.Background(), userUUID, token, 30); err != nil {
-		t.Fatalf("save session: %v", err)
+	authx := NewAuthxMiddleware(enforcer, func(*http.Request) string { return "route-1" }, secret, redis.New(redisServer.Addr()))
+	if err := authx.Save(context.Background(), userUUID, token, 30); err != nil {
+		t.Fatalf("save JWT auth entry: %v", err)
 	}
 
-	authx := NewAuthxMiddleware(enforcer, func(*http.Request) string { return "route-1" }, secret, sessions)
 	protected := authx.Handle(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("unauthorized role must not reach next handler")
 	})
@@ -104,20 +102,19 @@ func TestAuthxReturnsForbiddenWhenSessionExistsWithoutPolicy(t *testing.T) {
 
 func TestAuthxAuthenticateUsesGoZeroClaimsWithoutCasbin(t *testing.T) {
 	redisServer := miniredis.RunT(t)
-	sessions := auth.NewSessionStore(redis.New(redisServer.Addr()))
 	const (
 		secret   = "test-secret"
 		userUUID = "user-1"
 	)
 	token := signedToken(t, secret, userUUID, []string{"role-1"})
-	if err := sessions.Save(context.Background(), userUUID, token, 30); err != nil {
-		t.Fatalf("save session: %v", err)
-	}
-
 	authx := NewAuthxMiddleware(newTestEnforcer(t), func(*http.Request) string {
 		t.Fatal("authentication-only flow must not resolve a Casbin route")
 		return ""
-	}, secret, sessions)
+	}, secret, redis.New(redisServer.Addr()))
+	if err := authx.Save(context.Background(), userUUID, token, 30); err != nil {
+		t.Fatalf("save JWT auth entry: %v", err)
+	}
+
 	authenticated := authx.Authenticate(func(w http.ResponseWriter, r *http.Request) {
 		info, err := auth.Info(r.Context())
 		if err != nil || info.Uuid != userUUID || info.Username != "alice" {
@@ -138,17 +135,16 @@ func TestAuthxAuthenticateUsesGoZeroClaimsWithoutCasbin(t *testing.T) {
 
 func TestAuthxAuthenticateRejectsRefreshTokenEvenWhenRegistered(t *testing.T) {
 	redisServer := miniredis.RunT(t)
-	sessions := auth.NewSessionStore(redis.New(redisServer.Addr()))
 	const (
 		secret   = "test-secret"
 		userUUID = "user-1"
 	)
 	token := signedTokenWithType(t, secret, userUUID, []string{"role-1"}, "refresh")
-	if err := sessions.Save(context.Background(), userUUID, token, 30); err != nil {
-		t.Fatalf("save session: %v", err)
+	authx := NewAuthxMiddleware(newTestEnforcer(t), func(*http.Request) string { return "route-1" }, secret, redis.New(redisServer.Addr()))
+	if err := authx.Save(context.Background(), userUUID, token, 30); err != nil {
+		t.Fatalf("save JWT auth entry: %v", err)
 	}
 
-	authx := NewAuthxMiddleware(newTestEnforcer(t), func(*http.Request) string { return "route-1" }, secret, sessions)
 	authenticated := authx.Authenticate(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("refresh token must not reach next handler")
 	})
@@ -162,13 +158,12 @@ func TestAuthxAuthenticateRejectsRefreshTokenEvenWhenRegistered(t *testing.T) {
 	}
 }
 
-func TestAuthxRejectsInvalidJWTBeforeSessionAndCasbin(t *testing.T) {
+func TestAuthxRejectsInvalidJWTBeforeRedisAndCasbin(t *testing.T) {
 	redisServer := miniredis.RunT(t)
-	sessions := auth.NewSessionStore(redis.New(redisServer.Addr()))
 	authx := NewAuthxMiddleware(newTestEnforcer(t), func(*http.Request) string {
 		t.Fatal("invalid JWT must not reach route authorization")
 		return ""
-	}, "test-secret", sessions)
+	}, "test-secret", redis.New(redisServer.Addr()))
 	protected := authx.Handle(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("invalid JWT must not reach next handler")
 	})
@@ -204,6 +199,83 @@ func TestBearerToken(t *testing.T) {
 				t.Fatalf("bearerToken(%q) = (%q, %v), want (%q, %v)", test.value, got, ok, test.want, test.ok)
 			}
 		})
+	}
+}
+
+func TestAuthxJWTAuthLifecycle(t *testing.T) {
+	redisServer := miniredis.RunT(t)
+	authx := NewAuthxMiddleware(nil, nil, "test-secret", redis.New(redisServer.Addr()))
+	ctx := context.Background()
+
+	const (
+		userUUID = "user-1"
+		token    = "header.payload.signature"
+		ttl      = 30
+	)
+	if err := authx.Save(ctx, userUUID, token, ttl); err != nil {
+		t.Fatalf("save JWT auth entry: %v", err)
+	}
+
+	key := jwtAuthKey(userUUID, token)
+	stored, err := redisServer.Get(key)
+	if err != nil {
+		t.Fatalf("read JWT auth entry: %v", err)
+	}
+	if stored != token {
+		t.Fatalf("stored token = %q, want %q", stored, token)
+	}
+	if got := redisServer.TTL(key); got != ttl*time.Second {
+		t.Fatalf("ttl = %s, want %s", got, ttl*time.Second)
+	}
+
+	exists, err := authx.exists(ctx, userUUID, token)
+	if err != nil || !exists {
+		t.Fatalf("saved token exists = %v, err = %v, want true/nil", exists, err)
+	}
+	if err := redisServer.Set(key, "tampered"); err != nil {
+		t.Fatalf("tamper JWT auth value: %v", err)
+	}
+	exists, err = authx.exists(ctx, userUUID, token)
+	if err != nil || exists {
+		t.Fatalf("tampered token exists = %v, err = %v, want false/nil", exists, err)
+	}
+
+	if err := authx.Save(ctx, userUUID, token, ttl); err != nil {
+		t.Fatalf("restore JWT auth entry: %v", err)
+	}
+	if err := authx.Delete(ctx, userUUID, token); err != nil {
+		t.Fatalf("delete JWT auth entry: %v", err)
+	}
+	exists, err = authx.exists(ctx, userUUID, token)
+	if err != nil || exists {
+		t.Fatalf("deleted token exists = %v, err = %v, want false/nil", exists, err)
+	}
+}
+
+func TestAuthxJWTAuthRejectsInvalidInputAndUnavailableRedis(t *testing.T) {
+	ctx := context.Background()
+	authx := NewAuthxMiddleware(nil, nil, "test-secret", nil)
+
+	if err := authx.Save(ctx, "user-1", "token", 30); err == nil {
+		t.Fatal("save should fail without Redis")
+	}
+	if _, err := authx.exists(ctx, "user-1", "token"); err == nil {
+		t.Fatal("exists should fail without Redis")
+	}
+	if err := authx.Delete(ctx, "user-1", "token"); err == nil {
+		t.Fatal("delete should fail without Redis")
+	}
+
+	redisServer := miniredis.RunT(t)
+	authx = NewAuthxMiddleware(nil, nil, "test-secret", redis.New(redisServer.Addr()))
+	if err := authx.Save(ctx, "", "token", 30); err == nil {
+		t.Fatal("save should reject an empty user UUID")
+	}
+	if err := authx.Save(ctx, "user-1", "", 30); err == nil {
+		t.Fatal("save should reject an empty token")
+	}
+	if err := authx.Save(ctx, "user-1", "token", 0); err == nil {
+		t.Fatal("save should reject a non-positive TTL")
 	}
 }
 
