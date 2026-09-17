@@ -11,7 +11,7 @@ import (
 
 type Middleware struct {
 	Authx             rest.Middleware
-	AuthxAuthenticate func(r *http.Request) (*http.Request, error)
+	AuthxAuthenticate rest.Middleware
 	Ok                func(ctx context.Context, data any) any
 	Error             func(ctx context.Context, err error) (int, any)
 	I18n              rest.Middleware

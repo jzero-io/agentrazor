@@ -102,6 +102,66 @@ func TestAuthxReturnsForbiddenWhenSessionExistsWithoutPolicy(t *testing.T) {
 	}
 }
 
+func TestAuthxAuthenticateUsesGoZeroClaimsWithoutCasbin(t *testing.T) {
+	redisServer := miniredis.RunT(t)
+	sessions := auth.NewSessionStore(redis.New(redisServer.Addr()))
+	const (
+		secret   = "test-secret"
+		userUUID = "user-1"
+	)
+	token := signedToken(t, secret, userUUID, []string{"role-1"})
+	if err := sessions.Save(context.Background(), userUUID, token, 30); err != nil {
+		t.Fatalf("save session: %v", err)
+	}
+
+	authx := NewAuthxMiddleware(newTestEnforcer(t), func(*http.Request) string {
+		t.Fatal("authentication-only flow must not resolve a Casbin route")
+		return ""
+	}, secret, sessions)
+	authenticated := authx.Authenticate(func(w http.ResponseWriter, r *http.Request) {
+		info, err := auth.Info(r.Context())
+		if err != nil || info.Uuid != userUUID || info.Username != "alice" {
+			t.Fatalf("go-zero claims were not injected into context: %#v, %v", info, err)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/agent", http.NoBody)
+	req.Header.Set("Authorization", "Bearer "+token)
+	res := httptest.NewRecorder()
+	authenticated(res, req)
+
+	if res.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", res.Code, http.StatusNoContent)
+	}
+}
+
+func TestAuthxAuthenticateRejectsRefreshTokenEvenWhenRegistered(t *testing.T) {
+	redisServer := miniredis.RunT(t)
+	sessions := auth.NewSessionStore(redis.New(redisServer.Addr()))
+	const (
+		secret   = "test-secret"
+		userUUID = "user-1"
+	)
+	token := signedTokenWithType(t, secret, userUUID, []string{"role-1"}, "refresh")
+	if err := sessions.Save(context.Background(), userUUID, token, 30); err != nil {
+		t.Fatalf("save session: %v", err)
+	}
+
+	authx := NewAuthxMiddleware(newTestEnforcer(t), func(*http.Request) string { return "route-1" }, secret, sessions)
+	authenticated := authx.Authenticate(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("refresh token must not reach next handler")
+	})
+	req := httptest.NewRequest(http.MethodGet, "/agent", http.NoBody)
+	req.Header.Set("Authorization", "Bearer "+token)
+	res := httptest.NewRecorder()
+	authenticated(res, req)
+
+	if res.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", res.Code, http.StatusUnauthorized)
+	}
+}
+
 func TestAuthxRejectsInvalidJWTBeforeSessionAndCasbin(t *testing.T) {
 	redisServer := miniredis.RunT(t)
 	sessions := auth.NewSessionStore(redis.New(redisServer.Addr()))
@@ -161,11 +221,16 @@ func newTestEnforcer(t *testing.T) *casbin.Enforcer {
 }
 
 func signedToken(t *testing.T, secret, userUUID string, roles []string) string {
+	return signedTokenWithType(t, secret, userUUID, roles, accessTokenType)
+}
+
+func signedTokenWithType(t *testing.T, secret, userUUID string, roles []string, tokenType string) string {
 	t.Helper()
 	value, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"uuid":       userUUID,
 		"username":   "alice",
 		"role_uuids": roles,
+		"token_type": tokenType,
 		"exp":        time.Now().Add(time.Minute).Unix(),
 	}).SignedString([]byte(secret))
 	if err != nil {
