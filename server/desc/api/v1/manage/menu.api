@@ -136,7 +136,6 @@ type EditResponse {}
 	prefix:          /api/v1
 	group:           v1/manage/menu
 	compact_handler: true
-	jwt:             Jwt
 	middleware:      Authx
 )
 service server {

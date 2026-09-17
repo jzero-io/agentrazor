@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"time"
 
 	"github.com/jzero-io/agentrazor/core-engine/helper/auth"
 	"github.com/jzero-io/jzero/core/stores/condition"
@@ -34,11 +33,6 @@ func NewCodeLogin(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Reque
 }
 
 func (l *CodeLogin) CodeLogin(req *types.CodeLoginRequest) (resp *types.LoginResponse, err error) {
-	config, err := l.svcCtx.ConfigCenter.GetConfig()
-	if err != nil {
-		return nil, err
-	}
-
 	matched, err := verifyEmailCode(l.svcCtx, req.VerificationUuid, req.Email, req.VerificationCode)
 	if err != nil {
 		l.Errorf("get verification code: %v", err)
@@ -81,17 +75,7 @@ func (l *CodeLogin) CodeLogin(req *types.CodeLoginRequest) (resp *types.LoginRes
 		return nil, err
 	}
 
-	// token 过期时间
-	expirationTime := time.Now().Add(time.Duration(config.Jwt.AccessExpire) * time.Second).Unix()
-	claims["exp"] = expirationTime
-
-	token, err := CreateToken(l.svcCtx.MustGetConfig().Jwt.AccessSecret, claims)
-	if err != nil {
-		return nil, err
-	}
-
-	claims["exp"] = time.Now().Add(time.Duration(config.Jwt.RefreshExpire) * time.Second).Unix()
-	refreshToken, err := CreateToken(l.svcCtx.MustGetConfig().Jwt.AccessSecret, claims)
+	token, refreshToken, err := issueLoginTokenPair(l.ctx, l.svcCtx, user.Uuid, claims)
 	if err != nil {
 		return nil, err
 	}

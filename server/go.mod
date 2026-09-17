@@ -3,6 +3,7 @@ module github.com/jzero-io/agentrazor/server
 go 1.25.0
 
 require (
+	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/casbin/casbin/v2 v2.135.0
 	github.com/common-nighthawk/go-figure v0.0.0-20210622060536-734e95fb86be
 	github.com/eddieowens/opts v0.1.0
@@ -12,7 +13,7 @@ require (
 	github.com/guregu/null/v5 v5.0.0
 	github.com/huandu/go-sqlbuilder v1.42.1
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/jzero-io/agentrazor/core-engine v0.0.0-20260804050014-fd42e845cf2e
+	github.com/jzero-io/agentrazor/core-engine v0.0.0-20260917170940-3049c9293a43
 	github.com/jzero-io/jzero v1.4.1
 	github.com/pelletier/go-toml/v2 v2.3.0
 	github.com/pkg/errors v0.9.1
@@ -33,7 +34,6 @@ require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.1.6 // indirect
 	github.com/a8m/envsubst v1.4.3 // indirect
-	github.com/alicebob/miniredis/v2 v2.38.0 // indirect
 	github.com/antlr/antlr4/runtime/Go/antlr v0.0.0-20210521184019-c5ad59b459ec // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.8.1 // indirect

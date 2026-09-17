@@ -62,7 +62,7 @@ type IsRouteExistRequest {
 	prefix:          /api/v1
 	group:           v1/route
 	compact_handler: true
-	jwt:             Jwt
+	middleware:      AuthxAuthenticate
 )
 service server {
 	@handler GetUserRoutes

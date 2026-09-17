@@ -94,7 +94,6 @@ type GetHomeRequest {
 	prefix:          /api/v1
 	group:           v1/manage/role
 	compact_handler: true
-	jwt:             Jwt
 	middleware:      Authx
 )
 service server {

@@ -11,8 +11,6 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/zeromicro/go-zero/rest/handler"
-	"github.com/zeromicro/go-zero/rest/httpx"
 
 	"github.com/jzero-io/agentrazor/core-engine/helper/auth"
 	"github.com/jzero-io/agentrazor/server/internal/model"
@@ -66,7 +64,7 @@ func agentIdentityUUID(ctx context.Context) (string, bool) {
 }
 
 func (m *AgentMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
-	jwtNext := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	jwtHandler := m.svcCtx.AuthxAuthenticate(func(w http.ResponseWriter, r *http.Request) {
 		userUUID, ok := agentIdentityUUID(r.Context())
 		if !ok {
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
@@ -79,12 +77,6 @@ func (m *AgentMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 		}
 		next(w, r)
 	})
-	jwtHandler := handler.Authorize(
-		m.svcCtx.MustGetConfig().Jwt.AccessSecret,
-		handler.WithUnauthorizedCallback(func(w http.ResponseWriter, r *http.Request, err error) {
-			httpx.ErrorCtx(r.Context(), w, err)
-		}),
-	)(jwtNext)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if key, ok := APIKeyFromRequest(r); ok {
@@ -96,6 +88,7 @@ func (m *AgentMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 			next(w, r.WithContext(ctx))
 			return
 		}
-		jwtHandler.ServeHTTP(w, r)
+
+		jwtHandler(w, r)
 	}
 }

@@ -42,27 +42,29 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 	}
 	{
 		server.AddRoutes(
-			[]rest.Route{
-				{
+			rest.WithMiddlewares(
+				[]rest.Middleware{serverCtx.AuthxAuthenticate},
+				[]rest.Route{
+					{
 
-					Method:  http.MethodGet,
-					Path:    "/agent/api-keys",
-					Handler: v1agentapikey.List(serverCtx),
-				},
-				{
+						Method:  http.MethodGet,
+						Path:    "/agent/api-keys",
+						Handler: v1agentapikey.List(serverCtx),
+					},
+					{
 
-					Method:  http.MethodPost,
-					Path:    "/agent/api-keys",
-					Handler: v1agentapikey.Create(serverCtx),
-				},
-				{
+						Method:  http.MethodPost,
+						Path:    "/agent/api-keys",
+						Handler: v1agentapikey.Create(serverCtx),
+					},
+					{
 
-					Method:  http.MethodDelete,
-					Path:    "/agent/api-keys/:id",
-					Handler: v1agentapikey.Delete(serverCtx),
-				},
-			},
-			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
+						Method:  http.MethodDelete,
+						Path:    "/agent/api-keys/:id",
+						Handler: v1agentapikey.Delete(serverCtx),
+					},
+				}...,
+			),
 			rest.WithPrefix("/api/v1"),
 		)
 	}
@@ -278,14 +280,16 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 		)
 
 		server.AddRoutes(
-			[]rest.Route{
-				{
-					Method:  http.MethodGet,
-					Path:    "/auth/getUserInfo",
-					Handler: v1auth.GetUserInfo(serverCtx),
-				},
-			},
-			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
+			rest.WithMiddlewares(
+				[]rest.Middleware{serverCtx.AuthxAuthenticate},
+				[]rest.Route{
+					{
+						Method:  http.MethodGet,
+						Path:    "/auth/getUserInfo",
+						Handler: v1auth.GetUserInfo(serverCtx),
+					},
+				}...,
+			),
 			rest.WithPrefix("/api/v1"),
 		)
 	}
@@ -386,7 +390,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					},
 				}...,
 			),
-			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
 			rest.WithPrefix("/api/v1"),
 		)
 
@@ -401,7 +404,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					},
 				}...,
 			),
-			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
 			rest.WithPrefix("/api/v1"),
 		)
 	}
@@ -427,7 +429,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					},
 				}...,
 			),
-			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
 			rest.WithPrefix("/api/v1"),
 		)
 	}
@@ -468,7 +469,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					},
 				}...,
 			),
-			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
 			rest.WithPrefix("/api/v1"),
 		)
 	}
@@ -524,7 +524,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					},
 				}...,
 			),
-			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
 			rest.WithPrefix("/api/v1"),
 		)
 	}
@@ -555,25 +554,26 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					},
 				}...,
 			),
-			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
 			rest.WithPrefix("/api/v1"),
 		)
 	}
 	{
 		server.AddRoutes(
-			[]rest.Route{
-				{
-					Method:  http.MethodGet,
-					Path:    "/route/getUserRoutes",
-					Handler: v1route.GetUserRoutes(serverCtx),
-				},
-				{
-					Method:  http.MethodGet,
-					Path:    "/route/isRouteExist",
-					Handler: v1route.IsRouteExist(serverCtx),
-				},
-			},
-			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
+			rest.WithMiddlewares(
+				[]rest.Middleware{serverCtx.AuthxAuthenticate},
+				[]rest.Route{
+					{
+						Method:  http.MethodGet,
+						Path:    "/route/getUserRoutes",
+						Handler: v1route.GetUserRoutes(serverCtx),
+					},
+					{
+						Method:  http.MethodGet,
+						Path:    "/route/isRouteExist",
+						Handler: v1route.IsRouteExist(serverCtx),
+					},
+				}...,
+			),
 			rest.WithPrefix("/api/v1"),
 		)
 

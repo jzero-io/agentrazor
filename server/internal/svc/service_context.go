@@ -10,6 +10,7 @@ import (
 	"github.com/jzero-io/agentrazor/server/internal/agent"
 	"github.com/jzero-io/agentrazor/server/internal/config"
 	"github.com/jzero-io/agentrazor/server/internal/model"
+	"github.com/jzero-io/agentrazor/server/internal/service/loginlock"
 	"github.com/jzero-io/agentrazor/server/internal/service/quota"
 )
 
@@ -19,6 +20,7 @@ type ServiceContext struct {
 	Model        model.Model
 	AgentService *agent.Service
 	TokenQuota   *quota.Service
+	LoginLock    *loginlock.Guard
 	Middleware
 }
 
@@ -31,6 +33,7 @@ func NewServiceContext(cc configcenter.ConfigCenter[config.Config], route2code f
 	svcCtx.ServiceContext = svc.NewServiceContext(svcCtx.ConfigCenter.MustGetConfig().Config, route2code)
 	svcCtx.Model = model.NewModel(svcCtx.SqlxConn, modelx.WithCachedConn(modelx.NewConnWithCache(svcCtx.SqlxConn, svcCtx.Cache)))
 	svcCtx.TokenQuota = quota.NewService(svcCtx.Model.AgentTokenQuota, svcCtx.Model.ConversationTokenUsageEvent)
+	svcCtx.LoginLock = loginlock.NewGuard(svcCtx.Redis)
 	agentService, err := agent.NewService()
 	if err != nil {
 		panic(err)

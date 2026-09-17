@@ -70,7 +70,6 @@ type DeleteResponse {}
 	prefix:          /api/v1
 	group:           v1/manage/user
 	compact_handler: true
-	jwt:             Jwt
 	middleware:      Authx
 )
 service server {

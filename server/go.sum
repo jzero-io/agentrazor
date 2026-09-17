@@ -209,8 +209,8 @@ github.com/jhump/protoreflect v1.18.0 h1:TOz0MSR/0JOZ5kECB/0ufGnC2jdsgZ123Rd/k4Z
 github.com/jhump/protoreflect v1.18.0/go.mod h1:ezWcltJIVF4zYdIFM+D/sHV4Oh5LNU08ORzCGfwvTz8=
 github.com/jhump/protoreflect/v2 v2.0.0-beta.1 h1:Dw1rslK/VotaUGYsv53XVWITr+5RCPXfvvlGrM/+B6w=
 github.com/jhump/protoreflect/v2 v2.0.0-beta.1/go.mod h1:D9LBEowZyv8/iSu97FU2zmXG3JxVTmNw21mu63niFzU=
-github.com/jzero-io/agentrazor/core-engine v0.0.0-20260804050014-fd42e845cf2e h1:QoygqL/rU5iquSnTIuTPHVEwtwfPVdqd2YhcI1baB0g=
-github.com/jzero-io/agentrazor/core-engine v0.0.0-20260804050014-fd42e845cf2e/go.mod h1:AuoMBED7T+RjiQZazc1SrEZ8dmDMPFmm6q18ShaqRqQ=
+github.com/jzero-io/agentrazor/core-engine v0.0.0-20260917170940-3049c9293a43 h1:+lkn/D2Xypm9kID5aGJcqfoQGdu+rrLfGR5TgDmoa7c=
+github.com/jzero-io/agentrazor/core-engine v0.0.0-20260917170940-3049c9293a43/go.mod h1:Y3DyR9Jdy+lmwznTYIgqS7/tXp5DLp6dDji1byUOMao=
 github.com/jzero-io/desc v1.2.0 h1:choR7IQZvjm8jw2ZlUoQdPCqTvvMQiFRCoaEJAMzdLs=
 github.com/jzero-io/desc v1.2.0/go.mod h1:gav1fZ49+rsEjT/5MUNp6ueyNFuX0lDKGyzIM6NrB+E=
 github.com/jzero-io/go_fmt v0.0.0-20250905015347-1a45352494b7 h1:XamNaWUxHlOd7ytrgR1gwR2O0vo02gMKaTroXLXrh0w=

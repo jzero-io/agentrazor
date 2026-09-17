@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"net/http"
-	"time"
 
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/jzero-io/jzero/core/status"
@@ -18,6 +17,7 @@ import (
 
 var (
 	RefreshTokenExpiredErr = errors.New("refresh token expired")
+	InvalidRefreshTokenErr = errors.New("invalid refresh token")
 )
 
 type RefreshToken struct {
@@ -47,16 +47,19 @@ func (l *RefreshToken) RefreshToken(req *types.RefreshTokenRequest) (resp *types
 		if errors.Is(err, jwt.ErrTokenExpired) {
 			return nil, status.Wrap(errcodes.RefreshTokenExpiredCode, RefreshTokenExpiredErr)
 		}
-		return nil, err
+		return nil, status.Wrap(errcodes.RefreshTokenExpiredCode, InvalidRefreshTokenErr)
 	}
 
 	claims, ok := tok.Claims.(jwt.MapClaims)
 	if !ok {
-		return nil, jwt.ErrTokenInvalidClaims
+		return nil, status.Wrap(errcodes.RefreshTokenExpiredCode, InvalidRefreshTokenErr)
+	}
+	if tokenType, ok := claims[claimTokenType].(string); !ok || tokenType != tokenTypeRefresh {
+		return nil, status.Wrap(errcodes.RefreshTokenExpiredCode, InvalidRefreshTokenErr)
 	}
 	userUUID, ok := claims["uuid"].(string)
 	if !ok || userUUID == "" {
-		return nil, jwt.ErrTokenInvalidClaims
+		return nil, status.Wrap(errcodes.RefreshTokenExpiredCode, InvalidRefreshTokenErr)
 	}
 	user, err := l.svcCtx.Model.ManageUser.FindOneByUuid(l.ctx, nil, userUUID)
 	if err != nil {
@@ -65,21 +68,14 @@ func (l *RefreshToken) RefreshToken(req *types.RefreshTokenRequest) (resp *types
 	if err := ensureUserEnabled(user.Status); err != nil {
 		return nil, err
 	}
+	claims["username"] = user.Username
 	roleUuids, err := enabledRoleUuidsByUser(l.ctx, l.svcCtx, user.Uuid)
 	if err != nil {
 		return nil, err
 	}
 	claims["role_uuids"] = roleUuids
 
-	// 设置新的过期时间
-	claims["exp"] = time.Now().Add(time.Duration(l.svcCtx.MustGetConfig().Jwt.AccessExpire) * time.Second).Unix()
-	newAccessToken, err := CreateToken(l.svcCtx.MustGetConfig().Jwt.AccessSecret, claims)
-	if err != nil {
-		return nil, err
-	}
-
-	claims["exp"] = time.Now().Add(time.Duration(l.svcCtx.MustGetConfig().Jwt.RefreshExpire) * time.Second).Unix()
-	newRefreshToken, err := CreateToken(l.svcCtx.MustGetConfig().Jwt.AccessSecret, claims)
+	newAccessToken, newRefreshToken, err := issueTokenPair(l.ctx, l.svcCtx, user.Uuid, claims)
 	if err != nil {
 		return nil, err
 	}

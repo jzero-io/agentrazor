@@ -212,7 +212,6 @@ type HomeOverviewResponse {
 	prefix:          /api/v1
 	group:           v1/manage/agent
 	compact_handler: true
-	jwt:             Jwt
 	middleware:      Authx
 )
 service server {
@@ -275,7 +274,6 @@ service server {
 	prefix:          /api/v1
 	group:           v1/manage/agent
 	compact_handler: true
-	jwt:             Jwt
 	middleware:      Authx
 )
 service server {

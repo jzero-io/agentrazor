@@ -4,24 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"time"
+	"strings"
 
-	"github.com/golang-jwt/jwt/v4"
 	"github.com/jzero-io/agentrazor/core-engine/helper/auth"
 	"github.com/jzero-io/jzero/core/stores/condition"
 	"github.com/pkg/errors"
 	"github.com/zeromicro/go-zero/core/logx"
 
 	"github.com/jzero-io/agentrazor/server/internal/model/manage_role"
+	manage_usermodel "github.com/jzero-io/agentrazor/server/internal/model/manage_user"
 	"github.com/jzero-io/agentrazor/server/internal/model/manage_user_role"
+	"github.com/jzero-io/agentrazor/server/internal/service/loginlock"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/auth"
 )
-
-func CreateToken(secret string, claims jwt.MapClaims) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(secret))
-}
 
 const (
 	enabledRoleStatus = "1"
@@ -29,8 +25,9 @@ const (
 )
 
 var (
-	errRoleDisabled = errors.New("用户角色已被禁用")
-	errUserDisabled = errors.New("用户已被禁用")
+	errInvalidCredentials = errors.New("用户名或密码错误")
+	errRoleDisabled       = errors.New("用户角色已被禁用")
+	errUserDisabled       = errors.New("用户已被禁用")
 )
 
 func ensureUserEnabled(status string) error {
@@ -94,17 +91,31 @@ func NewPwdLogin(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Reques
 }
 
 func (l *PwdLogin) PwdLogin(req *types.PwdLoginRequest) (resp *types.LoginResponse, err error) {
-	config, err := l.svcCtx.ConfigCenter.GetConfig()
+	username := strings.TrimSpace(req.Username)
+	user, err := l.svcCtx.Model.ManageUser.FindOneByUsername(l.ctx, nil, username)
 	if err != nil {
+		if errors.Is(err, manage_usermodel.ErrNotFound) {
+			return nil, errInvalidCredentials
+		}
 		return nil, err
 	}
 
-	user, err := l.svcCtx.Model.ManageUser.FindOneByUsername(l.ctx, nil, req.Username)
+	locked, err := l.svcCtx.LoginLock.IsLocked(l.ctx, user.Uuid)
 	if err != nil {
-		return nil, errors.New("用户名或密码错误")
+		return nil, err
+	}
+	if locked {
+		return nil, loginlock.ErrLocked
 	}
 	if req.Password != user.Password {
-		return nil, errors.New("用户名或密码错误")
+		locked, err = l.svcCtx.LoginLock.RecordFailure(l.ctx, user.Uuid)
+		if err != nil {
+			return nil, err
+		}
+		if locked {
+			return nil, loginlock.ErrLocked
+		}
+		return nil, errInvalidCredentials
 	}
 	if err := ensureUserEnabled(user.Status); err != nil {
 		return nil, err
@@ -129,17 +140,7 @@ func (l *PwdLogin) PwdLogin(req *types.PwdLoginRequest) (resp *types.LoginRespon
 		return nil, err
 	}
 
-	// token 过期时间
-	expirationTime := time.Now().Add(time.Duration(config.Jwt.AccessExpire) * time.Second).Unix()
-	claims["exp"] = expirationTime
-
-	token, err := CreateToken(l.svcCtx.MustGetConfig().Jwt.AccessSecret, claims)
-	if err != nil {
-		return nil, err
-	}
-
-	claims["exp"] = time.Now().Add(time.Duration(config.Jwt.RefreshExpire) * time.Second).Unix()
-	refreshToken, err := CreateToken(l.svcCtx.MustGetConfig().Jwt.AccessSecret, claims)
+	token, refreshToken, err := issueLoginTokenPair(l.ctx, l.svcCtx, user.Uuid, claims)
 	if err != nil {
 		return nil, err
 	}
