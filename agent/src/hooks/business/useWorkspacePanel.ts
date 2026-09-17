@@ -181,7 +181,7 @@ export function safeWorkspaceFileURL(conversationId: string, relativePath: strin
     .filter(part => part && part !== '.')
     .join('/');
   if (!clean || clean.split('/').some(part => part === '..')) return '';
-  return '/api/v1/conversation/' + encodeURIComponent(conversationId) + '/workspace/file?path=' + encodeURIComponent(clean);
+  return '/api/v1/agent/conversation/' + encodeURIComponent(conversationId) + '/workspace/file?path=' + encodeURIComponent(clean);
 }
 
 export function normalizeWorkspaceFileReference(href: string, conversationId: string, workspaceDir: string, origin = window.location.origin) {
@@ -189,7 +189,7 @@ export function normalizeWorkspaceFileReference(href: string, conversationId: st
   const trimmed = href.trim();
   if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) return '';
 
-  const apiPath = '/api/v1/conversation/' + encodeURIComponent(conversationId) + '/workspace/file';
+  const apiPath = '/api/v1/agent/conversation/' + encodeURIComponent(conversationId) + '/workspace/file';
   const fromPathname = (pathname: string, search = '') => {
     let decodedPath = pathname;
     try {

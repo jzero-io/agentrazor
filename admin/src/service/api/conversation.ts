@@ -9,27 +9,6 @@ export interface ConversationStats {
   tokenUsageAvailable: boolean;
 }
 
-export type ConversationTrendDimension = 'day' | 'month';
-
-export interface ConversationTrendPoint {
-  period: string;
-  totalConversations: number;
-  archivedConversations: number;
-}
-
-export interface ConversationTrend {
-  dimension: ConversationTrendDimension;
-  points: ConversationTrendPoint[];
-}
-
-export function GetConversationTrend(dimension: ConversationTrendDimension) {
-  return request<ConversationTrend>({
-    url: '/api/v1/conversation/trend',
-    method: 'get',
-    params: { dimension }
-  });
-}
-
 export type TokenUsageDimension = 'day' | 'month';
 
 export interface TokenUsageTrendPoint {
@@ -44,7 +23,7 @@ export interface TokenUsageTrend {
 
 export function GetTokenUsageTrend(dimension: TokenUsageDimension) {
   return request<TokenUsageTrend>({
-    url: '/api/v1/conversation/token-usage-trend',
+    url: '/api/v1/agent/token/usage-trend',
     method: 'get',
     params: { dimension }
   });
@@ -52,7 +31,7 @@ export function GetTokenUsageTrend(dimension: TokenUsageDimension) {
 
 export function GetConversationStats() {
   return request<ConversationStats>({
-    url: '/api/v1/conversation/stats',
+    url: '/api/v1/agent/conversation/stats',
     method: 'get'
   });
 }

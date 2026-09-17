@@ -98,7 +98,7 @@ export interface SaveTokenQuotaUserRequest {
 
 export function GetTokenUsageDetails(params: TokenUsageDetailsParams) {
   return request<TokenUsageDetails>({
-    url: '/api/v1/conversation/token-usage-details',
+    url: '/api/v1/agent/token/usage-details',
     method: 'get',
     params
   });
@@ -106,7 +106,7 @@ export function GetTokenUsageDetails(params: TokenUsageDetailsParams) {
 
 export function GetTokenUsageConversations(params: TokenUsageConversationsParams) {
   return request<TokenUsageConversations>({
-    url: '/api/v1/conversation/token-usage-conversations',
+    url: '/api/v1/agent/token/usage-conversations',
     method: 'get',
     params
   });

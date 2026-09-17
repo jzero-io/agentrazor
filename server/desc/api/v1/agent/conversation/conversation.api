@@ -1,0 +1,189 @@
+syntax = "v1"
+
+info (
+	title:      "Conversation API"
+	desc:       "对话管理与消息接口"
+	author:     "agentrazor"
+	version:    "v1"
+	go_package: "v1/agent/conversation"
+)
+
+type (
+	Conversation {
+		Id               string  `json:"id"`
+		Title            string  `json:"title"`
+		Status           string  `json:"status"`
+		PinnedAt         *string `json:"pinnedAt,omitempty"`
+		ArchivedAt       *string `json:"archivedAt,omitempty"`
+		GroupId          *string `json:"groupId,omitempty"`
+		Running          bool    `json:"running"`
+		RunningStartedAt *string `json:"runningStartedAt,omitempty"`
+		CreatedAt        string  `json:"createdAt"`
+		UpdatedAt        string  `json:"updatedAt"`
+	}
+	MetadataResponse {
+		Id           string `json:"id"`
+		Title        string `json:"title"`
+		WorkspaceDir string `json:"workspaceDir"`
+		UpdatedAt    string `json:"updatedAt"`
+	}
+	StartedTurn {
+		Id        string `json:"id"`
+		StartedAt string `json:"startedAt"`
+	}
+	GeneratedImage {
+		Id      string `json:"id"`
+		DataUrl string `json:"dataUrl"`
+		Alt     string `json:"alt"`
+	}
+	Turn {
+		Id          string                   `json:"id"`
+		Status      string                   `json:"status"`
+		StartedAt   *string                  `json:"startedAt,omitempty"`
+		CompletedAt *string                  `json:"completedAt,omitempty"`
+		DurationMs  *int64                   `json:"durationMs,omitempty"`
+		Error       string                   `json:"error,omitempty"`
+		Items       []map[string]interface{} `json:"items"`
+	}
+	ListResponse {
+		Conversations []Conversation `json:"conversations"`
+	}
+	StatsResponse {
+		TotalConversations    int64 `json:"totalConversations"`
+		ActiveConversations   int64 `json:"activeConversations"`
+		RunningConversations  int64 `json:"runningConversations"`
+		ArchivedConversations int64 `json:"archivedConversations"`
+		TotalTokens           int64 `json:"totalTokens"`
+		TokenUsageAvailable   bool  `json:"tokenUsageAvailable"`
+	}
+	PathRequest {
+		ConversationId string `path:"conversation_id" validate:"required"`
+	}
+	DeleteResponse  {}
+	CancelTurnResponse  {}
+	EventsRequest {
+		ConversationId string `path:"conversation_id" validate:"required"`
+	}
+	EventsResponse {
+		Event string `json:"event"`
+		Data  string `json:"data"`
+	}
+	DetailResponse {
+		Conversation   Conversation `json:"conversation"`
+		StreamPosition string       `json:"streamPosition"`
+		Turns          []Turn       `json:"turns"`
+	}
+	WorkspaceEntry {
+		Name     string           `json:"name"`
+		Path     string           `json:"path"`
+		Type     string           `json:"type"`
+		Children []WorkspaceEntry `json:"children"`
+	}
+	WorkspaceFilesResponse {
+		Files []WorkspaceEntry `json:"files"`
+	}
+	WorkspaceFileRequest {
+		ConversationId string `path:"conversation_id" validate:"required"`
+		FilePath       string `form:"path" validate:"required"`
+	}
+	MessageAttachment {
+		Name        string `json:"name"`
+		Path        string `json:"path"`
+		ContentType string `json:"contentType"`
+		Size        int64  `json:"size"`
+		Kind        string `json:"kind"`
+	}
+	MessageAttachmentRef {
+		Path string `json:"path" validate:"required"`
+	}
+	UploadAttachmentRequest {
+		ConversationId string `path:"conversation_id" validate:"required"`
+	}
+	UploadAttachmentResponse {
+		Attachment MessageAttachment `json:"attachment"`
+	}
+	UpdateRequest {
+		ConversationId string  `path:"conversation_id" validate:"required"`
+		Title          *string `json:"title,optional"`
+		Pinned         *bool   `json:"pinned,optional"`
+		Archived       *bool   `json:"archived,optional"`
+		GroupId        *string `json:"groupId,optional"`
+	}
+	CreateRequest {
+		GroupId *string `json:"groupId,optional"`
+	}
+	SendMessageRequest {
+		ConversationId string                 `path:"conversation_id" validate:"required"`
+		Content        string                 `json:"content,optional"`
+		Attachments    []MessageAttachmentRef `json:"attachments,optional"`
+	}
+)
+
+@server (
+	prefix:          /api/v1
+	group:           v1/agent/conversation
+	compact_handler: true
+	middleware:      Agent
+)
+service server {
+	@doc "获取会话列表"
+	@handler List
+	get /agent/conversation returns (ListResponse)
+
+	@doc "获取会话统计"
+	@handler Stats
+	get /agent/conversation/stats returns (StatsResponse)
+
+	@doc "创建会话"
+	@handler Create
+	post /agent/conversation (CreateRequest) returns (Conversation)
+
+	@doc "发送消息"
+	@handler SendMessage
+	post /agent/conversation/:conversation_id/messages (SendMessageRequest) returns (StartedTurn)
+
+	@doc "上传消息附件到会话工作区"
+	@handler UploadAttachment
+	post /agent/conversation/:conversation_id/attachments (UploadAttachmentRequest) returns (UploadAttachmentResponse)
+
+	@doc "获取会话元信息"
+	@handler Metadata
+	get /agent/conversation/:conversation_id/metadata (PathRequest) returns (MetadataResponse)
+
+	@doc "获取会话详情"
+	@handler Get
+	get /agent/conversation/:conversation_id (PathRequest) returns (DetailResponse)
+
+	@doc "获取会话工作区文件"
+	@handler WorkspaceFiles
+	get /agent/conversation/:conversation_id/workspace/files (PathRequest) returns (WorkspaceFilesResponse)
+
+	@doc "读取会话工作区文件"
+	@handler WorkspaceFile
+	get /agent/conversation/:conversation_id/workspace/file (WorkspaceFileRequest)
+
+	@doc "修改会话"
+	@handler Update
+	patch /agent/conversation/:conversation_id (UpdateRequest) returns (Conversation)
+
+	@doc "删除会话"
+	@handler Delete
+	delete /agent/conversation/:conversation_id (PathRequest) returns (DeleteResponse)
+
+	@doc "停止当前 Turn"
+	@handler CancelTurn
+	post /agent/conversation/:conversation_id/turn/cancel (PathRequest) returns (CancelTurnResponse)
+}
+
+@server (
+	prefix:          /api/v1
+	group:           v1/agent/conversation
+	compact_handler: true
+	sse:             true
+	middleware:      Agent
+)
+service server {
+	@doc "订阅会话与 Agent 流式事件"
+	@handler StreamEvents
+	get /agent/conversation/:conversation_id/events (EventsRequest) returns (EventsResponse)
+}

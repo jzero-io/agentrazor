@@ -3,12 +3,12 @@ import type { AgentApiKey, CreatedAgentApiKey } from './types';
 
 export const apiKeyApi = {
   list() {
-    return request<{ keys: AgentApiKey[] }>('/api/v1/auth/api-keys');
+    return request<{ keys: AgentApiKey[] }>('/api/v1/agent/api-keys');
   },
   create() {
-    return request<CreatedAgentApiKey>('/api/v1/auth/api-keys', { method: 'POST' });
+    return request<CreatedAgentApiKey>('/api/v1/agent/api-keys', { method: 'POST' });
   },
   delete(id: string) {
-    return request<Record<string, never>>(`/api/v1/auth/api-keys/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return request<Record<string, never>>(`/api/v1/agent/api-keys/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 };

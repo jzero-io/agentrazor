@@ -1,0 +1,121 @@
+syntax = "v1"
+
+info (
+	title:      "Agent Token API"
+	desc:       "Token 用量与额度接口"
+	author:     "agentrazor"
+	version:    "v1"
+	go_package: "v1/agent/token"
+)
+
+import (
+	"../../common/request.api"
+	"../../common/response.api"
+)
+
+type (
+	TokenUsageTrendRequest {
+		Dimension string `form:"dimension,default=day,optional" validate:"oneof=day month"`
+	}
+	TokenUsageTrendPoint {
+		Period string `json:"period"`
+		Tokens int64  `json:"tokens"`
+	}
+	TokenUsageTrendResponse {
+		Dimension string                 `json:"dimension"`
+		Points    []TokenUsageTrendPoint `json:"points"`
+	}
+	TokenUsageTurn {
+		TurnId                string `json:"turnId"`
+		InputTokens           int64  `json:"inputTokens"`
+		CachedInputTokens     int64  `json:"cachedInputTokens"`
+		CacheWriteInputTokens int64  `json:"cacheWriteInputTokens"`
+		OutputTokens          int64  `json:"outputTokens"`
+		ReasoningOutputTokens int64  `json:"reasoningOutputTokens"`
+		TotalTokens           int64  `json:"totalTokens"`
+		ModelContextWindow    *int64 `json:"modelContextWindow,omitempty"`
+		StartedAt             string `json:"startedAt"`
+		UpdatedAt             string `json:"updatedAt"`
+	}
+	TokenUsageConversation {
+		ConversationId string           `json:"conversationId"`
+		TotalTokens    int64            `json:"totalTokens"`
+		TurnCount      int64            `json:"turnCount"`
+		FirstUsedAt    string           `json:"firstUsedAt"`
+		LastUsedAt     string           `json:"lastUsedAt"`
+		Turns          []TokenUsageTurn `json:"turns"`
+	}
+	TokenUsageAccount {
+		UserUuid          string `json:"userUuid"`
+		Username          string `json:"username"`
+		Nickname          string `json:"nickname"`
+		TotalTokens       int64  `json:"totalTokens"`
+		ConversationCount int64  `json:"conversationCount"`
+		TurnCount         int64  `json:"turnCount"`
+	}
+	TokenUsageSummary {
+		InputTokens           int64 `json:"inputTokens"`
+		CachedInputTokens     int64 `json:"cachedInputTokens"`
+		CacheWriteInputTokens int64 `json:"cacheWriteInputTokens"`
+		OutputTokens          int64 `json:"outputTokens"`
+		ReasoningOutputTokens int64 `json:"reasoningOutputTokens"`
+		TotalTokens           int64 `json:"totalTokens"`
+	}
+	TokenUsageDetailsRequest {
+		PageRequest
+		Username string `form:"username,optional"`
+	}
+	TokenUsageDetailsResponse {
+		PageResponse
+		Summary  TokenUsageSummary   `json:"summary"`
+		Accounts []TokenUsageAccount `json:"accounts"`
+	}
+	TokenUsageConversationsRequest {
+		PageRequest
+		UserUuid       string `form:"userUuid" validate:"required"`
+		ConversationId string `form:"conversationId,optional"`
+	}
+	TokenUsageConversationsResponse {
+		PageResponse
+		Conversations []TokenUsageConversation `json:"conversations"`
+	}
+	TokenQuotaWindow {
+		Limited          bool    `json:"limited"`
+		UsedTokens       int64   `json:"usedTokens"`
+		LimitTokens      int64   `json:"limitTokens"`
+		RemainingTokens  int64   `json:"remainingTokens"`
+		RemainingPercent float64 `json:"remainingPercent"`
+		Source           string  `json:"source"`
+		ResetAt          *string `json:"resetAt,omitempty"`
+	}
+	TokenQuotaStatusResponse {
+		Enabled      bool             `json:"enabled"`
+		FiveHour     TokenQuotaWindow `json:"fiveHour"`
+		SevenDay     TokenQuotaWindow `json:"sevenDay"`
+		QuotaResetAt *string          `json:"quotaResetAt,omitempty"`
+	}
+)
+
+@server (
+	prefix:          /api/v1
+	group:           v1/agent/token
+	compact_handler: true
+	middleware:      Agent
+)
+service server {
+	@doc "获取 Token 消耗趋势"
+	@handler UsageTrend
+	get /agent/token/usage-trend (TokenUsageTrendRequest) returns (TokenUsageTrendResponse)
+
+	@doc "分页获取账号 Token 消耗明细"
+	@handler UsageDetails
+	get /agent/token/usage-details (TokenUsageDetailsRequest) returns (TokenUsageDetailsResponse)
+
+	@doc "分页获取账号下的对话和 Turn Token 消耗明细"
+	@handler UsageConversations
+	get /agent/token/usage-conversations (TokenUsageConversationsRequest) returns (TokenUsageConversationsResponse)
+
+	@doc "获取当前用户 Token 额度状态"
+	@handler QuotaStatus
+	get /agent/token/quota returns (TokenQuotaStatusResponse)
+}

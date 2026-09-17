@@ -2,32 +2,32 @@ import { apiBase, expireSession, getToken, isEnvelope, refreshAccessToken, reque
 import type { Conversation, ConversationDetail, ConversationMetadata, Envelope, EventsResponse, MessageAttachment, StartedTurn, StreamEvent, TokenQuotaStatus, WorkspaceEntry, WorkspaceFileBlob } from './types';
 export const conversationApi = {
   async list(): Promise<Conversation[]> {
-    const result = await request<{ conversations: Conversation[] }>('/api/v1/conversation');
+    const result = await request<{ conversations: Conversation[] }>('/api/v1/agent/conversation');
     return result.conversations;
   },
   get(id: string) {
-    return request<ConversationDetail>(`/api/v1/conversation/${encodeURIComponent(id)}`);
+    return request<ConversationDetail>(`/api/v1/agent/conversation/${encodeURIComponent(id)}`);
   },
   metadata(id: string) {
-    return request<ConversationMetadata>(`/api/v1/conversation/${encodeURIComponent(id)}/metadata`);
+    return request<ConversationMetadata>(`/api/v1/agent/conversation/${encodeURIComponent(id)}/metadata`);
   },
   update(id: string, changes: { title?: string; pinned?: boolean; archived?: boolean; groupId?: string }) {
-    return request<Conversation>(`/api/v1/conversation/${encodeURIComponent(id)}`, {
+    return request<Conversation>(`/api/v1/agent/conversation/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: JSON.stringify(changes)
     });
   },
   remove(id: string) {
-    return request<null>(`/api/v1/conversation/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return request<null>(`/api/v1/agent/conversation/${encodeURIComponent(id)}`, { method: 'DELETE' });
   },
   create(groupId = '') {
-    return request<Conversation>('/api/v1/conversation', {
+    return request<Conversation>('/api/v1/agent/conversation', {
       method: 'POST',
       body: JSON.stringify({ groupId: groupId || undefined })
     });
   },
   send(conversationId: string, content: string, attachments: MessageAttachment[] = []) {
-    return request<StartedTurn>(`/api/v1/conversation/${encodeURIComponent(conversationId)}/messages`, {
+    return request<StartedTurn>(`/api/v1/agent/conversation/${encodeURIComponent(conversationId)}/messages`, {
       method: 'POST',
       body: JSON.stringify({
         content,
@@ -39,18 +39,18 @@ export const conversationApi = {
     const body = new FormData();
     body.append('file', file, file.name);
     return request<{ attachment: MessageAttachment }>(
-      `/api/v1/conversation/${encodeURIComponent(conversationId)}/attachments`,
+      `/api/v1/agent/conversation/${encodeURIComponent(conversationId)}/attachments`,
       { method: 'POST', body }
     ).then(result => result.attachment);
   },
   tokenQuota() {
-    return request<TokenQuotaStatus>('/api/v1/conversation/token-quota');
+    return request<TokenQuotaStatus>('/api/v1/agent/token/quota');
   },
   cancelTurn(id: string) {
-    return request<null>(`/api/v1/conversation/${encodeURIComponent(id)}/turn/cancel`, { method: 'POST' });
+    return request<null>(`/api/v1/agent/conversation/${encodeURIComponent(id)}/turn/cancel`, { method: 'POST' });
   },
   async workspaceFiles(id: string): Promise<WorkspaceEntry[]> {
-    const result = await request<{ files: WorkspaceEntry[] }>(`/api/v1/conversation/${encodeURIComponent(id)}/workspace/files`);
+    const result = await request<{ files: WorkspaceEntry[] }>(`/api/v1/agent/conversation/${encodeURIComponent(id)}/workspace/files`);
     return result.files;
   },
   async fetchWorkspaceBlob(path: string): Promise<WorkspaceFileBlob> {
@@ -92,7 +92,7 @@ export const conversationApi = {
     onReconnect?: () => void | Promise<void>
   ) {
     const controller = new AbortController();
-    const url = `${apiBase}/api/v1/conversation/${encodeURIComponent(id)}/events`;
+    const url = `${apiBase}/api/v1/agent/conversation/${encodeURIComponent(id)}/events`;
     let reconnectAttempts = 0;
     let connected = false;
     let terminal = false;

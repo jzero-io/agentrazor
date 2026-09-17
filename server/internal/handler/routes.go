@@ -8,10 +8,11 @@ import (
 	"github.com/zeromicro/go-zero/rest"
 
 	swagger "github.com/jzero-io/agentrazor/server/internal/handler/swagger"
+	v1agentapikey "github.com/jzero-io/agentrazor/server/internal/handler/v1/agent/apikey"
+	v1agentconversation "github.com/jzero-io/agentrazor/server/internal/handler/v1/agent/conversation"
+	v1agentconversationgroup "github.com/jzero-io/agentrazor/server/internal/handler/v1/agent/conversation/group"
+	v1agenttoken "github.com/jzero-io/agentrazor/server/internal/handler/v1/agent/token"
 	v1auth "github.com/jzero-io/agentrazor/server/internal/handler/v1/auth"
-	v1authapikey "github.com/jzero-io/agentrazor/server/internal/handler/v1/auth/apikey"
-	v1conversation "github.com/jzero-io/agentrazor/server/internal/handler/v1/conversation"
-	v1conversationgroup "github.com/jzero-io/agentrazor/server/internal/handler/v1/conversation/group"
 	v1manageagent "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/agent"
 	v1manageemail "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/email"
 	v1managemenu "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/menu"
@@ -45,23 +46,197 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				{
 
 					Method:  http.MethodGet,
-					Path:    "/auth/api-keys",
-					Handler: v1authapikey.List(serverCtx),
+					Path:    "/agent/api-keys",
+					Handler: v1agentapikey.List(serverCtx),
 				},
 				{
 
 					Method:  http.MethodPost,
-					Path:    "/auth/api-keys",
-					Handler: v1authapikey.Create(serverCtx),
+					Path:    "/agent/api-keys",
+					Handler: v1agentapikey.Create(serverCtx),
 				},
 				{
 
 					Method:  http.MethodDelete,
-					Path:    "/auth/api-keys/:id",
-					Handler: v1authapikey.Delete(serverCtx),
+					Path:    "/agent/api-keys/:id",
+					Handler: v1agentapikey.Delete(serverCtx),
 				},
 			},
 			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
+			rest.WithPrefix("/api/v1"),
+		)
+	}
+	{
+		server.AddRoutes(
+			rest.WithMiddlewares(
+				[]rest.Middleware{serverCtx.Agent},
+				[]rest.Route{
+					{
+
+						Method:  http.MethodGet,
+						Path:    "/agent/conversation",
+						Handler: v1agentconversation.List(serverCtx),
+					},
+					{
+
+						Method:  http.MethodPost,
+						Path:    "/agent/conversation",
+						Handler: v1agentconversation.Create(serverCtx),
+					},
+					{
+
+						Method:  http.MethodGet,
+						Path:    "/agent/conversation/:conversation_id",
+						Handler: v1agentconversation.Get(serverCtx),
+					},
+					{
+
+						Method:  http.MethodPatch,
+						Path:    "/agent/conversation/:conversation_id",
+						Handler: v1agentconversation.Update(serverCtx),
+					},
+					{
+
+						Method:  http.MethodDelete,
+						Path:    "/agent/conversation/:conversation_id",
+						Handler: v1agentconversation.Delete(serverCtx),
+					},
+					{
+
+						Method:  http.MethodPost,
+						Path:    "/agent/conversation/:conversation_id/attachments",
+						Handler: v1agentconversation.UploadAttachment(serverCtx),
+					},
+					{
+
+						Method:  http.MethodPost,
+						Path:    "/agent/conversation/:conversation_id/messages",
+						Handler: v1agentconversation.SendMessage(serverCtx),
+					},
+					{
+
+						Method:  http.MethodGet,
+						Path:    "/agent/conversation/:conversation_id/metadata",
+						Handler: v1agentconversation.Metadata(serverCtx),
+					},
+					{
+
+						Method:  http.MethodPost,
+						Path:    "/agent/conversation/:conversation_id/turn/cancel",
+						Handler: v1agentconversation.CancelTurn(serverCtx),
+					},
+					{
+
+						Method:  http.MethodGet,
+						Path:    "/agent/conversation/:conversation_id/workspace/file",
+						Handler: v1agentconversation.WorkspaceFile(serverCtx),
+					},
+					{
+
+						Method:  http.MethodGet,
+						Path:    "/agent/conversation/:conversation_id/workspace/files",
+						Handler: v1agentconversation.WorkspaceFiles(serverCtx),
+					},
+					{
+
+						Method:  http.MethodGet,
+						Path:    "/agent/conversation/stats",
+						Handler: v1agentconversation.Stats(serverCtx),
+					},
+				}...,
+			),
+			rest.WithPrefix("/api/v1"),
+		)
+
+		server.AddRoutes(
+			rest.WithMiddlewares(
+				[]rest.Middleware{serverCtx.Agent},
+				[]rest.Route{
+					{
+
+						Method:  http.MethodGet,
+						Path:    "/agent/conversation/:conversation_id/events",
+						Handler: v1agentconversation.StreamEvents(serverCtx),
+					},
+				}...,
+			),
+			rest.WithPrefix("/api/v1"),
+			rest.WithSSE(),
+		)
+	}
+	{
+		server.AddRoutes(
+			rest.WithMiddlewares(
+				[]rest.Middleware{serverCtx.Agent},
+				[]rest.Route{
+					{
+						Method:  http.MethodGet,
+						Path:    "/agent/conversation-groups",
+						Handler: v1agentconversationgroup.List(serverCtx),
+					},
+					{
+						Method:  http.MethodPost,
+						Path:    "/agent/conversation-groups",
+						Handler: v1agentconversationgroup.Create(serverCtx),
+					},
+					{
+						Method:  http.MethodPatch,
+						Path:    "/agent/conversation-groups/:group_id",
+						Handler: v1agentconversationgroup.Update(serverCtx),
+					},
+					{
+						Method:  http.MethodDelete,
+						Path:    "/agent/conversation-groups/:group_id",
+						Handler: v1agentconversationgroup.Delete(serverCtx),
+					},
+					{
+
+						Method:  http.MethodPost,
+						Path:    "/agent/conversation-groups/:group_id/archive-conversations",
+						Handler: v1agentconversationgroup.ArchiveConversations(serverCtx),
+					},
+					{
+
+						Method:  http.MethodPost,
+						Path:    "/agent/conversation-groups/:group_id/delete-archived-conversations",
+						Handler: v1agentconversationgroup.DeleteArchivedConversations(serverCtx),
+					},
+				}...,
+			),
+			rest.WithPrefix("/api/v1"),
+		)
+	}
+	{
+		server.AddRoutes(
+			rest.WithMiddlewares(
+				[]rest.Middleware{serverCtx.Agent},
+				[]rest.Route{
+					{
+
+						Method:  http.MethodGet,
+						Path:    "/agent/token/quota",
+						Handler: v1agenttoken.QuotaStatus(serverCtx),
+					},
+					{
+
+						Method:  http.MethodGet,
+						Path:    "/agent/token/usage-conversations",
+						Handler: v1agenttoken.UsageConversations(serverCtx),
+					},
+					{
+
+						Method:  http.MethodGet,
+						Path:    "/agent/token/usage-details",
+						Handler: v1agenttoken.UsageDetails(serverCtx),
+					},
+					{
+
+						Method:  http.MethodGet,
+						Path:    "/agent/token/usage-trend",
+						Handler: v1agenttoken.UsageTrend(serverCtx),
+					},
+				}...,
+			),
 			rest.WithPrefix("/api/v1"),
 		)
 	}
@@ -111,176 +286,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				},
 			},
 			rest.WithJwt(serverCtx.MustGetConfig().Jwt.AccessSecret),
-			rest.WithPrefix("/api/v1"),
-		)
-	}
-	{
-		server.AddRoutes(
-			rest.WithMiddlewares(
-				[]rest.Middleware{serverCtx.Agent},
-				[]rest.Route{
-					{
-
-						Method:  http.MethodGet,
-						Path:    "/conversation",
-						Handler: v1conversation.List(serverCtx),
-					},
-					{
-
-						Method:  http.MethodPost,
-						Path:    "/conversation",
-						Handler: v1conversation.Create(serverCtx),
-					},
-					{
-
-						Method:  http.MethodGet,
-						Path:    "/conversation/:conversation_id",
-						Handler: v1conversation.Get(serverCtx),
-					},
-					{
-
-						Method:  http.MethodPatch,
-						Path:    "/conversation/:conversation_id",
-						Handler: v1conversation.Update(serverCtx),
-					},
-					{
-
-						Method:  http.MethodDelete,
-						Path:    "/conversation/:conversation_id",
-						Handler: v1conversation.Delete(serverCtx),
-					},
-					{
-
-						Method:  http.MethodPost,
-						Path:    "/conversation/:conversation_id/attachments",
-						Handler: v1conversation.UploadAttachment(serverCtx),
-					},
-					{
-
-						Method:  http.MethodPost,
-						Path:    "/conversation/:conversation_id/messages",
-						Handler: v1conversation.SendMessage(serverCtx),
-					},
-					{
-
-						Method:  http.MethodGet,
-						Path:    "/conversation/:conversation_id/metadata",
-						Handler: v1conversation.Metadata(serverCtx),
-					},
-					{
-
-						Method:  http.MethodPost,
-						Path:    "/conversation/:conversation_id/turn/cancel",
-						Handler: v1conversation.CancelTurn(serverCtx),
-					},
-					{
-
-						Method:  http.MethodGet,
-						Path:    "/conversation/:conversation_id/workspace/file",
-						Handler: v1conversation.WorkspaceFile(serverCtx),
-					},
-					{
-
-						Method:  http.MethodGet,
-						Path:    "/conversation/:conversation_id/workspace/files",
-						Handler: v1conversation.WorkspaceFiles(serverCtx),
-					},
-					{
-
-						Method:  http.MethodGet,
-						Path:    "/conversation/stats",
-						Handler: v1conversation.Stats(serverCtx),
-					},
-					{
-
-						Method:  http.MethodGet,
-						Path:    "/conversation/token-quota",
-						Handler: v1conversation.TokenQuotaStatus(serverCtx),
-					},
-					{
-
-						Method:  http.MethodGet,
-						Path:    "/conversation/token-usage-conversations",
-						Handler: v1conversation.TokenUsageConversations(serverCtx),
-					},
-					{
-
-						Method:  http.MethodGet,
-						Path:    "/conversation/token-usage-details",
-						Handler: v1conversation.TokenUsageDetails(serverCtx),
-					},
-					{
-
-						Method:  http.MethodGet,
-						Path:    "/conversation/token-usage-trend",
-						Handler: v1conversation.TokenUsageTrend(serverCtx),
-					},
-					{
-
-						Method:  http.MethodGet,
-						Path:    "/conversation/trend",
-						Handler: v1conversation.ConversationTrend(serverCtx),
-					},
-				}...,
-			),
-			rest.WithPrefix("/api/v1"),
-		)
-
-		server.AddRoutes(
-			rest.WithMiddlewares(
-				[]rest.Middleware{serverCtx.Agent},
-				[]rest.Route{
-					{
-
-						Method:  http.MethodGet,
-						Path:    "/conversation/:conversation_id/events",
-						Handler: v1conversation.StreamEvents(serverCtx),
-					},
-				}...,
-			),
-			rest.WithPrefix("/api/v1"),
-			rest.WithSSE(),
-		)
-	}
-	{
-		server.AddRoutes(
-			rest.WithMiddlewares(
-				[]rest.Middleware{serverCtx.Agent},
-				[]rest.Route{
-					{
-						Method:  http.MethodGet,
-						Path:    "/conversation-groups",
-						Handler: v1conversationgroup.List(serverCtx),
-					},
-					{
-						Method:  http.MethodPost,
-						Path:    "/conversation-groups",
-						Handler: v1conversationgroup.Create(serverCtx),
-					},
-					{
-						Method:  http.MethodPatch,
-						Path:    "/conversation-groups/:group_id",
-						Handler: v1conversationgroup.Update(serverCtx),
-					},
-					{
-						Method:  http.MethodDelete,
-						Path:    "/conversation-groups/:group_id",
-						Handler: v1conversationgroup.Delete(serverCtx),
-					},
-					{
-
-						Method:  http.MethodPost,
-						Path:    "/conversation-groups/:group_id/archive-conversations",
-						Handler: v1conversationgroup.ArchiveConversations(serverCtx),
-					},
-					{
-
-						Method:  http.MethodPost,
-						Path:    "/conversation-groups/:group_id/delete-archived-conversations",
-						Handler: v1conversationgroup.DeleteArchivedConversations(serverCtx),
-					},
-				}...,
-			),
 			rest.WithPrefix("/api/v1"),
 		)
 	}

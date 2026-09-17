@@ -35,7 +35,7 @@
 
 ## 权限
 
-- `GET /api/v1/conversation/token-quota`：Agent 认证用户，只返回当前用户数据。
+- `GET /api/v1/agent/token/quota`：Agent 认证用户，只返回当前用户数据。
 - `/api/v1/manage/agent/token-quota/**`：通过 Authx/Casbin，仅 Token 消耗菜单授权的管理员可访问。
 - 普通 Agent 用户不能读取或修改其他用户额度。
 
