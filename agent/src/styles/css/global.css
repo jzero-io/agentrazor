@@ -599,6 +599,10 @@ body.sidebar-resizing .app-shell {
   height: 100%;
 }
 
+.conversation-scroll > .n-scrollbar-rail--vertical {
+  display: none;
+}
+
 .conversation-row {
   --conversation-action-bg: var(--sidebar-hover-bg);
   position: relative;
