@@ -26,8 +26,6 @@ interface ConversationStreamEventsOptions {
   selectedConversationId: Ref<string>;
   conversations: Ref<Conversation[]>;
   detailsByConversation: Map<string, ConversationDetail>;
-  locallyStoppedTurnIds: Set<string>;
-  locallyStoppedConversationIds: Set<string>;
   activeTurnResultSeenByConversation: Map<string, boolean>;
   resetProcessTimer: (conversationId: string) => void;
   setConversationProcessing: (conversationId: string, running: boolean) => void;
@@ -40,7 +38,7 @@ interface ConversationStreamEventsOptions {
   markProcessActive: (conversationId: string) => void;
   isVisibleProcessStreamItem: (item: ThreadItem) => boolean;
   upsertStreamingItem: (conversationId: string, item: ThreadItem) => void;
-  finishActiveTurn: (status: 'completed' | 'failed' | 'stopped', conversationId?: string, error?: string) => Turn | null;
+  finishActiveTurn: (status: 'completed' | 'failed' | 'interrupted', conversationId?: string, error?: string) => Turn | null;
   mergeTurnForDisplay: (target: Turn, source: Turn, keepStatus?: boolean) => void;
   setConversationDetail: (snapshot: ConversationDetail) => void;
   scrollToBottom: () => Promise<void>;
@@ -107,10 +105,6 @@ export function useConversationStreamEvents(options: ConversationStreamEventsOpt
 
   async function handleStreamEvent(event: StreamEvent) {
     const isSelectedConversation = event.conversationId === options.selectedConversationId.value;
-    const locallyStopped = Boolean(event.turnId && options.locallyStoppedTurnIds.has(event.turnId))
-      || options.locallyStoppedConversationIds.has(event.conversationId);
-
-    if (locallyStopped && event.type !== 'turn.completed') return;
     if (event.type !== 'item.reasoning.textDelta' && event.type !== 'item.agentMessage.delta') {
       flushPendingDeltas(event.conversationId);
     }
@@ -134,14 +128,6 @@ export function useConversationStreamEvents(options: ConversationStreamEventsOpt
     }
 
     if (event.type === 'turn.completed') {
-      if (locallyStopped) {
-        if (event.turnId) options.locallyStoppedTurnIds.delete(event.turnId);
-        options.locallyStoppedConversationIds.delete(event.conversationId);
-        options.setConversationProcessing(event.conversationId, false);
-        options.closeIdleConversationStreams();
-        return;
-      }
-
       const turn = codexTurnPayload(event.data);
       if (turn) {
         const activeTurn = options.cachedActiveTurn(event.conversationId) || options.beginActiveTurn({
@@ -163,7 +149,7 @@ export function useConversationStreamEvents(options: ConversationStreamEventsOpt
 
       const normalizedStatus = String(turn?.status || 'completed').toLowerCase();
       const completedTurn = options.finishActiveTurn(
-        normalizedStatus === 'interrupted' ? 'stopped' : normalizedStatus === 'failed' ? 'failed' : 'completed',
+        normalizedStatus === 'interrupted' ? 'interrupted' : normalizedStatus === 'failed' ? 'failed' : 'completed',
         event.conversationId,
         codexTurnError(turn) || undefined
       );

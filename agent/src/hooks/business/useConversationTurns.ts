@@ -40,8 +40,6 @@ interface UseConversationTurnsOptions {
   activeDetail: ComputedRef<ConversationDetail | null>;
   detailsByConversation: Map<string, ConversationDetail>;
   detail: Ref<ConversationDetail | null>;
-  locallyStoppedTurnIds: Set<string>;
-  locallyStoppedConversationIds: Set<string>;
   setConversationProcessing: (conversationId: string, processing: boolean) => void;
   touchConversationUpdatedAt: (conversationId: string, value?: string) => void;
   isConversationProcessing: (conversation: Conversation) => boolean;
@@ -150,8 +148,6 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
     activeDetail,
     detailsByConversation,
     detail,
-    locallyStoppedTurnIds,
-    locallyStoppedConversationIds,
     setConversationProcessing,
     isConversationProcessing,
     upsertConversationListItem
@@ -595,7 +591,7 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
     target.items = mergeTurnItems(target.items, source.items, { skipIncomingReasoning: true });
   }
 
-  function finishActiveTurn(status: 'completed' | 'failed' | 'stopped', conversationId = selectedConversationId.value, error?: string) {
+  function finishActiveTurn(status: 'completed' | 'failed' | 'interrupted', conversationId = selectedConversationId.value, error?: string) {
     const selected = conversationId === selectedConversationId.value;
     const durationMs = stopTurnTimer(conversationId);
     const finishedTurn = conversationId ? activeTurnsByConversation.get(conversationId) || null : null;
@@ -612,10 +608,6 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
     delete (finishedTurn as Turn & { restoredRunning?: boolean }).restoredRunning;
     if (error) finishedTurn.error = error;
     if (finishedTurn.durationMs === undefined && durationMs !== undefined) finishedTurn.durationMs = durationMs;
-    if (status === 'stopped') {
-      if (finishedTurn.id) locallyStoppedTurnIds.add(finishedTurn.id);
-      if (conversationId) locallyStoppedConversationIds.add(conversationId);
-    }
     if (conversationId) {
       options.touchConversationUpdatedAt(conversationId);
       setConversationProcessing(conversationId, false);
@@ -626,17 +618,13 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
     const targetDetail = detailsByConversation.get(conversationId);
     if (targetDetail) {
       const persisted = targetDetail.turns.find(turn => turn.id === finishedTurn.id);
-      if (persisted) mergeTurnForDisplay(persisted, finishedTurn, status === 'stopped');
+      if (persisted) mergeTurnForDisplay(persisted, finishedTurn);
       else targetDetail.turns.push({ ...finishedTurn, items: [...finishedTurn.items] });
       setConversationDetail(targetDetail);
     }
 
     if (selected) clearDisplayedActiveTurn();
     return finishedTurn;
-  }
-
-  function finalizeStoppedTurn(conversationId = selectedConversationId.value) {
-    finishActiveTurn('stopped', conversationId);
   }
 
   function findStreamingItem(conversationId: string, id: string) {
@@ -776,7 +764,6 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
     isVisibleProcessStreamItem,
     upsertStreamingItem,
     finishActiveTurn,
-    finalizeStoppedTurn,
     mergeTurnForDisplay,
     stopTurnTimer,
     stopAllTurnTimers,

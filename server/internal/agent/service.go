@@ -76,6 +76,7 @@ type activeTurn struct {
 	id        string
 	createdAt time.Time
 	cancel    context.CancelFunc
+	done      chan error
 }
 
 type Service struct {
@@ -317,7 +318,7 @@ func (s *Service) Send(threadID string, input TurnInput) (StartedTurn, error) {
 	}
 	server := s.server
 	ctx, cancel := context.WithCancel(context.Background())
-	active := &activeTurn{createdAt: time.Now().UTC(), cancel: cancel}
+	active := &activeTurn{createdAt: time.Now().UTC(), cancel: cancel, done: make(chan error, 1)}
 	s.turns[threadID] = active
 	s.mu.Unlock()
 
@@ -340,6 +341,8 @@ func (s *Service) Send(threadID string, input TurnInput) (StartedTurn, error) {
 		idleTimer.Stop()
 		cancel()
 		s.removeActiveTurn(threadID, active)
+		active.done <- err
+		close(active.done)
 		return StartedTurn{}, err
 	}
 	s.mu.Lock()
@@ -350,8 +353,10 @@ func (s *Service) Send(threadID string, input TurnInput) (StartedTurn, error) {
 	go func() {
 		defer cancel()
 		defer idleTimer.Stop()
-		defer s.removeActiveTurn(threadID, active)
-		<-started.Done
+		err := <-started.Done
+		s.removeActiveTurn(threadID, active)
+		active.done <- err
+		close(active.done)
 	}()
 	return started, nil
 }
@@ -430,7 +435,7 @@ func (s *Service) Logout(ctx context.Context) error {
 	return server.logout(ctx)
 }
 
-func (s *Service) Cancel(threadID string) error {
+func (s *Service) Cancel(ctx context.Context, threadID string) error {
 	if err := validateThreadID(threadID); err != nil {
 		return err
 	}
@@ -440,14 +445,21 @@ func (s *Service) Cancel(threadID string) error {
 		return errServiceStopped
 	}
 	turn, ok := s.turns[threadID]
-	if ok {
-		delete(s.turns, threadID)
-	}
 	s.mu.Unlock()
-	if ok {
-		turn.cancel()
+	if !ok {
+		return nil
 	}
-	return nil
+
+	turn.cancel()
+	select {
+	case err := <-turn.done:
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (s *Service) Close() error {

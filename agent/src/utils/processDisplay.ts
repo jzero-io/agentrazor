@@ -32,13 +32,13 @@ export function formatTurnDuration(durationMs = 0) {
   return parts.join('');
 }
 
-export function isStoppedTurn(turn: Turn) {
-  return String(turn.status || '').replace(/[-_\s]/g, '').toLowerCase() === 'stopped';
+export function isInterruptedTurn(turn: Turn) {
+  return String(turn.status || '').replace(/[-_\s]/g, '').toLowerCase() === 'interrupted';
 }
 
 export function completedProcessSummary(turn: Turn) {
   const duration = formatTurnDuration(turn.durationMs ?? 0);
-  return isStoppedTurn(turn) ? `你在 ${duration} 后停止了` : `已处理 ${duration}`;
+  return isInterruptedTurn(turn) ? `你在 ${duration} 后停止了` : `已处理 ${duration}`;
 }
 
 export function streamingProcessSummary(_turn: Turn, elapsedDurationMs: number) {
@@ -46,7 +46,7 @@ export function streamingProcessSummary(_turn: Turn, elapsedDurationMs: number) 
 }
 
 export function showCompletedProcessSummary(turn: Turn) {
-  return turn.durationMs !== undefined && (isStoppedTurn(turn) || turnProcessItems(turn).length > 0);
+  return turn.durationMs !== undefined && (isInterruptedTurn(turn) || turnProcessItems(turn).length > 0);
 }
 
 export function humanizeSkillName(name: string): string {

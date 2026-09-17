@@ -31,7 +31,6 @@ interface UseConversationComposerOptions {
   isDraftConversation: (id?: string) => boolean;
   isConversationRunning: (id: string) => boolean;
   setConversationProcessing: (id: string, processing: boolean) => void;
-  locallyStoppedConversationIds: Set<string>;
   createOptimisticTurn: (content: string, attachments?: Array<{ name: string; kind: 'image' | 'file'; previewUrl?: string }>) => Turn;
   showOptimisticTurn: (conversationId: string, turn: Turn) => void;
   moveOptimisticTurn: (fromConversationId: string, toConversationId: string, turnId: string) => void;
@@ -40,7 +39,6 @@ interface UseConversationComposerOptions {
   cachedActiveTurn: (conversationId: string) => Turn | null | undefined;
   confirmSentTurn: (conversationId: string, turn: Turn) => void;
   resetActiveTurn: () => void;
-  finalizeStoppedTurn: (conversationId: string) => void;
   setConversationDetail: (detail: ConversationDetail) => void;
   upsertConversationListItem: (conversation: ConversationDetail['conversation']) => void;
   syncConversationMetadata: (conversation: ConversationDetail['conversation']) => void;
@@ -254,11 +252,10 @@ export function useConversationComposer(options: UseConversationComposerOptions)
     const conversationId = options.selectedConversationId.value;
     if (!conversationId || !options.isConversationRunning(conversationId) || options.stopping.value) return;
     options.stopping.value = true;
-    options.finalizeStoppedTurn(conversationId);
     try {
       await conversationApi.cancelTurn(conversationId);
     } catch (error) {
-      options.locallyStoppedConversationIds.delete(conversationId);
+      options.stopping.value = false;
       options.setConversationProcessing(conversationId, false);
       options.showError(error);
     }

@@ -110,8 +110,6 @@ const loadingDetail = ref(false);
 const loadingDetailId = ref('');
 const sendingRequest = ref(false);
 const creatingConversation = ref(false);
-const locallyStoppedTurnIds = new Set<string>();
-const locallyStoppedConversationIds = new Set<string>();
 const renameVisible = ref(false);
 const renameConversationId = ref('');
 const renameValue = ref('');
@@ -254,8 +252,6 @@ const conversationTurns = useConversationTurns({
   activeDetail,
   detailsByConversation,
   detail,
-  locallyStoppedTurnIds,
-  locallyStoppedConversationIds,
   setConversationProcessing,
   touchConversationUpdatedAt,
   isConversationProcessing,
@@ -293,7 +289,6 @@ const {
   isVisibleProcessStreamItem,
   upsertStreamingItem,
   finishActiveTurn,
-  finalizeStoppedTurn,
   mergeTurnForDisplay,
   stopTurnTimer,
   stopAllTurnTimers,
@@ -528,8 +523,6 @@ const conversationStreamEvents = useConversationStreamEvents({
   selectedConversationId,
   conversations,
   detailsByConversation,
-  locallyStoppedTurnIds,
-  locallyStoppedConversationIds,
   activeTurnResultSeenByConversation,
   resetProcessTimer,
   setConversationProcessing,
@@ -868,7 +861,6 @@ const conversationComposer = useConversationComposer({
   isDraftConversation,
   isConversationRunning,
   setConversationProcessing,
-  locallyStoppedConversationIds,
   createOptimisticTurn,
   showOptimisticTurn,
   moveOptimisticTurn,
@@ -877,7 +869,6 @@ const conversationComposer = useConversationComposer({
   cachedActiveTurn,
   confirmSentTurn,
   resetActiveTurn,
-  finalizeStoppedTurn,
   setConversationDetail,
   upsertConversationListItem,
   syncConversationMetadata,

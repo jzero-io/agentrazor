@@ -433,8 +433,24 @@ func (r *appServer) startTurn(ctx context.Context, threadID string, input TurnIn
 		case outcome := <-execution.done:
 			done <- outcome.err
 		case <-ctx.Done():
-			r.interruptTurn(threadID, turnID)
-			done <- ctx.Err()
+			select {
+			case outcome := <-execution.done:
+				done <- outcome.err
+				return
+			default:
+			}
+			if err := r.interruptTurn(threadID, turnID); err != nil {
+				select {
+				case outcome := <-execution.done:
+					done <- outcome.err
+				default:
+					done <- fmt.Errorf("interrupt Codex turn: %w", err)
+				}
+				return
+			}
+
+			outcome := <-execution.done
+			done <- outcome.err
 		}
 	}()
 	return StartedTurn{ID: turnID, StartedAt: time.Now().UTC(), Done: done}, nil
@@ -480,13 +496,14 @@ func (r *appServer) turnInput(turn TurnInput) []map[string]any {
 	return input
 }
 
-func (r *appServer) interruptTurn(threadID, turnID string) {
+func (r *appServer) interruptTurn(threadID, turnID string) error {
 	interruptCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	_, _ = r.request(interruptCtx, "turn/interrupt", map[string]any{
+	_, err := r.request(interruptCtx, "turn/interrupt", map[string]any{
 		"threadId": threadID,
 		"turnId":   turnID,
 	})
+	return err
 }
 
 func (r *appServer) registerExecution(execution *appServerTurn) error {
