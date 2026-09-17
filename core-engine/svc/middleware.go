@@ -10,21 +10,22 @@ import (
 )
 
 type Middleware struct {
-	Authx      rest.Middleware
-	JwtSession rest.Middleware
-	Ok         func(ctx context.Context, data any) any
-	Error      func(ctx context.Context, err error) (int, any)
-	I18n       rest.Middleware
-	Validate   *middleware.ValidatorMiddleware
+	Authx             rest.Middleware
+	AuthxAuthenticate func(r *http.Request) (*http.Request, error)
+	Ok                func(ctx context.Context, data any) any
+	Error             func(ctx context.Context, err error) (int, any)
+	I18n              rest.Middleware
+	Validate          *middleware.ValidatorMiddleware
 }
 
 func NewMiddleware(svcCtx *ServiceContext, route2code func(r *http.Request) string) Middleware {
+	authx := middleware.NewAuthxMiddleware(svcCtx.CasbinEnforcer, route2code, svcCtx.Config.Jwt.AccessSecret, svcCtx.AuthSessions)
 	return Middleware{
-		Error:      middleware.NewErrorMiddleware().Handle,
-		Ok:         middleware.NewOkMiddleware().Handle,
-		Authx:      middleware.NewAuthxMiddleware(svcCtx.CasbinEnforcer, route2code, svcCtx.AuthSessions).Handle,
-		JwtSession: middleware.NewJwtSessionMiddleware(svcCtx.AuthSessions).Handle,
-		I18n:       middleware.NewI18nMiddleware().Handle,
-		Validate:   middleware.NewValidatorMiddleware(),
+		Error:             middleware.NewErrorMiddleware().Handle,
+		Ok:                middleware.NewOkMiddleware().Handle,
+		Authx:             authx.Handle,
+		AuthxAuthenticate: authx.Authenticate,
+		I18n:              middleware.NewI18nMiddleware().Handle,
+		Validate:          middleware.NewValidatorMiddleware(),
 	}
 }

@@ -12,7 +12,6 @@ import (
 	casbinmodel "github.com/casbin/casbin/v2/model"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/zeromicro/go-zero/core/stores/redis"
-	"github.com/zeromicro/go-zero/rest/handler"
 
 	"github.com/jzero-io/agentrazor/core-engine/helper/auth"
 )
@@ -29,7 +28,7 @@ e = some(where (p.eft == allow))
 [matchers]
 m = r.sub == p.sub && r.obj == p.obj`
 
-func TestAuthxChecksJwtSessionBeforeCasbin(t *testing.T) {
+func TestAuthxAuthenticatesJWTAndRedisBeforeCasbin(t *testing.T) {
 	redisServer := miniredis.RunT(t)
 	sessions := auth.NewSessionStore(redis.New(redisServer.Addr()))
 	enforcer := newTestEnforcer(t)
@@ -47,11 +46,15 @@ func TestAuthxChecksJwtSessionBeforeCasbin(t *testing.T) {
 	}
 
 	nextCalled := false
-	authx := NewAuthxMiddleware(enforcer, func(*http.Request) string { return "route-1" }, sessions)
-	protected := handler.Authorize(secret)(authx.Handle(func(w http.ResponseWriter, _ *http.Request) {
+	authx := NewAuthxMiddleware(enforcer, func(*http.Request) string { return "route-1" }, secret, sessions)
+	protected := authx.Handle(func(w http.ResponseWriter, r *http.Request) {
 		nextCalled = true
+		info, err := auth.Info(r.Context())
+		if err != nil || info.Uuid != userUUID || info.Username != "alice" {
+			t.Fatalf("claims were not injected into context: %#v, %v", info, err)
+		}
 		w.WriteHeader(http.StatusNoContent)
-	}))
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/protected", http.NoBody)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -85,10 +88,10 @@ func TestAuthxReturnsForbiddenWhenSessionExistsWithoutPolicy(t *testing.T) {
 		t.Fatalf("save session: %v", err)
 	}
 
-	authx := NewAuthxMiddleware(enforcer, func(*http.Request) string { return "route-1" }, sessions)
-	protected := handler.Authorize(secret)(authx.Handle(func(http.ResponseWriter, *http.Request) {
+	authx := NewAuthxMiddleware(enforcer, func(*http.Request) string { return "route-1" }, secret, sessions)
+	protected := authx.Handle(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("unauthorized role must not reach next handler")
-	}))
+	})
 	req := httptest.NewRequest(http.MethodGet, "/protected", http.NoBody)
 	req.Header.Set("Authorization", "Bearer "+token)
 	res := httptest.NewRecorder()
@@ -96,6 +99,51 @@ func TestAuthxReturnsForbiddenWhenSessionExistsWithoutPolicy(t *testing.T) {
 	protected.ServeHTTP(res, req)
 	if res.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", res.Code, http.StatusForbidden)
+	}
+}
+
+func TestAuthxRejectsInvalidJWTBeforeSessionAndCasbin(t *testing.T) {
+	redisServer := miniredis.RunT(t)
+	sessions := auth.NewSessionStore(redis.New(redisServer.Addr()))
+	authx := NewAuthxMiddleware(newTestEnforcer(t), func(*http.Request) string {
+		t.Fatal("invalid JWT must not reach route authorization")
+		return ""
+	}, "test-secret", sessions)
+	protected := authx.Handle(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("invalid JWT must not reach next handler")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", http.NoBody)
+	req.Header.Set("Authorization", "Bearer invalid-token")
+	res := httptest.NewRecorder()
+	protected.ServeHTTP(res, req)
+
+	if res.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", res.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestBearerToken(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  string
+		ok    bool
+	}{
+		{name: "bearer", value: "Bearer token", want: "token", ok: true},
+		{name: "case insensitive", value: "bearer token", want: "token", ok: true},
+		{name: "missing scheme", value: "token"},
+		{name: "wrong scheme", value: "Basic token"},
+		{name: "empty", value: ""},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, ok := bearerToken(test.value)
+			if got != test.want || ok != test.ok {
+				t.Fatalf("bearerToken(%q) = (%q, %v), want (%q, %v)", test.value, got, ok, test.want, test.ok)
+			}
+		})
 	}
 }
 
