@@ -40,6 +40,7 @@ type Request struct {
 	ConversationID string
 	GroupID        string
 	Content        string
+	Attachments    []MessageAttachmentRef
 }
 
 // Response contains the stable final answer for a conversational turn.
@@ -98,8 +99,8 @@ func NewClient(config Config) (*Client, error) {
 // answer. The supplied context controls the entire request and wait lifecycle.
 func (c *Client) Chat(ctx context.Context, request Request) (*Response, error) {
 	content := strings.TrimSpace(request.Content)
-	if content == "" {
-		return nil, errors.New("conversation SDK: message content is required")
+	if content == "" && len(request.Attachments) == 0 {
+		return nil, errors.New("conversation SDK: message content or attachment is required")
 	}
 
 	conversationID := strings.TrimSpace(request.ConversationID)
@@ -117,7 +118,7 @@ func (c *Client) Chat(ctx context.Context, request Request) (*Response, error) {
 	events := make(chan Event, 256)
 	streamErrors := make(chan error, 1)
 	go func() {
-		streamErrors <- c.streamEvents(streamCtx, conversationID, 0, func() { close(ready) }, func(event Event) (bool, error) {
+		streamErrors <- c.streamEvents(streamCtx, conversationID, func() { close(ready) }, func(event Event) (bool, error) {
 			select {
 			case events <- event:
 				return false, nil
@@ -134,7 +135,7 @@ func (c *Client) Chat(ctx context.Context, request Request) (*Response, error) {
 		return nil, ctx.Err()
 	}
 
-	sent, err := c.SendMessage(ctx, conversationID, SendMessageRequest{Content: content})
+	sent, err := c.SendMessage(ctx, conversationID, SendMessageRequest{Content: content, Attachments: request.Attachments})
 	if err != nil {
 		return nil, err
 	}

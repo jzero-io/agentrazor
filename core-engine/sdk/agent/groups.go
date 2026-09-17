@@ -14,7 +14,7 @@ func (c *Client) ListGroups(ctx context.Context) ([]Group, error) {
 	var response struct {
 		Groups []Group `json:"groups"`
 	}
-	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/conversation-groups", nil, &response); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/agent/conversation-groups", nil, &response); err != nil {
 		return nil, err
 	}
 	return response.Groups, nil
@@ -27,7 +27,7 @@ func (c *Client) CreateGroup(ctx context.Context, name string) (*Group, error) {
 		return nil, err
 	}
 	var response Group
-	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/conversation-groups", map[string]string{"name": name}, &response); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/agent/conversation-groups", map[string]string{"name": name}, &response); err != nil {
 		return nil, err
 	}
 	return &response, nil
@@ -95,5 +95,5 @@ func groupPath(groupID, suffix string) (string, error) {
 	if groupID == "" {
 		return "", errors.New("conversation SDK: group ID is required")
 	}
-	return "/api/v1/conversation-groups/" + url.PathEscape(groupID) + suffix, nil
+	return "/api/v1/agent/conversation-groups/" + url.PathEscape(groupID) + suffix, nil
 }

@@ -9,7 +9,6 @@ import (
 	"io"
 	"mime"
 	"net/http"
-	"strconv"
 	"strings"
 )
 
@@ -18,22 +17,18 @@ type eventsResponse struct {
 	Data  string `json:"data"`
 }
 
-// StreamEvents subscribes to live conversation events. Events with IDs up to
-// afterID are skipped by the server. The method blocks until the context is
-// canceled, the connection closes, or the handler returns an error.
-func (c *Client) StreamEvents(ctx context.Context, conversationID string, afterID int64, handler EventHandler) error {
+// StreamEvents subscribes to live conversation events. The method blocks until
+// the context is canceled, the connection closes, or the handler returns an error.
+func (c *Client) StreamEvents(ctx context.Context, conversationID string, handler EventHandler) error {
 	if handler == nil {
 		return errors.New("conversation SDK: event handler is required")
 	}
-	if afterID < 0 {
-		return errors.New("conversation SDK: after event ID must not be negative")
-	}
-	return c.streamEvents(ctx, conversationID, afterID, nil, func(event Event) (bool, error) {
+	return c.streamEvents(ctx, conversationID, nil, func(event Event) (bool, error) {
 		return false, handler(event)
 	})
 }
 
-func (c *Client) streamEvents(ctx context.Context, conversationID string, afterID int64, onReady func(), handler func(Event) (bool, error)) error {
+func (c *Client) streamEvents(ctx context.Context, conversationID string, onReady func(), handler func(Event) (bool, error)) error {
 	path, err := conversationPath(conversationID, "/events")
 	if err != nil {
 		return err
@@ -44,9 +39,6 @@ func (c *Client) streamEvents(ctx context.Context, conversationID string, afterI
 	}
 	request.Header.Set("Accept", "text/event-stream")
 	request.Header.Set(apiKeyHeader, c.apiKey)
-	if afterID > 0 {
-		request.Header.Set("Last-Event-ID", strconv.FormatInt(afterID, 10))
-	}
 
 	response, err := c.httpClient.Do(request)
 	if err != nil {

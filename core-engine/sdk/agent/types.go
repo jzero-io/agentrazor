@@ -38,9 +38,17 @@ type Turn struct {
 
 // Detail is the full persisted state of a conversation.
 type Detail struct {
-	Conversation Conversation `json:"conversation"`
-	EventCursor  int64        `json:"eventCursor"`
-	Turns        []Turn       `json:"turns"`
+	Conversation   Conversation `json:"conversation"`
+	StreamPosition string       `json:"streamPosition"`
+	Turns          []Turn       `json:"turns"`
+}
+
+// Metadata is the lightweight metadata returned for one conversation.
+type Metadata struct {
+	ID           string `json:"id"`
+	Title        string `json:"title"`
+	WorkspaceDir string `json:"workspaceDir"`
+	UpdatedAt    string `json:"updatedAt"`
 }
 
 // Stats summarizes the authenticated account's conversations.
@@ -60,7 +68,13 @@ type CreateConversationRequest struct {
 
 // SendMessageRequest starts a turn in an existing conversation.
 type SendMessageRequest struct {
-	Content string `json:"content"`
+	Content     string                 `json:"content,omitempty"`
+	Attachments []MessageAttachmentRef `json:"attachments,omitempty"`
+}
+
+// MessageAttachmentRef identifies an uploaded attachment by workspace path.
+type MessageAttachmentRef struct {
+	Path string `json:"path"`
 }
 
 // UpdateConversationRequest contains the conversation fields to change.
@@ -72,20 +86,12 @@ type UpdateConversationRequest struct {
 	GroupID  *string `json:"groupId,omitempty"`
 }
 
-// WorkspaceEntry describes one file or directory in a conversation workspace.
-type WorkspaceEntry struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-	Type string `json:"type"`
-	Size int64  `json:"size"`
-}
-
 // Event is one server-sent conversation event.
 type Event struct {
-	ID             int64           `json:"id"`
 	Type           string          `json:"type"`
 	ConversationID string          `json:"conversationId"`
 	TurnID         string          `json:"turnId,omitempty"`
+	StreamPosition string          `json:"streamPosition,omitempty"`
 	Data           json.RawMessage `json:"data,omitempty"`
 	CreatedAt      string          `json:"createdAt"`
 }
