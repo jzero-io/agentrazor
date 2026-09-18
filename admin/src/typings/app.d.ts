@@ -465,7 +465,6 @@ declare namespace App {
         trigger: string;
         update: string;
         updateSuccess: string;
-        userCenter: string;
         yesOrNo: {
           yes: string;
           no: string;
@@ -540,6 +539,29 @@ declare namespace App {
       };
       route: Record<I18nRouteKey, string>;
       button: {
+        commonApi: string;
+        agent: {
+          config: {
+            save: string;
+            chatgptLogin: string;
+            apiKeyLogin: string;
+            logout: string;
+          };
+          skills: {
+            upload: string;
+            edit: string;
+            delete: string;
+            status: string;
+          };
+          tokenQuota: {
+            viewGlobal: string;
+            saveGlobal: string;
+            viewUser: string;
+            saveUser: string;
+            restoreUser: string;
+            resetUser: string;
+          };
+        };
         manage: {
           user: {
             list: string;
@@ -640,6 +662,7 @@ declare namespace App {
             roleCode: string;
             roleStatus: string;
             roleDesc: string;
+            editMenuAuth: string;
             form: {
               roleName: string;
               roleCode: string;

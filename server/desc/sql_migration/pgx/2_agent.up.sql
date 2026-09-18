@@ -146,7 +146,7 @@ INSERT INTO "manage_menu" (
     ('f110f1d2-8d73-4ff9-9702-4f7395b7a004',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'1','aa10f1d2-8d73-4ff9-9702-4f7395b7a002','3','启用/禁用 Skill',0,'',3,'','','','','1','button.agent.skills.status',0,'',0,0,'[]','[{"code":"v1:manage:agent:setSkillStatus","desc":"启用或禁用 Skill"}]',0,'v1:manage:agent:setSkillStatus'),
     ('d110f1d2-8d73-4ff9-9702-4f7395b7a001',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'1','cc10f1d2-8d73-4ff9-9702-4f7395b7a001','3','读取全局 Token 额度',0,'',0,'','','','','1','button.agent.tokenQuota.viewGlobal',0,'',0,0,'[]','[{"code":"v1:manage:agent:getTokenQuotaGlobal","desc":"读取全局 Token 额度"}]',0,'v1:manage:agent:getTokenQuotaGlobal'),
     ('d110f1d2-8d73-4ff9-9702-4f7395b7a002',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'1','cc10f1d2-8d73-4ff9-9702-4f7395b7a001','3','保存全局 Token 额度',0,'',1,'','','','','1','button.agent.tokenQuota.saveGlobal',0,'',0,0,'[]','[{"code":"v1:manage:agent:getTokenQuotaGlobal","desc":"读取全局 Token 额度"},{"code":"v1:manage:agent:saveTokenQuotaGlobal","desc":"保存全局 Token 额度"}]',0,'v1:manage:agent:saveTokenQuotaGlobal'),
-    ('dc10f1d2-8d73-4ff9-9702-4f7395b7a001',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'1','cc10f1d2-8d73-4ff9-9702-4f7395b7a001','3','读取用户 Token 额度',0,'',2,'','','','','1','',0,'',0,0,'[]','[{"code":"v1:manage:agent:getTokenQuotaGlobal","desc":"读取全局 Token 额度"},{"code":"v1:manage:agent:getUserTokenQuota","desc":"读取用户 Token 额度"}]',0,'v1:manage:agent:getUserTokenQuota'),
+    ('dc10f1d2-8d73-4ff9-9702-4f7395b7a001',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'1','cc10f1d2-8d73-4ff9-9702-4f7395b7a001','3','读取用户 Token 额度',0,'',2,'','','','','1','button.agent.tokenQuota.viewUser',0,'',0,0,'[]','[{"code":"v1:manage:agent:getTokenQuotaGlobal","desc":"读取全局 Token 额度"},{"code":"v1:manage:agent:getUserTokenQuota","desc":"读取用户 Token 额度"}]',0,'v1:manage:agent:getUserTokenQuota'),
     ('d110f1d2-8d73-4ff9-9702-4f7395b7a003',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'1','cc10f1d2-8d73-4ff9-9702-4f7395b7a001','3','保存用户 Token 额度',0,'',3,'','','','','1','button.agent.tokenQuota.saveUser',0,'',0,0,'[]','[{"code":"v1:manage:agent:getTokenQuotaGlobal","desc":"读取全局 Token 额度"},{"code":"v1:manage:agent:getUserTokenQuota","desc":"读取用户 Token 额度"},{"code":"v1:manage:agent:saveUserTokenQuota","desc":"保存用户 Token 额度"}]',0,'v1:manage:agent:saveUserTokenQuota'),
     ('d110f1d2-8d73-4ff9-9702-4f7395b7a004',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'1','cc10f1d2-8d73-4ff9-9702-4f7395b7a001','3','恢复用户全局额度',0,'',4,'','','','','1','button.agent.tokenQuota.restoreUser',0,'',0,0,'[]','[{"code":"v1:manage:agent:getTokenQuotaGlobal","desc":"读取全局 Token 额度"},{"code":"v1:manage:agent:getUserTokenQuota","desc":"读取用户 Token 额度"},{"code":"v1:manage:agent:deleteUserTokenQuota","desc":"恢复用户全局额度"}]',0,'v1:manage:agent:deleteUserTokenQuota'),
     ('d110f1d2-8d73-4ff9-9702-4f7395b7a005',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'1','cc10f1d2-8d73-4ff9-9702-4f7395b7a001','3','重置用户 Token 用量',0,'',5,'','','','','1','button.agent.tokenQuota.resetUser',0,'',0,0,'[]','[{"code":"v1:manage:agent:getTokenQuotaGlobal","desc":"读取全局 Token 额度"},{"code":"v1:manage:agent:getUserTokenQuota","desc":"读取用户 Token 额度"},{"code":"v1:manage:agent:resetUserTokenQuota","desc":"重置用户 Token 用量"}]',0,'v1:manage:agent:resetUserTokenQuota');
@@ -193,14 +193,23 @@ VALUES (
 
 INSERT INTO "manage_role_menu" (
     uuid, create_time, update_time, role_uuid, menu_uuid, is_home
-) VALUES (
-    'ad8e6f2b-3c45-4e79-8a01-b2c3d4e5f607',
-    CURRENT_TIMESTAMP,
-    CURRENT_TIMESTAMP,
-    '9c7f5e1a-2b34-4d68-8f90-a1b2c3d4e5f6',
-    'f7e8d9c6-b5a4-4382-8271-605f4e3d2c1b',
-    1
-);
+) VALUES
+    (
+        'ad8e6f2b-3c45-4e79-8a01-b2c3d4e5f607',
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP,
+        '9c7f5e1a-2b34-4d68-8f90-a1b2c3d4e5f6',
+        'f7e8d9c6-b5a4-4382-8271-605f4e3d2c1b',
+        1
+    ),
+    (
+        'bd9f703c-4d56-4f8a-9b12-c3d4e5f60718',
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP,
+        '9c7f5e1a-2b34-4d68-8f90-a1b2c3d4e5f6',
+        '0f6a2f42-6c4d-4e84-a6b2-0c9f0d3e8a11',
+        0
+    );
 
 UPDATE "manage_menu"
 SET permissions = '[{"code":"v1:manage:agent:homeOverview","desc":"读取首页概览"}]',

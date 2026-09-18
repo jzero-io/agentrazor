@@ -8,7 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/jzero-io/agentrazor/server/internal/model"
+	"github.com/jzero-io/agentrazor/server/internal/service/quota"
 )
 
 var (
@@ -90,11 +91,12 @@ type Service struct {
 	turns      map[string]*activeTurn
 	closed     bool
 
-	tokenUsageRecorder func(context.Context, TokenUsageEvent) error
-	tokenUsageWriter   *tokenUsageWriter
+	tokenQuota       *quota.Service
+	tokenUsageStore  tokenUsageStore
+	tokenUsageWriter *tokenUsageWriter
 }
 
-func NewService() (*Service, error) {
+func NewService(models model.Model) (*Service, error) {
 	server, err := newAppServer()
 	if err != nil {
 		return nil, err
@@ -105,6 +107,14 @@ func NewService() (*Service, error) {
 		workspace: server.workspaceHome,
 		events:    newEventHub(),
 		turns:     make(map[string]*activeTurn),
+		tokenQuota: quota.NewService(
+			models.AgentTokenQuota,
+			models.ConversationTokenUsageEvent,
+		),
+		tokenUsageStore: tokenUsageStore{
+			conversation: models.Conversation,
+			usageEvent:   models.ConversationTokenUsageEvent,
+		},
 	}
 	service.tokenUsageWriter = newTokenUsageWriter(service.persistTokenUsage)
 	return service, nil
@@ -146,10 +156,8 @@ func (s *Service) call(ctx context.Context, method string, params any) (map[stri
 	return server.request(ctx, method, params)
 }
 
-func (s *Service) SetTokenUsageRecorder(recorder func(context.Context, TokenUsageEvent) error) {
-	s.mu.Lock()
-	s.tokenUsageRecorder = recorder
-	s.mu.Unlock()
+func (s *Service) TokenQuota() *quota.Service {
+	return s.tokenQuota
 }
 
 func (s *Service) Create(ctx context.Context) (StoredThread, error) {
@@ -531,20 +539,6 @@ func (s *Service) recordTokenUsage(event map[string]any) {
 		return
 	}
 	s.tokenUsageWriter.enqueue(usage)
-}
-
-func (s *Service) persistTokenUsage(usage TokenUsageEvent) {
-	s.mu.Lock()
-	recorder := s.tokenUsageRecorder
-	s.mu.Unlock()
-	if recorder == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := recorder(ctx, usage); err != nil {
-		logx.Errorf("record Codex token usage failed: %v", err)
-	}
 }
 
 func (s *Service) ValidateThread(ctx context.Context, threadID string) error {

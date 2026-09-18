@@ -59,7 +59,7 @@ func sendMessage(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 	if thread.Archived {
 		return nil, agentdomain.ErrThreadArchived
 	}
-	if err := svcCtx.TokenQuota.Check(ctx, userUUID); err != nil {
+	if err := svcCtx.AgentService.TokenQuota().Check(ctx, userUUID); err != nil {
 		switch {
 		case errors.Is(err, quota.ErrAgentDisabled):
 			return nil, status.Wrap(errcodes.AgentDisabledCode, err)

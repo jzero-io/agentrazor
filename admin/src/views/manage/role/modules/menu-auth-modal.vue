@@ -37,7 +37,7 @@ function closeModal() {
   visible.value = false;
 }
 
-const title = computed(() => $t('common.edit') + $t('page.manage.role.menuAuth'));
+const title = computed(() => $t('page.manage.role.editMenuAuth'));
 
 const home = shallowRef('');
 
@@ -83,6 +83,18 @@ const pageSelectOptions = computed(() => {
 
 const tree = shallowRef<Api.Manage.MenuTree[]>([]);
 const checks = shallowRef<string[]>([]);
+
+const localizedTree = computed(() => {
+  function localize(nodes: Api.Manage.MenuTree[]): Api.Manage.MenuTree[] {
+    return nodes.map(node => ({
+      ...node,
+      label: node.i18nKey ? $t(node.i18nKey) : node.label,
+      children: node.children ? localize(node.children) : undefined
+    }));
+  }
+
+  return localize(tree.value);
+});
 
 function getMenuUuidsWithAncestors() {
   const menuUuids = new Set(checks.value);
@@ -170,7 +182,7 @@ watch(visible, val => {
     <template v-else>
       <NTree
         v-model:checked-keys="checks"
-        :data="tree"
+        :data="localizedTree"
         key-field="uuid"
         checkable
         expand-on-click

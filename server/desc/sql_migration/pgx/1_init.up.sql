@@ -81,9 +81,8 @@ VALUES
     ('c9d0e1f2-a3b4-d5e6-f7c0-d1e2f3a4b5c6','2024-11-28 12:22:58','2024-11-28 12:22:58','1','d7e8f9a0-b1c2-4334-87d8-e9f0a1b2c3d4','3','添加下一级菜单',0,'',0,'','','','','1','button.manage.menu.add',0,'',0,0,'[]','[{"code":"v1:manage:menu:add","desc":"添加下一级菜单"}]',0,'v1:manage:menu:add'),
     ('d1e2f3a4-b5c6-e7f8-a9d2-e3f4a5b6c7d8','2024-11-28 12:23:59','2024-11-28 12:23:59','1','d7e8f9a0-b1c2-4334-87d8-e9f0a1b2c3d4','3','编辑菜单',0,'',1,'','','','','1','button.manage.menu.edit',0,'',0,0,'[]','[{"code":"v1:manage:menu:edit","desc":"编辑菜单"}]',0,'v1:manage:menu:edit'),
     ('e3f4a5b6-c7d8-f9a0-b1e4-f5a6b7c8d9e0','2024-11-28 12:24:38','2024-11-28 12:24:38','1','d7e8f9a0-b1c2-4334-87d8-e9f0a1b2c3d4','3','删除菜单',0,'',2,'','','','','1','button.manage.menu.delete',0,'',0,0,'[]','[{"code":"v1:manage:menu:delete","desc":"删除菜单"}]',0,'v1:manage:menu:delete'),
-    ('f5a6b7c8-d9e0-a1b2-c3f6-a7b8c9d0e1f2','2024-11-28 15:59:02','2024-11-28 15:59:02','1','','2','个人中心',1,'/manage/user',0,'user-center','/user-center','layout.base$view.user-center','','1','route.user-center',0,'',0,0,'[]','[]',0,''),
     ('bb10f1d2-8d73-4ff9-9702-4f7395b7a001','2024-12-06 00:00:00','2024-12-06 00:00:00','1','a1b2c3d4-e5f6-4782-91a0-b9c8d7e6f5a4','2','邮箱配置',0,'',7,'manage_email','/manage/email','view.manage_email','carbon:email','1','route.manage_email',0,'',0,0,'[]','[{"code":"v1:manage:email:getConfig","desc":"读取邮箱配置"},{"code":"v1:manage:email:saveConfig","desc":"保存邮箱配置"},{"code":"v1:manage:email:testConfig","desc":"发送测试邮件"}]',0,''),
-    ('c1d2e3f4-a5b6-d7e8-f9c2-d3e4f5a6b7c8','2024-11-30 03:20:13','2024-11-30 03:20:13','1','a1b2c3d4-e5f6-4782-91a0-b9c8d7e6f5a4','2','用户详情',1,'',0,'manage_user-detail','/manage/user-detail/:id','view.manage_user-detail','','1','route.manage_user-detail',0,'',0,0,'[]','[]',0,'');
+    ('0f6a2f42-6c4d-4e84-a6b2-0c9f0d3e8a11','2024-11-30 03:20:13','2024-11-30 03:20:13','1','','3','通用接口',0,'',4,'','','','','1','button.commonApi',0,'',0,0,'[]','[{"code":"v1:auth:getUserInfo","desc":"获取当前用户信息"},{"code":"v1:route:getUserRoutes","desc":"获取当前用户路由"},{"code":"v1:route:isRouteExist","desc":"检查路由是否存在"}]',0,'');
 
 DROP TABLE IF EXISTS "manage_role";
 
@@ -142,8 +141,7 @@ VALUES
     ('4b5c6d7e-8f9a-0b1c-2d3e-4f5a6b7c8d9e','2024-12-04 01:33:23','2024-12-04 01:33:23','1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d','c9d0e1f2-a3b4-d5e6-f7c0-d1e2f3a4b5c6',0),
     ('5c6d7e8f-9a0b-1c2d-3e4f-5a6b7c8d9e0f','2024-12-04 01:33:23','2024-12-04 01:33:23','1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d','d1e2f3a4-b5c6-e7f8-a9d2-e3f4a5b6c7d8',0),
     ('6d7e8f9a-0b1c-2d3e-4f5a-6b7c8d9e0f1a','2024-12-04 01:33:23','2024-12-04 01:33:23','1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d','e3f4a5b6-c7d8-f9a0-b1e4-f5a6b7c8d9e0',0),
-    ('7e8f9a0b-1c2d-3e4f-5a6b-7c8d9e0f1a2b','2024-12-04 01:33:23','2024-12-04 01:33:23','1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d','f5a6b7c8-d9e0-a1b2-c3f6-a7b8c9d0e1f2',0),
-    ('8f9a0b1c-2d3e-4f5a-6b7c-8d9e0f1a2b3c','2024-12-04 01:33:23','2024-12-04 01:33:23','1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d','c1d2e3f4-a5b6-d7e8-f9c2-d3e4f5a6b7c8',0),
+    ('0f6a2f42-6c4d-4e84-a6b2-0c9f0d3e8a12','2024-12-04 01:33:23','2024-12-04 01:33:23','1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d','0f6a2f42-6c4d-4e84-a6b2-0c9f0d3e8a11',0),
     ('bb20f1d2-8d73-4ff9-9702-4f7395b7a001','2024-12-06 00:00:00','2024-12-06 00:00:00','1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d','bb10f1d2-8d73-4ff9-9702-4f7395b7a001',0);
 
 DROP TABLE IF EXISTS "manage_user";

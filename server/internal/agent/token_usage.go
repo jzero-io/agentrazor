@@ -1,9 +1,56 @@
 package agent
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"sync"
+	"time"
+
+	"github.com/pkg/errors"
+	"github.com/zeromicro/go-zero/core/logx"
+
+	conversationmodel "github.com/jzero-io/agentrazor/server/internal/model/conversation"
+	conversationtokenusageeventmodel "github.com/jzero-io/agentrazor/server/internal/model/conversation_token_usage_event"
 )
+
+type tokenUsageStore struct {
+	conversation conversationmodel.ConversationModel
+	usageEvent   conversationtokenusageeventmodel.ConversationTokenUsageEventModel
+}
+
+func (s tokenUsageStore) record(ctx context.Context, event TokenUsageEvent) error {
+	conversation, err := s.conversation.FindOne(ctx, nil, event.ConversationID)
+	if errors.Is(err, conversationmodel.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	var modelContextWindow sql.NullInt64
+	if event.ModelContextWindow != nil {
+		modelContextWindow = sql.NullInt64{Int64: *event.ModelContextWindow, Valid: true}
+	}
+	return s.usageEvent.InsertV2(ctx, nil, &conversationtokenusageeventmodel.ConversationTokenUsageEvent{
+		ConversationId:             event.ConversationID,
+		UserUuid:                   conversation.UserUuid,
+		TurnId:                     event.TurnID,
+		LastInputTokens:            event.Last.InputTokens,
+		LastCachedInputTokens:      event.Last.CachedInputTokens,
+		LastCacheWriteInputTokens:  event.Last.CacheWriteInputTokens,
+		LastOutputTokens:           event.Last.OutputTokens,
+		LastReasoningOutputTokens:  event.Last.ReasoningOutputTokens,
+		LastTotalTokens:            event.Last.TotalTokens,
+		TotalInputTokens:           event.Total.InputTokens,
+		TotalCachedInputTokens:     event.Total.CachedInputTokens,
+		TotalCacheWriteInputTokens: event.Total.CacheWriteInputTokens,
+		TotalOutputTokens:          event.Total.OutputTokens,
+		TotalReasoningOutputTokens: event.Total.ReasoningOutputTokens,
+		TotalTokens:                event.Total.TotalTokens,
+		ModelContextWindow:         modelContextWindow,
+	})
+}
 
 // tokenUsageWriter keeps database work off the app-server reader while
 // preserving event order and draining accepted events during shutdown.
@@ -58,6 +105,14 @@ func (w *tokenUsageWriter) run() {
 		w.queue = w.queue[1:]
 		w.mu.Unlock()
 		w.write(event)
+	}
+}
+
+func (s *Service) persistTokenUsage(usage TokenUsageEvent) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := s.tokenUsageStore.record(ctx, usage); err != nil {
+		logx.Errorf("record Codex token usage failed: %v", err)
 	}
 }
 

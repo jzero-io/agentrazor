@@ -46,7 +46,6 @@ const local: App.I18n.Schema = {
     trigger: '触发',
     update: '更新',
     updateSuccess: '更新成功',
-    userCenter: '个人中心',
     yesOrNo: {
       yes: '是',
       no: '否'
@@ -168,10 +167,8 @@ const local: App.I18n.Schema = {
     document_unocss: 'UnoCSS文档',
     document_naive: 'Naive UI文档',
     document_antd: 'Ant Design Vue文档',
-    'user-center': '个人中心',
     manage: '系统管理',
     manage_user: '用户管理',
-    'manage_user-detail': '用户详情',
     manage_role: '角色管理',
     manage_menu: '菜单管理',
     manage_email: '邮箱配置',
@@ -185,6 +182,29 @@ const local: App.I18n.Schema = {
     exception_500: '500'
   },
   button: {
+    commonApi: '通用接口',
+    agent: {
+      config: {
+        save: '保存模型配置',
+        chatgptLogin: 'ChatGPT 登录',
+        apiKeyLogin: 'API Key 登录',
+        logout: '退出模型账号'
+      },
+      skills: {
+        upload: '上传 Skill',
+        edit: '编辑 Skill',
+        delete: '删除 Skill',
+        status: '启用/禁用 Skill'
+      },
+      tokenQuota: {
+        viewGlobal: '读取全局 Token 额度',
+        saveGlobal: '保存全局 Token 额度',
+        viewUser: '读取用户 Token 额度',
+        saveUser: '保存用户 Token 额度',
+        restoreUser: '恢复用户全局额度',
+        resetUser: '重置用户 Token 用量'
+      }
+    },
     manage: {
       user: {
         list: '用户列表',
@@ -418,6 +438,7 @@ const local: App.I18n.Schema = {
         roleStatus: '角色状态',
         roleDesc: '角色描述',
         menuAuth: '菜单权限',
+        editMenuAuth: '编辑菜单权限',
         buttonAuth: '按钮权限',
         form: {
           roleName: '请输入角色名称',

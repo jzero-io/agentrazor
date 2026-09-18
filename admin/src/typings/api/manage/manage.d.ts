@@ -214,6 +214,7 @@ declare namespace Api {
     type MenuTree = {
       uuid: string;
       label: string;
+      i18nKey?: App.I18n.I18nKey | null;
       pUuid: string;
       children?: MenuTree[];
     };

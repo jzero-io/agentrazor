@@ -34,7 +34,7 @@ func (l *QuotaStatus) QuotaStatus() (resp *types.TokenQuotaStatusResponse, err e
 	if err != nil {
 		return nil, err
 	}
-	value, err := l.svcCtx.TokenQuota.Status(l.ctx, userUUID)
+	value, err := l.svcCtx.AgentService.TokenQuota().Status(l.ctx, userUUID)
 	if err != nil {
 		return nil, err
 	}

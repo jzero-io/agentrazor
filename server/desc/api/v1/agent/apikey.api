@@ -31,7 +31,7 @@ type (
 	prefix:          /api/v1
 	group:           v1/agent/apikey
 	compact_handler: true
-	middleware:      AuthxAuthenticate
+	middleware:      Agent
 )
 service server {
 	@doc "列出当前账户的 Agent API 密钥"

@@ -100,7 +100,8 @@ func (l *PwdLogin) PwdLogin(req *types.PwdLoginRequest) (resp *types.LoginRespon
 		return nil, err
 	}
 
-	locked, err := l.svcCtx.LoginLock.IsLocked(l.ctx, user.Uuid)
+	loginGuard := loginlock.NewGuard(l.svcCtx.Redis)
+	locked, err := loginGuard.IsLocked(l.ctx, user.Uuid)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +109,7 @@ func (l *PwdLogin) PwdLogin(req *types.PwdLoginRequest) (resp *types.LoginRespon
 		return nil, loginlock.ErrLocked
 	}
 	if req.Password != user.Password {
-		locked, err = l.svcCtx.LoginLock.RecordFailure(l.ctx, user.Uuid)
+		locked, err = loginGuard.RecordFailure(l.ctx, user.Uuid)
 		if err != nil {
 			return nil, err
 		}

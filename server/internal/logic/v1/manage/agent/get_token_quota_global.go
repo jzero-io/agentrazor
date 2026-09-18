@@ -27,7 +27,7 @@ func NewGetTokenQuotaGlobal(ctx context.Context, svcCtx *svc.ServiceContext, r *
 }
 
 func (l *GetTokenQuotaGlobal) GetTokenQuotaGlobal(req *types.GetTokenQuotaGlobalRequest) (resp *types.GetTokenQuotaGlobalResponse, err error) {
-	value, err := l.svcCtx.TokenQuota.Global(l.ctx)
+	value, err := l.svcCtx.AgentService.TokenQuota().Global(l.ctx)
 	if err != nil {
 		return nil, err
 	}

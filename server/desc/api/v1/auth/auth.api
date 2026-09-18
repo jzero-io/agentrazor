@@ -95,7 +95,7 @@ service server {
 	prefix:          /api/v1
 	group:           v1/auth
 	compact_handler: true
-	middleware:      AuthxAuthenticate
+	middleware:      Authx
 )
 service server {
 	@handler GetUserInfo

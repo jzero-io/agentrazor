@@ -64,7 +64,7 @@ func agentIdentityUUID(ctx context.Context) (string, bool) {
 }
 
 func (m *AgentMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
-	jwtHandler := m.svcCtx.AuthxAuthenticate(func(w http.ResponseWriter, r *http.Request) {
+	jwtHandler := m.svcCtx.AuthxMiddleware.Authenticate(func(w http.ResponseWriter, r *http.Request) {
 		userUUID, ok := agentIdentityUUID(r.Context())
 		if !ok {
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)

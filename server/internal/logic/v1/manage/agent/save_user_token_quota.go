@@ -30,7 +30,7 @@ func (l *SaveUserTokenQuota) SaveUserTokenQuota(req *types.SaveUserTokenQuotaReq
 	if err := ensureTokenQuotaUser(l.ctx, l.svcCtx.Model.ManageUser, req.UserUuid); err != nil {
 		return nil, err
 	}
-	if err := l.svcCtx.TokenQuota.SaveUser(
+	if err := l.svcCtx.AgentService.TokenQuota().SaveUser(
 		l.ctx,
 		req.UserUuid,
 		req.Enabled,

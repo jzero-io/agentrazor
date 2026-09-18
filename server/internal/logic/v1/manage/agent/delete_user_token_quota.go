@@ -30,7 +30,7 @@ func (l *DeleteUserTokenQuota) DeleteUserTokenQuota(req *types.DeleteUserTokenQu
 	if err := ensureTokenQuotaUser(l.ctx, l.svcCtx.Model.ManageUser, req.UserUuid); err != nil {
 		return nil, err
 	}
-	if err := l.svcCtx.TokenQuota.DeleteUser(l.ctx, req.UserUuid); err != nil {
+	if err := l.svcCtx.AgentService.TokenQuota().DeleteUser(l.ctx, req.UserUuid); err != nil {
 		return nil, err
 	}
 	return &types.DeleteUserTokenQuotaResponse{}, nil

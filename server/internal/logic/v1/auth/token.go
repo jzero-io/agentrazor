@@ -59,7 +59,8 @@ func issueLoginTokenPair(ctx context.Context, svcCtx *svc.ServiceContext, userUU
 		return "", "", err
 	}
 
-	locked, resetErr := svcCtx.LoginLock.ResetAfterSuccess(ctx, userUUID)
+	loginGuard := loginlock.NewGuard(svcCtx.Redis)
+	locked, resetErr := loginGuard.ResetAfterSuccess(ctx, userUUID)
 	if resetErr != nil || locked {
 		// Never expose an access token when the final atomic lock check rejects
 		// the login. Deletion is best effort because the token has not left the

@@ -6,12 +6,11 @@ import (
 	"github.com/jzero-io/agentrazor/core-engine/svc"
 	"github.com/jzero-io/jzero/core/configcenter"
 	"github.com/jzero-io/jzero/core/stores/modelx"
+	"github.com/zeromicro/go-zero/core/logx"
 
 	"github.com/jzero-io/agentrazor/server/internal/agent"
 	"github.com/jzero-io/agentrazor/server/internal/config"
 	"github.com/jzero-io/agentrazor/server/internal/model"
-	"github.com/jzero-io/agentrazor/server/internal/service/loginlock"
-	"github.com/jzero-io/agentrazor/server/internal/service/quota"
 )
 
 type ServiceContext struct {
@@ -19,8 +18,6 @@ type ServiceContext struct {
 	ConfigCenter configcenter.ConfigCenter[config.Config]
 	Model        model.Model
 	AgentService *agent.Service
-	TokenQuota   *quota.Service
-	LoginLock    *loginlock.Guard
 	Middleware
 }
 
@@ -32,13 +29,8 @@ func NewServiceContext(cc configcenter.ConfigCenter[config.Config], route2code f
 
 	svcCtx.ServiceContext = svc.NewServiceContext(svcCtx.ConfigCenter.MustGetConfig().Config, route2code)
 	svcCtx.Model = model.NewModel(svcCtx.SqlxConn, modelx.WithCachedConn(modelx.NewConnWithCache(svcCtx.SqlxConn, svcCtx.Cache)))
-	svcCtx.TokenQuota = quota.NewService(svcCtx.Model.AgentTokenQuota, svcCtx.Model.ConversationTokenUsageEvent)
-	svcCtx.LoginLock = loginlock.NewGuard(svcCtx.Redis)
-	agentService, err := agent.NewService()
-	if err != nil {
-		panic(err)
-	}
+	agentService, err := agent.NewService(svcCtx.Model)
+	logx.Must(err)
 	svcCtx.AgentService = agentService
-	svcCtx.installAgentTokenUsageRecorder()
 	return svcCtx
 }

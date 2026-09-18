@@ -5,9 +5,10 @@ import (
 	"net/http"
 
 	"github.com/jzero-io/jzero/core/stores/condition"
+	"github.com/pkg/errors"
 	"github.com/zeromicro/go-zero/core/logx"
 
-	"github.com/jzero-io/agentrazor/server/internal/model/manage_menu"
+	managemenumodel "github.com/jzero-io/agentrazor/server/internal/model/manage_menu"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/route"
 )
@@ -28,9 +29,15 @@ func NewIsRouteExist(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Re
 }
 
 func (l *IsRouteExist) IsRouteExist(req *types.IsRouteExistRequest) (resp bool, err error) {
-	manageMenu, err := l.svcCtx.Model.ManageMenu.FindOneByCondition(l.ctx, nil, condition.NewChain().
-		Equal(manage_menu.RouteName, req.RouteName).
+	_, err = l.svcCtx.Model.ManageMenu.FindOneByCondition(l.ctx, nil, condition.NewChain().
+		Equal(managemenumodel.RouteName, req.RouteName).
 		Build()...)
+	if err != nil {
+		if errors.Is(err, managemenumodel.ErrNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
 
-	return manageMenu != nil, err
+	return true, nil
 }

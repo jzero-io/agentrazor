@@ -142,6 +142,7 @@ type TreeRequest struct {
 type TreeResponse struct {
 	Uuid     string         `json:"uuid"`
 	Label    string         `json:"label"`
+	I18nKey  string         `json:"i18nKey,optional"`
 	PUuid    string         `json:"pUuid"`
 	Order    int64          `json:"-"`
 	Children []TreeResponse `json:"children"`

@@ -42,7 +42,7 @@ func (l *GetUserTokenQuota) GetUserTokenQuota(req *types.GetUserTokenQuotaReques
 	if err := ensureTokenQuotaUser(l.ctx, l.svcCtx.Model.ManageUser, req.UserUuid); err != nil {
 		return nil, err
 	}
-	value, err := l.svcCtx.TokenQuota.Status(l.ctx, req.UserUuid)
+	value, err := l.svcCtx.AgentService.TokenQuota().Status(l.ctx, req.UserUuid)
 	if err != nil {
 		return nil, err
 	}

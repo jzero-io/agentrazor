@@ -82,7 +82,9 @@ func (l *GetUserInfo) GetUserInfo(req *types.GetUserInfoRequest) (resp *types.Ge
 	}
 	buttons := make([]string, 0)
 	for _, menu := range menus {
-		buttons = append(buttons, menu.ButtonCode)
+		if menu.ButtonCode != "" {
+			buttons = append(buttons, menu.ButtonCode)
+		}
 	}
 
 	return &types.GetUserInfoResponse{

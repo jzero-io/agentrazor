@@ -54,10 +54,11 @@ func buildSimpleMenuTree(menus []*types.SystemMenu, parentUuid string) []types.T
 	for _, menu := range menus {
 		if menu.ParentUuid == parentUuid {
 			subMenu := types.TreeResponse{
-				Uuid:  menu.Uuid,
-				Label: menu.MenuName,
-				PUuid: menu.ParentUuid,
-				Order: menu.Order,
+				Uuid:    menu.Uuid,
+				Label:   menu.MenuName,
+				I18nKey: menu.I18nKey,
+				PUuid:   menu.ParentUuid,
+				Order:   menu.Order,
 			}
 			subMenu.Children = buildSimpleMenuTree(menus, menu.Uuid)
 			sort.Slice(subMenu.Children, func(i, j int) bool {

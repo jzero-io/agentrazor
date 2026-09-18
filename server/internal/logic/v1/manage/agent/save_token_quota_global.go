@@ -27,7 +27,7 @@ func NewSaveTokenQuotaGlobal(ctx context.Context, svcCtx *svc.ServiceContext, r 
 }
 
 func (l *SaveTokenQuotaGlobal) SaveTokenQuotaGlobal(req *types.SaveTokenQuotaGlobalRequest) (resp *types.SaveTokenQuotaGlobalResponse, err error) {
-	if err := l.svcCtx.TokenQuota.SaveGlobal(
+	if err := l.svcCtx.AgentService.TokenQuota().SaveGlobal(
 		l.ctx,
 		req.FiveHourLimitTokens,
 		req.SevenDayLimitTokens,

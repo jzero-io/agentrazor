@@ -179,30 +179,7 @@ export const generatedRoutes: GeneratedRoute[] = [
           order: 1,
           roles: ['R_ADMIN']
         }
-      },
-      {
-        name: 'manage_user-detail',
-        path: '/manage/user-detail/:uuid',
-        component: 'view.manage_user-detail',
-        props: true,
-        meta: {
-          title: 'manage_user-detail',
-          i18nKey: 'route.manage_user-detail',
-          hideInMenu: true,
-          roles: ['R_ADMIN'],
-          activeMenu: 'manage_user'
-        }
       }
     ]
-  },
-  {
-    name: 'user-center',
-    path: '/user-center',
-    component: 'layout.base$view.user-center',
-    meta: {
-      title: 'user-center',
-      i18nKey: 'route.user-center',
-      hideInMenu: true
-    }
   }
 ];

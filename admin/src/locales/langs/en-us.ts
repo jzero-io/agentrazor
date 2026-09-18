@@ -46,7 +46,6 @@ const local: App.I18n.Schema = {
     trigger: 'Trigger',
     update: 'Update',
     updateSuccess: 'Update Success',
-    userCenter: 'User Center',
     yesOrNo: {
       yes: 'Yes',
       no: 'No'
@@ -168,10 +167,8 @@ const local: App.I18n.Schema = {
     document_unocss: 'UnoCSS Document',
     document_naive: 'Naive UI Document',
     document_antd: 'Ant Design Vue Document',
-    'user-center': 'User Center',
     manage: 'System Manage',
     manage_user: 'User Manage',
-    'manage_user-detail': 'User Detail',
     manage_role: 'Role Manage',
     manage_menu: 'Menu Manage',
     manage_email: 'Email Settings',
@@ -185,6 +182,29 @@ const local: App.I18n.Schema = {
     exception_500: '500'
   },
   button: {
+    commonApi: 'Common APIs',
+    agent: {
+      config: {
+        save: 'Save Model Configuration',
+        chatgptLogin: 'ChatGPT Login',
+        apiKeyLogin: 'API Key Login',
+        logout: 'Log Out Model Account'
+      },
+      skills: {
+        upload: 'Upload Skill',
+        edit: 'Edit Skill',
+        delete: 'Delete Skill',
+        status: 'Enable/Disable Skill'
+      },
+      tokenQuota: {
+        viewGlobal: 'View Global Token Quota',
+        saveGlobal: 'Save Global Token Quota',
+        viewUser: 'View User Token Quota',
+        saveUser: 'Save User Token Quota',
+        restoreUser: 'Restore User Global Quota',
+        resetUser: 'Reset User Token Usage'
+      }
+    },
     manage: {
       user: {
         list: 'User List',
@@ -419,6 +439,7 @@ const local: App.I18n.Schema = {
         roleStatus: 'Role Status',
         roleDesc: 'Role Description',
         menuAuth: 'Menu Auth',
+        editMenuAuth: 'Edit Menu Permissions',
         buttonAuth: 'Button Auth',
         form: {
           roleName: 'Please enter role name',
