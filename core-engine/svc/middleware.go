@@ -10,23 +10,21 @@ import (
 )
 
 type Middleware struct {
-	Authx             rest.Middleware
-	AuthxAuthenticate rest.Middleware
-	Ok                func(ctx context.Context, data any) any
-	Error             func(ctx context.Context, err error) (int, any)
-	I18n              rest.Middleware
-	Validate          *middleware.ValidatorMiddleware
+	Authx    rest.Middleware
+	Ok       func(ctx context.Context, data any) any
+	Error    func(ctx context.Context, err error) (int, any)
+	I18n     rest.Middleware
+	Validate *middleware.ValidatorMiddleware
 }
 
 func NewMiddleware(svcCtx *ServiceContext, route2code func(r *http.Request) string) Middleware {
 	authx := middleware.NewAuthxMiddleware(svcCtx.CasbinEnforcer, route2code, svcCtx.Config.Jwt.AccessSecret, svcCtx.Redis)
 	svcCtx.AuthxMiddleware = authx
 	return Middleware{
-		Error:             middleware.NewErrorMiddleware().Handle,
-		Ok:                middleware.NewOkMiddleware().Handle,
-		Authx:             authx.Handle,
-		AuthxAuthenticate: authx.Authenticate,
-		I18n:              middleware.NewI18nMiddleware().Handle,
-		Validate:          middleware.NewValidatorMiddleware(),
+		Error:    middleware.NewErrorMiddleware().Handle,
+		Ok:       middleware.NewOkMiddleware().Handle,
+		Authx:    authx.Handle,
+		I18n:     middleware.NewI18nMiddleware().Handle,
+		Validate: middleware.NewValidatorMiddleware(),
 	}
 }
