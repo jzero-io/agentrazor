@@ -3,6 +3,7 @@ import type { Conversation, ConversationDetail, ThreadItem, Turn } from '../../s
 import {
   completedProcessSummary,
   formatTurnDuration,
+  hasGeneratedImageAsset,
   processDisplayItems,
   showCompletedProcessSummary,
   streamingProcessSummary,
@@ -201,7 +202,7 @@ export function useConversationTurns(options: UseConversationTurnsOptions) {
 
   function isVisibleProcessStreamItem(item: ThreadItem) {
     return item.type !== 'userMessage'
-      && item.type !== 'imageGeneration'
+      && (item.type !== 'imageGeneration' || !hasGeneratedImageAsset(item))
       && item.type !== 'reasoning'
       && (item.type !== 'agentMessage' || Boolean(item.phase) && item.phase !== 'final_answer');
   }

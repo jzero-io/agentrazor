@@ -7,9 +7,10 @@ defineOptions({
 import type { ComponentPublicInstance } from 'vue';
 import { Icon } from '@iconify/vue';
 import type { Conversation, ThreadItem, Turn } from '../../../service/api';
-import type { ProcessDisplayItem } from '../../../utils/processDisplay';
+import { hasGeneratedImageAsset, type ProcessDisplayItem } from '../../../utils/processDisplay';
 import type { WorkspaceDescriptor } from '../../../hooks/business/useWorkspacePanel';
 import ComposerBox from '../../../layouts/modules/composer-box/index.vue';
+import GeneratedImageAsset from './GeneratedImageAsset.vue';
 import MarkdownBlock from './MarkdownBlock.vue';
 import ProcessItemCard from './ProcessItemCard.vue';
 import WorkspaceAttachmentThumbnail from './WorkspaceAttachmentThumbnail.vue';
@@ -39,6 +40,7 @@ interface ParsedAgentMessage {
 
 const props = defineProps<{
   selectedConversationId: string;
+  generatedImageDir: string;
   isNewChat: boolean;
   newChatGroupName: string;
   currentUser: unknown;
@@ -77,8 +79,6 @@ const props = defineProps<{
   copyMessage: (item: ThreadItem) => void;
   parseAgentMessage: (content: string, streaming: boolean) => ParsedAgentMessage;
   openWorkspace: (workspace: WorkspaceDescriptor) => void;
-  activityIcon: (item: ThreadItem) => string;
-  activityTitle: (item: ThreadItem) => string;
   openLogin: () => void;
 }>();
 
@@ -98,6 +98,30 @@ function emitError(message: string) {
 function workspaceAttachmentPath(path: string) {
   const relativePath = props.displayWorkspaceProcessPath(path);
   return props.normalizeWorkspaceFilePath(relativePath);
+}
+
+const GENERATED_IMAGES_ASSET_DIRECTORY = '__generated_images__';
+
+function generatedImageAssetPath(item: ThreadItem) {
+  const savedPath = typeof item.savedPath === 'string'
+    ? item.savedPath.replace(/\\/g, '/').trim()
+    : '';
+  if (!savedPath) return '';
+
+  const generatedImageDir = props.generatedImageDir.replace(/\\/g, '/').replace(/\/+$/, '');
+  let relativePath = '';
+  if (generatedImageDir && savedPath.startsWith(generatedImageDir + '/')) {
+    relativePath = savedPath.slice(generatedImageDir.length + 1);
+  } else if (!savedPath.includes('/')) {
+    relativePath = savedPath;
+  }
+  if (!relativePath) return '';
+  return props.normalizeWorkspaceFilePath(GENERATED_IMAGES_ASSET_DIRECTORY + '/' + relativePath);
+}
+
+function generatedImageName(item: ThreadItem) {
+  const savedPath = typeof item.savedPath === 'string' ? item.savedPath.replace(/\\/g, '/') : '';
+  return String(item.alt || item.revisedPrompt || savedPath.split('/').filter(Boolean).pop() || 'Generated image');
 }
 
 
@@ -357,15 +381,15 @@ function userItemAttachments(item: ThreadItem) {
                 </div>
               </article>
 
-              <article v-else-if="item.type === 'imageGeneration'" class="activity-card image-item">
-                <div class="activity-heading"><Icon :icon="activityIcon(item)" /><span>{{ activityTitle(item) }}</span></div>
-                <n-image
-                  v-if="item.dataUrl"
-                  class="generated-image"
-                  :src="item.dataUrl"
-                  :alt="item.alt || String(item.result || '生成的图片')"
-                  object-fit="contain"
-                  lazy
+              <article
+                v-else-if="item.type === 'imageGeneration' && hasGeneratedImageAsset(item)"
+                class="generated-image-result"
+              >
+                <GeneratedImageAsset
+                  :name="generatedImageName(item)"
+                  :path="generatedImageAssetPath(item)"
+                  :data-url="typeof item.dataUrl === 'string' ? item.dataUrl.trim() : undefined"
+                  :load-image="loadWorkspaceImage"
                 />
               </article>
             </template>

@@ -57,10 +57,17 @@ export function humanizeSkillName(name: string): string {
     .join(' ');
 }
 
+export function hasGeneratedImageAsset(item: ThreadItem) {
+  if (item.type !== 'imageGeneration') return false;
+  const dataUrl = typeof item.dataUrl === 'string' ? item.dataUrl.trim() : '';
+  const savedPath = typeof item.savedPath === 'string' ? item.savedPath.trim() : '';
+  return Boolean(dataUrl || savedPath);
+}
+
 export function turnProcessItems(turn: Turn) {
   return turn.items.filter(item =>
     item.type !== 'userMessage'
-    && item.type !== 'imageGeneration'
+    && (item.type !== 'imageGeneration' || !hasGeneratedImageAsset(item))
     && item.type !== 'reasoning'
     && (item.type !== 'agentMessage' || Boolean(item.phase) && !isTurnFinalAgentMessage(turn, item))
   );
@@ -72,7 +79,7 @@ export function turnWorkedItems(turn: Turn) {
 
 export function turnResultItems(turn: Turn) {
   return turn.items.filter(item =>
-    item.type === 'imageGeneration'
+    hasGeneratedImageAsset(item)
     || item.type === 'agentMessage' && isTurnFinalAgentMessage(turn, item)
   );
 }

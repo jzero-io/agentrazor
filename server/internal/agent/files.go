@@ -20,6 +20,10 @@ const (
 	MaxAttachmentSize     = maxFileSize
 	MaxMessageAttachments = 10
 	attachmentDirectory   = "attachments"
+	// GeneratedImagesWorkspaceDirectory is a virtual workspace directory used
+	// by the web client to browse images produced by OpenAI image generation.
+	// The files remain stored under CODEX_HOME/generated_images/<conversation>.
+	GeneratedImagesWorkspaceDirectory = "__generated_images__"
 )
 
 type WorkspaceEntry struct {
@@ -197,12 +201,97 @@ func (s *Service) ListWorkspaceFiles(ctx context.Context, conversationID string)
 	}
 	files, err := s.workspaceFileTree(ctx, root, "")
 	if err != nil {
+		if !isRemoteNotFound(err) {
+			return nil, err
+		}
+		files = []WorkspaceEntry{}
+	}
+	generatedImages, err := s.generatedImageTree(ctx, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	if len(generatedImages) > 0 {
+		files = append([]WorkspaceEntry{{
+			Name: "图片资产", Path: GeneratedImagesWorkspaceDirectory, Type: "directory", Children: generatedImages,
+		}}, files...)
+	}
+	return files, nil
+}
+
+func (s *Service) GeneratedImageDir(conversationID string) (string, error) {
+	return s.generatedImagesRoot(conversationID)
+}
+
+func (s *Service) generatedImagesRoot(conversationID string) (string, error) {
+	conversationID = strings.TrimSpace(conversationID)
+	if err := validateThreadID(conversationID); err != nil {
+		return "", err
+	}
+	if strings.ContainsAny(conversationID, "/\\") || filepath.Base(conversationID) != conversationID {
+		return "", errors.New("invalid conversation id")
+	}
+	return safeChild(filepath.Join(s.codexHome, "generated_images"), conversationID)
+}
+
+func (s *Service) generatedImageTree(ctx context.Context, conversationID string) ([]WorkspaceEntry, error) {
+	root, err := s.generatedImagesRoot(conversationID)
+	if err != nil {
+		return nil, err
+	}
+	rootMetadata, err := s.metadata(ctx, root)
+	if err != nil {
 		if isRemoteNotFound(err) {
 			return []WorkspaceEntry{}, nil
 		}
 		return nil, err
 	}
-	return files, nil
+	if rootMetadata.IsSymlink || !rootMetadata.IsDirectory {
+		return nil, errors.New("generated image root is not a supported directory")
+	}
+
+	entries, err := s.readDirectory(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]WorkspaceEntry, 0, len(entries))
+	for _, entry := range entries {
+		if entry.Name == "" || strings.ContainsAny(entry.Name, "/\\") || !entry.IsFile {
+			continue
+		}
+		metadata, err := s.metadata(ctx, filepath.Join(root, entry.Name))
+		if err != nil || metadata.IsSymlink || !metadata.IsFile || metadata.Size > maxFileSize {
+			continue
+		}
+		result = append(result, WorkspaceEntry{
+			Name: entry.Name,
+			Path: filepath.ToSlash(filepath.Join(GeneratedImagesWorkspaceDirectory, entry.Name)),
+			Type: "file", Children: []WorkspaceEntry{},
+		})
+	}
+	sort.SliceStable(result, func(i, j int) bool {
+		return strings.ToLower(result[i].Name) < strings.ToLower(result[j].Name)
+	})
+	rootMetadata, err = s.metadata(ctx, root)
+	if err != nil || rootMetadata.IsSymlink || !rootMetadata.IsDirectory {
+		return nil, errors.New("generated image root changed while listing files")
+	}
+	return result, nil
+}
+
+func (s *Service) generatedImageTarget(conversationID, savedPath string) (root, target string, err error) {
+	root, err = s.generatedImagesRoot(conversationID)
+	if err != nil {
+		return "", "", err
+	}
+	target, err = safePathWithin(root, savedPath)
+	if err != nil {
+		return "", "", err
+	}
+	relative, err := filepath.Rel(root, target)
+	if err != nil || relative == "." || strings.ContainsAny(relative, "/\\") {
+		return "", "", errors.New("generated image path must reference a direct child")
+	}
+	return root, target, nil
 }
 
 func (s *Service) workspaceFileTree(ctx context.Context, root, relative string) ([]WorkspaceEntry, error) {
@@ -254,9 +343,21 @@ func isInternalWorkspaceEntry(name string) bool {
 	return name == ".git" || name == ".agents" || name == ".codex"
 }
 
+func generatedImageRelativePath(filePath string) (string, bool) {
+	normalizedPath := strings.ReplaceAll(strings.TrimSpace(filePath), "\\", "/")
+	generatedPrefix := GeneratedImagesWorkspaceDirectory + "/"
+	if !strings.HasPrefix(normalizedPath, generatedPrefix) {
+		return "", false
+	}
+	return strings.TrimPrefix(normalizedPath, generatedPrefix), true
+}
+
 func (s *Service) ReadWorkspaceFile(ctx context.Context, conversationID, filePath string) (File, error) {
 	if err := validateThreadID(conversationID); err != nil {
 		return File{}, err
+	}
+	if generatedPath, ok := generatedImageRelativePath(filePath); ok {
+		return s.ReadGeneratedImage(ctx, conversationID, generatedPath)
 	}
 	root, err := safeChild(s.workspace, conversationID)
 	if err != nil {
@@ -407,13 +508,13 @@ func attachmentKind(name, contentType string) string {
 }
 
 func (s *Service) ReadGeneratedImage(ctx context.Context, conversationID, savedPath string) (File, error) {
-	if err := validateThreadID(conversationID); err != nil {
-		return File{}, err
-	}
-	root := filepath.Join(s.codexHome, "generated_images", conversationID)
-	target, err := safePathWithin(root, savedPath)
+	root, target, err := s.generatedImageTarget(conversationID, savedPath)
 	if err != nil {
 		return File{}, err
+	}
+	rootMetadata, err := s.metadata(ctx, root)
+	if err != nil || rootMetadata.IsSymlink || !rootMetadata.IsDirectory {
+		return File{}, errors.New("generated image root is not a supported directory")
 	}
 	metadata, err := s.metadata(ctx, target)
 	if err != nil {
@@ -425,6 +526,12 @@ func (s *Service) ReadGeneratedImage(ctx context.Context, conversationID, savedP
 	data, err := s.readFile(ctx, target, maxFileSize)
 	if err != nil {
 		return File{}, err
+	}
+	rootMetadata, rootErr := s.metadata(ctx, root)
+	metadataAfterRead, targetErr := s.metadata(ctx, target)
+	if rootErr != nil || targetErr != nil || rootMetadata.IsSymlink || !rootMetadata.IsDirectory ||
+		metadataAfterRead.IsSymlink || !metadataAfterRead.IsFile || metadataAfterRead.Size != metadata.Size {
+		return File{}, errors.New("generated image path changed while reading")
 	}
 	contentType := http.DetectContentType(data)
 	if !strings.HasPrefix(contentType, "image/") {

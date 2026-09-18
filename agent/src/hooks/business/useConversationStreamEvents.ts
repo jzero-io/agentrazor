@@ -43,6 +43,7 @@ interface ConversationStreamEventsOptions {
   setConversationDetail: (snapshot: ConversationDetail) => void;
   scrollToBottom: () => Promise<void>;
   closeIdleConversationStreams: () => void;
+  onGeneratedImagesChanged?: (conversationId: string) => void;
 }
 
 interface PendingStreamDelta {
@@ -155,6 +156,9 @@ export function useConversationStreamEvents(options: ConversationStreamEventsOpt
       );
       await nextTick();
       options.closeIdleConversationStreams();
+      if (Array.isArray(turn?.items) && (turn.items as ThreadItem[]).some(item => item.type === 'imageGeneration')) {
+        options.onGeneratedImagesChanged?.(event.conversationId);
+      }
       if (completedTurn) {
         const targetDetail = options.detailsByConversation.get(event.conversationId);
         if (targetDetail) {
@@ -237,6 +241,9 @@ export function useConversationStreamEvents(options: ConversationStreamEventsOpt
         const mergedItem = options.findStreamingItem(event.conversationId, completedItem.id) || completedItem;
         if (mergedItem.type === 'agentMessage' && mergedItem.phase === 'final_answer') {
           if (mergedItem.text) options.activeTurnResultSeenByConversation.set(event.conversationId, true);
+        }
+        if (mergedItem.type === 'imageGeneration') {
+          options.onGeneratedImagesChanged?.(event.conversationId);
         }
       }
       if (isSelectedConversation) void options.scrollToBottom();

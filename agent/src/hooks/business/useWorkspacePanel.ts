@@ -1,7 +1,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, type Ref } from 'vue';
 import hljs from 'highlight.js/lib/common';
 import type { WorkspaceEntry, WorkspaceFileBlob, WorkspaceFileContent } from '../../service/api';
-import { useWorkspaceFileTree } from './useWorkspaceFileTree';
+import { GENERATED_IMAGES_ASSET_DIRECTORY, useWorkspaceFileTree } from './useWorkspaceFileTree';
 
 export interface WorkspaceDescriptor {
   type: 'workspace';
@@ -327,7 +327,10 @@ export function useWorkspacePanel(options: {
   });
   const title = computed(() => activeFilePreview.value?.name || activeWorkspace.value?.title || '');
   const filePath = computed(() => activeFilePreview.value ? displayWorkspaceFilePath(activeFilePreview.value) : '');
-  const fileBreadcrumbs = computed(() => filePath.value.split('/').filter(Boolean));
+  const fileBreadcrumbs = computed(() => {
+    const parts = filePath.value.split('/').filter(Boolean);
+    return parts[0] === GENERATED_IMAGES_ASSET_DIRECTORY ? parts.slice(1) : parts;
+  });
   const fileBadge = computed(() => {
     const language = activeFilePreview.value?.language || 'text';
     if (language === 'typescript') return 'TS';
@@ -399,6 +402,12 @@ export function useWorkspacePanel(options: {
     const file = await options.fetchBlob(path);
     if (!isImageFile(file.name, file.contentType)) throw new Error('工作区文件不是受支持的图片');
     return file.blob;
+  }
+
+  async function loadTreeImage(relativePath: string) {
+    const path = safeWorkspaceFileURL(options.selectedConversationId.value, relativePath);
+    if (!path) throw new Error('图片路径无效');
+    return loadImage(path);
   }
 
   function previewsForConversation(conversationId: string) {
@@ -633,6 +642,10 @@ export function useWorkspacePanel(options: {
     if (!preview || preview.placeholder) void openFile(activePath, true);
   }
 
+  function refreshFiles() {
+    void fileTree.load(true);
+  }
+
   function reload() {
     const state = activeState.value;
     if (state?.kind === 'file') {
@@ -680,10 +693,9 @@ export function useWorkspacePanel(options: {
     if (!fileTabs.some(tab => tab.path === closedTab.path)) revokeFilePreview(conversationId, closedTab.path);
     fileError.value = '';
     if (!fileTabs.length) {
-      const hasWorkspaceTabs = Boolean(state.workspaceTabs?.length);
       setState(conversationId, {
-        visible: hasWorkspaceTabs,
-        kind: hasWorkspaceTabs ? 'workspace' : undefined,
+        visible: true,
+        kind: 'file',
         fileTabs: [],
         activeFileTabId: ''
       });
@@ -794,6 +806,7 @@ export function useWorkspacePanel(options: {
     fileLoading,
     fileError,
     fileTree: fileTree.tree,
+    imageAssets: fileTree.imageAssets,
     fileTreeExpandedPaths: fileTree.expandedPaths,
     fileTreeLoading: fileTree.loading,
     fileTreeLoaded: fileTree.loaded,
@@ -809,6 +822,7 @@ export function useWorkspacePanel(options: {
     panelStyle,
     normalizeFilePath,
     loadImage,
+    loadTreeImage,
     displayWorkspaceFilePath,
     displayWorkspaceProcessPath: (path: string) => displayWorkspaceProcessPath(path, options.workspaceDir.value),
     openWorkspace,
@@ -826,6 +840,7 @@ export function useWorkspacePanel(options: {
     openTreeFile,
     toggleExpanded,
     reload,
+    refreshFiles,
     restore,
     removeConversation,
     startResize

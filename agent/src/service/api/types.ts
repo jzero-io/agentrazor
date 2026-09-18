@@ -15,6 +15,7 @@ export interface ConversationMetadata {
   id: string;
   title: string;
   workspaceDir: string;
+  generatedImageDir: string;
   updatedAt: string;
 }
 

@@ -5,6 +5,7 @@ import { NButton, NSpin } from 'naive-ui';
 import type { FilePreview, FilePreviewTab, WorkspaceDescriptor, WorkspaceTab } from '../../../hooks/business/useWorkspacePanel';
 import type { WorkspaceTreeNode } from '../../../hooks/business/useWorkspaceFileTree';
 import FileTreeNode from './FileTreeNode.vue';
+import ImageAssetThumbnail from './ImageAssetThumbnail.vue';
 import { fileVisualKind, fileVisualLabel } from './filePresentation';
 
 defineOptions({
@@ -40,6 +41,8 @@ const props = defineProps<{
   fileTreeLoading: boolean;
   fileTreeLoaded: boolean;
   fileTreeError: string;
+  imageAssets: WorkspaceTreeNode[];
+  loadTreeImage: (relativePath: string) => Promise<Blob>;
 }>();
 
 const emit = defineEmits<{
@@ -60,6 +63,7 @@ const emit = defineEmits<{
 
 const draggingFileTabId = ref('');
 const fileTreeVisible = ref(false);
+const imageAssetsVisible = ref(false);
 const addFileTabMode = ref(false);
 const pickerOpen = ref(false);
 const pickerSection = ref<'root' | 'workspace'>('root');
@@ -76,6 +80,7 @@ const breadcrumbPopupPosition = ref({ left: 10, top: 112, width: 360 });
 watch(
   () => props.conversationId,
   () => {
+    imageAssetsVisible.value = false;
     fileTreeVisible.value = false;
     addFileTabMode.value = false;
     pickerOpen.value = false;
@@ -107,22 +112,41 @@ function toggleFileTree() {
   breadcrumbPopupOpen.value = false;
   const nextVisible = !fileTreeVisible.value;
   fileTreeVisible.value = nextVisible;
+  if (nextVisible) imageAssetsVisible.value = false;
   addFileTabMode.value = false;
   if (nextVisible) emit('switchFiles');
 }
 
+function openImageAssets() {
+  pickerOpen.value = false;
+  pickerSection.value = 'root';
+  fileTreeVisible.value = false;
+  imageAssetsVisible.value = true;
+  addFileTabMode.value = false;
+  emit('switchFiles');
+  breadcrumbPopupOpen.value = false;
+}
+
 function openFiles(forceNewTab: boolean) {
   pickerOpen.value = false;
+  pickerSection.value = 'root';
   fileTreeVisible.value = true;
+  imageAssetsVisible.value = false;
   addFileTabMode.value = forceNewTab;
   emit('switchFiles');
 }
 
 function openTreeFile(path: string) {
+  imageAssetsVisible.value = false;
   emit('openTreeFile', path, addFileTabMode.value);
   if (window.matchMedia('(max-width: 720px)').matches) fileTreeVisible.value = false;
   addFileTabMode.value = false;
   breadcrumbPopupOpen.value = false;
+}
+
+function selectFile(tabId: string) {
+  imageAssetsVisible.value = false;
+  emit('selectFile', tabId);
 }
 
 function openBreadcrumbDirectory(index: number, event: MouseEvent) {
@@ -233,7 +257,7 @@ function dropTab(event: DragEvent, tabId: string) {
     <aside ref="panelElement" v-if="visible && contentReady" class="workspace-panel" :class="{ 'is-expanded': expanded, 'is-file-preview': !workspace }">
     <div class="workspace-resizer" aria-hidden="true" @pointerdown="emit('resizeStart', $event)" />
     <header class="workspace-panel-header">
-      <div v-if="workspaceTabs.length || fileTabs.length" class="file-preview-tabs">
+      <div v-if="!imageAssetsVisible && (workspaceTabs.length || fileTabs.length)" class="file-preview-tabs">
         <button
           v-for="tab in workspaceTabs"
           :key="tab.tabId"
@@ -263,12 +287,12 @@ function dropTab(event: DragEvent, tabId: string) {
           type="button"
           class="file-preview-tab"
           :class="{
-            'is-active': activeKind === 'file' && tab.tabId === activeFileTabId,
+            'is-active': activeKind === 'file' && !imageAssetsVisible && tab.tabId === activeFileTabId,
             'is-dragging': draggingFileTabId === tab.tabId
           }"
           :style="{ order: tab.order }"
           draggable="true"
-          @click="emit('selectFile', tab.tabId)"
+          @click="selectFile(tab.tabId)"
           @dragstart="startTabDrag($event, tab.tabId)"
           @dragend="draggingFileTabId = ''"
           @dragover="enterTabDrag"
@@ -321,6 +345,10 @@ function dropTab(event: DragEvent, tabId: string) {
             <button type="button" class="workspace-panel-picker-item" @click="openFiles(true)">
               <Icon icon="lucide:folders" />
               <span>文件</span>
+            </button>
+            <button type="button" class="workspace-panel-picker-item" @click="openImageAssets">
+              <Icon icon="solar:gallery-linear" />
+              <span>图片资产</span>
             </button>
           </template>
           <template v-else>
@@ -400,6 +428,10 @@ function dropTab(event: DragEvent, tabId: string) {
             <Icon icon="lucide:folders" />
             <span>文件</span>
           </button>
+          <button type="button" class="workspace-panel-launcher-item" @click="openImageAssets">
+            <Icon icon="solar:gallery-linear" />
+            <span>图片资产</span>
+          </button>
         </div>
       </div>
 
@@ -411,7 +443,7 @@ function dropTab(event: DragEvent, tabId: string) {
       />
 
       <section v-else class="file-preview-panel">
-        <div class="file-preview-pathbar">
+        <div v-if="!imageAssetsVisible" class="file-preview-pathbar">
           <div class="file-preview-breadcrumb">
             <template v-for="(part, index) in fileBreadcrumbs" :key="part + index">
               <button
@@ -472,6 +504,31 @@ function dropTab(event: DragEvent, tabId: string) {
           <div class="file-preview-main">
             <n-spin :show="fileLoading">
               <div v-if="fileError" class="file-preview-error">{{ fileError }}</div>
+              <template v-else-if="imageAssetsVisible">
+                <div class="image-assets-home">
+                  <div class="image-assets-home-header">
+                    <div>
+                      <h2>图片资产</h2>
+                      <p>本次对话生成的图片</p>
+                    </div>
+                    <span v-if="imageAssets.length" class="image-assets-home-count">{{ imageAssets.length }}</span>
+                  </div>
+                  <div v-if="imageAssets.length" class="image-assets-grid">
+                    <ImageAssetThumbnail
+                      v-for="asset in imageAssets"
+                      :key="asset.path"
+                      :asset="asset"
+                      :load-image="loadTreeImage"
+                      @open="openTreeFile"
+                    />
+                  </div>
+                  <div v-else class="file-preview-empty image-assets-empty">
+                    <Icon icon="solar:gallery-linear" />
+                    <span>暂无图片资产</span>
+                    <small>生成的图片会出现在这里</small>
+                  </div>
+                </div>
+              </template>
               <template v-else-if="filePreview">
                 <template v-if="filePreview.kind !== 'loading'">
                   <div v-if="filePreview.kind === 'image'" class="file-preview-image-view">
@@ -498,9 +555,25 @@ function dropTab(event: DragEvent, tabId: string) {
                   </div>
                 </template>
               </template>
-              <div v-else class="file-preview-empty">
-                <Icon icon="solar:document-text-linear" />
-                <span>选择文件进行预览</span>
+              <div v-else class="file-preview-empty file-preview-start">
+                <div class="file-preview-start-options">
+                  <button type="button" class="file-preview-start-option" @click="openFiles(false)">
+                    <Icon icon="lucide:folders" />
+                    <span>
+                      <strong>文件</strong>
+                      <small>浏览工作区文件</small>
+                    </span>
+                    <Icon class="file-preview-start-arrow" icon="lucide:chevron-right" />
+                  </button>
+                  <button type="button" class="file-preview-start-option" @click="openImageAssets">
+                    <Icon icon="solar:gallery-linear" />
+                    <span>
+                      <strong>图片资产</strong>
+                      <small>查看本次对话生成的图片</small>
+                    </span>
+                    <Icon class="file-preview-start-arrow" icon="lucide:chevron-right" />
+                  </button>
+                </div>
               </div>
             </n-spin>
           </div>

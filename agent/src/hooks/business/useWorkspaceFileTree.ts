@@ -5,6 +5,8 @@ export interface WorkspaceTreeNode extends WorkspaceEntry {
   children: WorkspaceTreeNode[];
 }
 
+export const GENERATED_IMAGES_ASSET_DIRECTORY = '__generated_images__';
+
 interface UseWorkspaceFileTreeOptions {
   selectedConversationId: Ref<string>;
   draftConversationId: string;
@@ -21,7 +23,15 @@ export function useWorkspaceFileTree(options: UseWorkspaceFileTreeOptions) {
 
   const conversationId = computed(() => options.selectedConversationId.value);
   const entries = computed(() => entriesByConversation.get(conversationId.value) || []);
-  const tree = computed(() => entries.value as WorkspaceTreeNode[]);
+  const imageAssets = computed(() => {
+    const root = entries.value.find(entry =>
+      entry.type === 'directory' && entry.path === GENERATED_IMAGES_ASSET_DIRECTORY
+    );
+    return (root?.children || []).filter(entry => entry.type === 'file') as WorkspaceTreeNode[];
+  });
+  const tree = computed(() => entries.value.filter(entry =>
+    entry.path !== GENERATED_IMAGES_ASSET_DIRECTORY
+  ) as WorkspaceTreeNode[]);
   const expandedPaths = computed(() => expandedByConversation.get(conversationId.value) || new Set<string>());
   const loading = computed(() => loadingConversationIds.has(conversationId.value));
   const loaded = computed(() => loadedConversationIds.has(conversationId.value));
@@ -42,7 +52,11 @@ export function useWorkspaceFileTree(options: UseWorkspaceFileTreeOptions) {
       if (!expandedByConversation.has(id)) {
         expandedByConversation.set(id, new Set(
           nextEntries
-            .filter(entry => entry.type === 'directory' && !entry.path.includes('/'))
+            .filter(entry =>
+              entry.type === 'directory'
+              && entry.path !== GENERATED_IMAGES_ASSET_DIRECTORY
+              && !entry.path.includes('/')
+            )
             .map(entry => entry.path)
         ));
       }
@@ -75,6 +89,7 @@ export function useWorkspaceFileTree(options: UseWorkspaceFileTreeOptions) {
   return {
     entries,
     tree,
+    imageAssets,
     expandedPaths,
     loading,
     loaded,

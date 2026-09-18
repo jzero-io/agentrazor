@@ -79,10 +79,17 @@ export const conversationApi = {
     };
 
     const response = await fetchFile();
+    const responseContentType = response.headers.get("content-type") || "";
+    if (responseContentType.includes("application/json")) {
+      const body = await response.clone().json().catch(() => null) as Envelope<unknown> | null;
+      if (body && isEnvelope<unknown>(body)) {
+        throw new Error(body.msg || "文件读取失败");
+      }
+    }
     const blob = await response.blob();
     const requestedPath = new URL(pathname, window.location.origin).searchParams.get("path") || "";
     const name = requestedPath.split("\\").join("/").split("/").filter(Boolean).pop() || "文件";
-    const contentType = response.headers.get("content-type") || blob.type || "application/octet-stream";
+    const contentType = responseContentType || blob.type || "application/octet-stream";
     return { path: pathname, name, blob, contentType };
   },
   subscribe(

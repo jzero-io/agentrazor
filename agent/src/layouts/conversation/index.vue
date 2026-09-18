@@ -16,7 +16,6 @@ import {
 } from 'naive-ui';
 import { conversationApi, conversationGroupApi } from '../../service/api';
 import type { Conversation, ConversationDetail, ConversationMetadata, StreamEvent, ThreadItem, TokenQuotaStatus, Turn } from '../../service/api';
-import { activityIcon, activityTitle } from '../../utils/processDisplay';
 import { useAppearance } from '../../hooks/system/useAppearance';
 import { useConfirmDialog } from '../../hooks/system/useConfirmDialog';
 import { useAuthSession } from '../../hooks/system/useAuthSession';
@@ -60,7 +59,9 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'));
 
 const selectedConversationId = ref('');
 const workspaceDirsByConversation = reactive(new Map<string, string>());
+const generatedImageDirsByConversation = reactive(new Map<string, string>());
 const selectedWorkspaceDir = computed(() => workspaceDirsByConversation.get(selectedConversationId.value) || '');
+const selectedGeneratedImageDir = computed(() => generatedImageDirsByConversation.get(selectedConversationId.value) || '');
 const mainPanel = ref<HTMLElement | null>(null);
 const pinnedSummaryOpen = ref(false);
 const workspacePanel = useWorkspacePanel({
@@ -90,6 +91,7 @@ const filePreviewLoading = workspacePanel.fileLoading;
 const filePreviewError = workspacePanel.fileError;
 const sidePanelTitle = workspacePanel.title;
 const workspaceFileTree = workspacePanel.fileTree;
+const workspaceImageAssets = workspacePanel.imageAssets;
 const workspaceFileTreeExpandedPaths = workspacePanel.fileTreeExpandedPaths;
 const workspaceFileTreeLoading = workspacePanel.fileTreeLoading;
 const workspaceFileTreeLoaded = workspacePanel.fileTreeLoaded;
@@ -493,6 +495,9 @@ function syncConversationMetadata(metadata: Conversation | ConversationMetadata)
   if ('workspaceDir' in metadata && metadata.workspaceDir) {
     workspaceDirsByConversation.set(metadata.id, metadata.workspaceDir);
   }
+  if ('generatedImageDir' in metadata && metadata.generatedImageDir) {
+    generatedImageDirsByConversation.set(metadata.id, metadata.generatedImageDir);
+  }
   const item = conversations.value.find(conversation => conversation.id === metadata.id);
   if (item) replaceConversation({ ...item, ...metadata });
   const currentDetail = detailsByConversation.get(metadata.id);
@@ -507,11 +512,11 @@ function syncConversationMetadata(metadata: Conversation | ConversationMetadata)
   });
 }
 
-async function refreshConversationWorkspaceDir(id: string) {
+async function refreshConversationMetadata(id: string) {
   try {
     syncConversationMetadata(await conversationApi.metadata(id));
   } catch {
-    // Workspace metadata is retried when the conversation is selected again.
+    // Conversation metadata is retried when the conversation is selected again.
   }
 }
 
@@ -539,7 +544,10 @@ const conversationStreamEvents = useConversationStreamEvents({
   mergeTurnForDisplay,
   setConversationDetail,
   scrollToBottom,
-  closeIdleConversationStreams
+  closeIdleConversationStreams,
+  onGeneratedImagesChanged: conversationId => {
+    if (selectedConversationId.value === conversationId) workspacePanel.refreshFiles();
+  }
 });
 
 const conversationStreams = useConversationStreams({
@@ -1050,6 +1058,7 @@ function discardDeletedConversationState(ids: string[]) {
     clearConversationDetail(id);
     workspacePanel.removeConversation(id);
     workspaceDirsByConversation.delete(id);
+    generatedImageDirsByConversation.delete(id);
     closeConversationStream(id);
   });
   clearConversationProcessing(ids);
@@ -1269,7 +1278,9 @@ watch(selectedConversationId, id => {
     && performance.getEntriesByType('navigation').some(entry => (entry as PerformanceNavigationTiming).type === 'reload');
   initialConversationSelection = false;
   if (id) {
-    if (id !== DRAFT_CONVERSATION_ID && !workspaceDirsByConversation.has(id)) void refreshConversationWorkspaceDir(id);
+    if (id !== DRAFT_CONVERSATION_ID && (!workspaceDirsByConversation.has(id) || !generatedImageDirsByConversation.has(id))) {
+      void refreshConversationMetadata(id);
+    }
     if (restorePanel) workspacePanel.restore(id);
     else workspacePanel.collapse();
   } else {
@@ -1454,6 +1465,7 @@ watch(settingsSection, section => {
             v-model:section="settingsSection"
             v-model:archive-query="archiveQuery"
             :selected-conversation-id="selectedConversationId"
+            :generated-image-dir="selectedGeneratedImageDir"
             :is-new-chat="isNewChat"
             :new-chat-group-name="draftConversationGroupName"
             :current-user="currentUser"
@@ -1484,8 +1496,6 @@ watch(settingsSection, section => {
             :display-workspace-process-path="displayWorkspaceProcessPath"
             :open-workspace="openWorkspace"
             :open-workspace-file="openWorkspaceFile"
-            :activity-icon="activityIcon"
-            :activity-title="activityTitle"
             :open-login="openLogin"
             :appearance="appearance"
             :token-quota="tokenQuota"
@@ -1539,6 +1549,8 @@ watch(settingsSection, section => {
           :file-tree-loading="workspaceFileTreeLoading"
           :file-tree-loaded="workspaceFileTreeLoaded"
           :file-tree-error="workspaceFileTreeError"
+          :image-assets="workspaceImageAssets"
+          :load-tree-image="workspacePanel.loadTreeImage"
           :file-lines="activeFilePreviewLines"
           @resize-start="startWorkspaceResize"
           @reload="reloadWorkspace"
