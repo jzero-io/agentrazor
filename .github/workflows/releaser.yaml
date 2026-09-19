@@ -99,7 +99,7 @@ jobs:
           fi
           if [ "${release_type}" = "standard" ]; then
             if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ] || [ "${BUILD_ADMIN}" = "true" ]; then
-              components=$(jq -c '. + [{"component":"admin","context":"./admin","file":"./admin/Dockerfile"}]' <<< "${components}")
+              components=$(jq -c '. + [{"component":"admin","context":".","file":"./admin/Dockerfile"}]' <<< "${components}")
             fi
             if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ] || [ "${BUILD_AGENT}" = "true" ]; then
               components=$(jq -c '. + [{"component":"agent","context":"./agent","file":"./agent/Dockerfile"}]' <<< "${components}")

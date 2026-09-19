@@ -15,7 +15,6 @@ export interface ConversationMetadata {
   id: string;
   title: string;
   workspaceDir: string;
-  generatedImageDir: string;
   updatedAt: string;
 }
 
@@ -128,6 +127,11 @@ export interface WorkspaceEntry {
   path: string;
   type: 'directory' | 'file';
   children: WorkspaceEntry[];
+}
+
+export interface ImageAsset {
+  name: string;
+  size: number;
 }
 
 export interface WorkspaceFileContent {

@@ -122,6 +122,44 @@ func UploadAttachment(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
+// 读取会话生成的图片资产
+func ImageAsset(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req types.ImageAssetRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+			return
+		}
+
+		l := conversation.NewImageAsset(r.Context(), svcCtx, r, w)
+		err := l.ImageAsset(&req)
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.Ok(w)
+		}
+	}
+}
+
+// 获取会话生成的图片资产
+func ImageAssets(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req types.PathRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+			return
+		}
+
+		l := conversation.NewImageAssets(r.Context(), svcCtx, r)
+		resp, err := l.ImageAssets(&req)
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.OkJsonCtx(r.Context(), w, resp)
+		}
+	}
+}
+
 // 发送消息
 func SendMessage(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

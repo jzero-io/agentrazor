@@ -1,8 +1,13 @@
 FROM node:20.12.2-bullseye-slim AS builder
 
-WORKDIR /agentrazor-admin
+# Build context is the repository root so the generic locale loader can include
+# the plugin bundles that are present in this build.
+WORKDIR /workspace
 
-COPY ./ ./
+COPY ./admin ./admin
+COPY ./server/plugins ./server/plugins
+
+WORKDIR /workspace/admin
 
 RUN --mount=type=cache,target=/node_modules npm install -g pnpm@8.15.6 \
   && pnpm i \
@@ -12,7 +17,7 @@ FROM nginx:alpine
 
 WORKDIR /usr/share/nginx/
 
-COPY ./nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY ./admin/nginx/default.conf /etc/nginx/conf.d/default.conf
 RUN nginx -t
 
-COPY --from=builder /agentrazor-admin/dist ./html
+COPY --from=builder /workspace/admin/dist ./html

@@ -19,12 +19,6 @@ import (
 	types "github.com/jzero-io/agentrazor/server/internal/types/v1/manage/role"
 )
 
-const (
-	agentSaveSettingsMenuUUID = "e110f1d2-8d73-4ff9-9702-4f7395b7a001"
-	agentChatGPTLoginMenuUUID = "e110f1d2-8d73-4ff9-9702-4f7395b7a002"
-	agentAPIKeyLoginMenuUUID  = "e110f1d2-8d73-4ff9-9702-4f7395b7a003"
-)
-
 type SetMenus struct {
 	logx.Logger
 	ctx    context.Context
@@ -41,8 +35,6 @@ func NewSetMenus(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Reques
 }
 
 func (l *SetMenus) SetMenus(req *types.SetMenusRequest) (resp *types.SetMenusResponse, err error) {
-	req.MenuUuids = normalizeMenuDependencies(req.MenuUuids)
-
 	if err = l.svcCtx.SqlxConn.TransactCtx(l.ctx, func(ctx context.Context, session sqlx.Session) error {
 		// 找到该角色的首页
 		roleHomeMenu, err := l.svcCtx.Model.ManageRoleMenu.FindOneByCondition(l.ctx, nil, condition.NewChain().
@@ -129,30 +121,4 @@ func (l *SetMenus) SetMenus(req *types.SetMenusRequest) (resp *types.SetMenusRes
 		err = l.svcCtx.CasbinEnforcer.LoadPolicy()
 	}
 	return
-}
-
-func normalizeMenuDependencies(menuUUIDs []string) []string {
-	seen := make(map[string]struct{}, len(menuUUIDs)+1)
-	normalized := make([]string, 0, len(menuUUIDs)+1)
-	requiresSaveSettings := false
-
-	for _, menuUUID := range menuUUIDs {
-		if _, ok := seen[menuUUID]; ok {
-			continue
-		}
-		seen[menuUUID] = struct{}{}
-		normalized = append(normalized, menuUUID)
-
-		if menuUUID == agentChatGPTLoginMenuUUID || menuUUID == agentAPIKeyLoginMenuUUID {
-			requiresSaveSettings = true
-		}
-	}
-
-	if requiresSaveSettings {
-		if _, ok := seen[agentSaveSettingsMenuUUID]; !ok {
-			normalized = append(normalized, agentSaveSettingsMenuUUID)
-		}
-	}
-
-	return normalized
 }

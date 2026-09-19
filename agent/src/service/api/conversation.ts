@@ -1,5 +1,5 @@
 import { apiBase, expireSession, getToken, isEnvelope, refreshAccessToken, request } from './request';
-import type { Conversation, ConversationDetail, ConversationMetadata, Envelope, EventsResponse, MessageAttachment, StartedTurn, StreamEvent, TokenQuotaStatus, WorkspaceEntry, WorkspaceFileBlob } from './types';
+import type { Conversation, ConversationDetail, ConversationMetadata, Envelope, EventsResponse, ImageAsset, MessageAttachment, StartedTurn, StreamEvent, TokenQuotaStatus, WorkspaceEntry, WorkspaceFileBlob } from './types';
 export const conversationApi = {
   async list(): Promise<Conversation[]> {
     const result = await request<{ conversations: Conversation[] }>('/api/v1/agent/conversation');
@@ -53,6 +53,10 @@ export const conversationApi = {
     const result = await request<{ files: WorkspaceEntry[] }>(`/api/v1/agent/conversation/${encodeURIComponent(id)}/workspace/files`);
     return result.files;
   },
+  async imageAssets(id: string): Promise<ImageAsset[]> {
+    const result = await request<{ images: ImageAsset[] }>(`/api/v1/agent/conversation/${encodeURIComponent(id)}/image-assets`);
+    return result.images;
+  },
   async fetchWorkspaceBlob(path: string): Promise<WorkspaceFileBlob> {
     const pathname = path.startsWith("/") ? path : "/" + path;
     const fetchFile = async (retried = false): Promise<Response> => {
@@ -87,7 +91,9 @@ export const conversationApi = {
       }
     }
     const blob = await response.blob();
-    const requestedPath = new URL(pathname, window.location.origin).searchParams.get("path") || "";
+    const requestedPath = new URL(pathname, window.location.origin).searchParams.get("path")
+      || new URL(pathname, window.location.origin).searchParams.get("name")
+      || "";
     const name = requestedPath.split("\\").join("/").split("/").filter(Boolean).pop() || "文件";
     const contentType = responseContentType || blob.type || "application/octet-stream";
     return { path: pathname, name, blob, contentType };

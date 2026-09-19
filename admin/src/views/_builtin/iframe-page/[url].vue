@@ -1,24 +1,91 @@
 <script setup lang="ts">
-import { onActivated, onMounted } from 'vue';
+import { computed, onBeforeMount, onBeforeUnmount, ref } from 'vue';
+import { request } from '@/service/request';
 
 interface Props {
   url: string;
 }
 
-defineProps<Props>();
+type PluginMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
-onMounted(() => {
-  console.log('mounted');
+interface PluginApiRequest {
+  type: 'agentrazor:plugin-api-request';
+  requestId: string;
+  method?: string;
+  path: string;
+  body?: unknown;
+  params?: Record<string, unknown>;
+}
+
+const props = defineProps<Props>();
+const iframeRef = ref<HTMLIFrameElement | null>(null);
+
+// Only same-origin plugin static pages get the host API bridge. Regular iframe
+// pages continue to work as plain embeds.
+const apiPrefix = computed(() => {
+  const match = /^\/plugins\/([a-z0-9_-]+)\/admin\/?$/i.exec(props.url);
+  return match ? `/api/v1/manage/plugin/${match[1]}` : '';
 });
 
-onActivated(() => {
-  console.log('activated');
-});
+function validPluginRequest(value: unknown): value is PluginApiRequest {
+  if (!value || typeof value !== 'object') return false;
+  const message = value as Partial<PluginApiRequest>;
+  return (
+    message.type === 'agentrazor:plugin-api-request' &&
+    typeof message.requestId === 'string' &&
+    message.requestId.length > 0 &&
+    typeof message.path === 'string'
+  );
+}
+
+function allowedMethod(method?: string): PluginMethod | null {
+  const normalized = (method || 'get').toLowerCase();
+  return ['get', 'post', 'put', 'patch', 'delete'].includes(normalized) ? (normalized as PluginMethod) : null;
+}
+
+function postPluginResponse(target: Window, requestId: string, result: { data?: unknown; error?: string }) {
+  target.postMessage({ type: 'agentrazor:plugin-api-response', requestId, ...result }, window.location.origin);
+}
+
+async function handlePluginApiRequest(event: MessageEvent<unknown>) {
+  const frame = iframeRef.value;
+  if (
+    !apiPrefix.value ||
+    !frame?.contentWindow ||
+    event.origin !== window.location.origin ||
+    event.source !== frame.contentWindow
+  ) {
+    return;
+  }
+  if (!validPluginRequest(event.data)) return;
+
+  const message = event.data;
+  const method = allowedMethod(message.method);
+  const permittedPath = message.path === apiPrefix.value || message.path.startsWith(`${apiPrefix.value}/`);
+  if (!method || !permittedPath) {
+    postPluginResponse(frame.contentWindow, message.requestId, { error: '插件请求不在允许范围内' });
+    return;
+  }
+
+  const { data, error } = await request<unknown>({
+    url: message.path,
+    method,
+    params: method === 'get' || method === 'delete' ? message.params : undefined,
+    data: method === 'get' || method === 'delete' ? undefined : message.body
+  });
+  postPluginResponse(frame.contentWindow, message.requestId, {
+    data,
+    error: error ? '请求失败，请检查权限或稍后重试' : undefined
+  });
+}
+
+onBeforeMount(() => window.addEventListener('message', handlePluginApiRequest));
+onBeforeUnmount(() => window.removeEventListener('message', handlePluginApiRequest));
 </script>
 
 <template>
   <div class="h-full">
-    <iframe id="iframePage" class="size-full" :src="url"></iframe>
+    <iframe id="iframePage" ref="iframeRef" class="size-full border-0" :src="url"></iframe>
   </div>
 </template>
 

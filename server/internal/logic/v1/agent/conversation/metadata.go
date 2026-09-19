@@ -45,15 +45,10 @@ func (l *Metadata) Metadata(req *types.PathRequest) (resp *types.MetadataRespons
 	if err != nil {
 		return nil, err
 	}
-	generatedImageDir, err := l.svcCtx.AgentService.GeneratedImageDir(req.ConversationId)
-	if err != nil {
-		return nil, err
-	}
 	return &types.MetadataResponse{
-		Id:                thread.ID,
-		Title:             strings.TrimSpace(thread.Name),
-		WorkspaceDir:      workspaceDir,
-		GeneratedImageDir: generatedImageDir,
-		UpdatedAt:         formatTime(thread.UpdatedAt),
+		Id:           thread.ID,
+		Title:        strings.TrimSpace(thread.Name),
+		WorkspaceDir: workspaceDir,
+		UpdatedAt:    formatTime(thread.UpdatedAt),
 	}, nil
 }

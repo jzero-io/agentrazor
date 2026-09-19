@@ -1,0 +1,15 @@
+# The Admin image builds from the repository root in order to discover the
+# plugin-owned locale bundles. Keep the context limited to those inputs.
+*
+!admin/
+!admin/**
+!server/
+!server/plugins/
+!server/plugins/**
+
+admin/node_modules
+admin/dist
+admin/.pnpm-store
+**/.git
+**/node_modules
+**/dist

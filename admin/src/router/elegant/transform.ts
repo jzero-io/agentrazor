@@ -145,7 +145,10 @@ function transformElegantRouteToVueRoute(
   if (children?.length) {
     const childRoutes = children.flatMap(child => transformElegantRouteToVueRoute(child, layouts, views));
 
-    if(isFirstLevelRoute(route)) {
+    // Server-driven menus are a real tree. In particular, a layout parent
+    // such as `plugin_management` may contain an underscore in its name;
+    // that must not detach its child page from layout.base.
+    if(isFirstLevelRoute(route) || (component && isLayout(component))) {
       vueRoute.children = childRoutes;
     } else {
       vueRoutes.push(...childRoutes);

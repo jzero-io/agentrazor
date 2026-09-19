@@ -111,6 +111,18 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					},
 					{
 
+						Method:  http.MethodGet,
+						Path:    "/agent/conversation/:conversation_id/image-asset",
+						Handler: v1agentconversation.ImageAsset(serverCtx),
+					},
+					{
+
+						Method:  http.MethodGet,
+						Path:    "/agent/conversation/:conversation_id/image-assets",
+						Handler: v1agentconversation.ImageAssets(serverCtx),
+					},
+					{
+
 						Method:  http.MethodPost,
 						Path:    "/agent/conversation/:conversation_id/messages",
 						Handler: v1agentconversation.SendMessage(serverCtx),

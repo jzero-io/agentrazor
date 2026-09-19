@@ -24,6 +24,8 @@ var RoutesCodesMap = map[string]string{
 	"PATCH:/api/v1/agent/conversation/:conversation_id":                              "v1:agent:conversation:update",
 	"POST:/api/v1/agent/conversation/:conversation_id/attachments":                   "v1:agent:conversation:uploadAttachment",
 	"GET:/api/v1/agent/conversation/:conversation_id/events":                         "v1:agent:conversation:streamEvents",
+	"GET:/api/v1/agent/conversation/:conversation_id/image-asset":                    "v1:agent:conversation:imageAsset",
+	"GET:/api/v1/agent/conversation/:conversation_id/image-assets":                   "v1:agent:conversation:imageAssets",
 	"POST:/api/v1/agent/conversation/:conversation_id/messages":                      "v1:agent:conversation:sendMessage",
 	"GET:/api/v1/agent/conversation/:conversation_id/metadata":                       "v1:agent:conversation:metadata",
 	"POST:/api/v1/agent/conversation/:conversation_id/turn/cancel":                   "v1:agent:conversation:cancelTurn",

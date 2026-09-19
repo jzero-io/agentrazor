@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Icon } from '@iconify/vue';
 import { NButton, NSpin } from 'naive-ui';
+import type { ImageAsset } from '../../../service/api';
 import type { FilePreview, FilePreviewTab, WorkspaceDescriptor, WorkspaceTab } from '../../../hooks/business/useWorkspacePanel';
 import type { WorkspaceTreeNode } from '../../../hooks/business/useWorkspaceFileTree';
 import FileTreeNode from './FileTreeNode.vue';
@@ -41,8 +42,8 @@ const props = defineProps<{
   fileTreeLoading: boolean;
   fileTreeLoaded: boolean;
   fileTreeError: string;
-  imageAssets: WorkspaceTreeNode[];
-  loadTreeImage: (relativePath: string) => Promise<Blob>;
+  imageAssets: ImageAsset[];
+  loadImageAsset: (name: string) => Promise<Blob>;
 }>();
 
 const emit = defineEmits<{
@@ -59,6 +60,7 @@ const emit = defineEmits<{
   reorderFile: [fromTabId: string, toTabId: string];
   toggleFileTreeDirectory: [path: string];
   openTreeFile: [path: string, forceNewTab?: boolean];
+  openImageAsset: [name: string, forceNewTab?: boolean];
 }>();
 
 const draggingFileTabId = ref('');
@@ -139,6 +141,14 @@ function openFiles(forceNewTab: boolean) {
 function openTreeFile(path: string) {
   imageAssetsVisible.value = false;
   emit('openTreeFile', path, addFileTabMode.value);
+  if (window.matchMedia('(max-width: 720px)').matches) fileTreeVisible.value = false;
+  addFileTabMode.value = false;
+  breadcrumbPopupOpen.value = false;
+}
+
+function openImageAsset(name: string) {
+  imageAssetsVisible.value = false;
+  emit('openImageAsset', name, addFileTabMode.value);
   if (window.matchMedia('(max-width: 720px)').matches) fileTreeVisible.value = false;
   addFileTabMode.value = false;
   breadcrumbPopupOpen.value = false;
@@ -516,10 +526,10 @@ function dropTab(event: DragEvent, tabId: string) {
                   <div v-if="imageAssets.length" class="image-assets-grid">
                     <ImageAssetThumbnail
                       v-for="asset in imageAssets"
-                      :key="asset.path"
+                      :key="asset.name"
                       :asset="asset"
-                      :load-image="loadTreeImage"
-                      @open="openTreeFile"
+                      :load-image="loadImageAsset"
+                      @open="openImageAsset"
                     />
                   </div>
                   <div v-else class="file-preview-empty image-assets-empty">

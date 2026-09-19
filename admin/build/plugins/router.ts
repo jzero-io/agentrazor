@@ -4,6 +4,11 @@ import type { RouteKey } from '@elegant-router/types';
 
 export function setupElegantRouter() {
   return ElegantVueRouter({
+    // The generated transform assumes underscores always mean a deeper view
+    // level. Dynamic menus can use underscores in a layout parent name, so
+    // keep the project transformer separate and let the plugin write only
+    // its disposable generated copy.
+    transformDir: 'src/router/elegant/generated-transform.ts',
     layouts: {
       base: 'src/layouts/base-layout/index.vue',
       blank: 'src/layouts/blank-layout/index.vue'

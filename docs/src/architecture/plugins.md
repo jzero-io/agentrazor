@@ -23,6 +23,35 @@ Codex app-server 负责模型推理和工具执行，AgentRazor 负责把插件�
 - 插件 Skills 同步到 Codex home。
 - 插件配置随服务端部署和运行时读取。
 
+## 前端页面
+
+插件可以携带两个独立构建的静态微前端；它们由插件自身的
+`serverless.HandlerFunc` 注册，并随服务端二进制一起构建：
+
+- 工作台：`/plugins/<plugin_id>/workbench/`，由 Agent 会话中的
+  `workspace` 项在右侧 iframe 中打开。
+- 后台配置：`/plugins/<plugin_id>/admin/`，由管理后台的
+  `view.plugin-management` 在既有后台布局的内容区 iframe 中打开。
+
+例如 crypto-tracing 的工作台入口为
+`/plugins/crypto_tracing/workbench/`。其 serverless 模块把
+`assets/dist/index.html` 和静态资源嵌入服务端，并注册该路径。
+
+管理后台和 Agent Nginx 都会把 `/plugins/` 反向代理到 server；插件被构建进
+镜像时，`jzero serverless build` 会发现并加载其 serverless 模块，未构建的
+插件没有静态入口、菜单或接口。
+
+`插件管理` 是普通的后台一级菜单组；每个插件是它的一个二级菜单，结构与
+`系统管理 → 用户管理` 一致。二级菜单使用内嵌页面组件，因此点击菜单只在
+既有 Admin 基础布局中切换路由，并在内容区嵌入插件静态页，不会打开外部页面。
+iframe 不接触登录令牌：它通过受限的 `postMessage` 请求宿主，宿主再用核心 Admin
+的统一请求层调用 `/api/v1/manage/plugin/<plugin_id>/...`。
+
+插件迁移应在 `插件管理` 下登记一个 `menu_type = 2` 的子菜单：`href` 指向静态
+入口，`permissions` 声明该插件页面可调用的操作码。这样角色菜单授权、子菜单
+可见性和服务端 Casbin 校验都以同一份菜单权限为准。密钥类接口仍必须由服务端分别
+校验读取、保存和测试权限，并且只返回“已配置”状态，不能回传明文。
+
 ## 适合沉淀到插件的内容
 
 - 某个业务域的命令行工具。

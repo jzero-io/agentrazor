@@ -105,7 +105,9 @@ func convert(list []*manage_menu.ManageMenu) ([]*types.Route, map[string]*types.
 			Name:     item.RouteName,
 			Path:     item.RoutePath,
 			Meta: types.RouteMeta{
-				Title:           item.RouteName,
+				// All menus use the same Admin localization contract: I18nKey is
+				// resolved by the client and MenuName remains its fallback label.
+				Title:           item.MenuName,
 				I18nKey:         item.I18nKey,
 				Icon:            item.Icon,
 				Order:           int(item.Order),
@@ -121,6 +123,8 @@ func convert(list []*manage_menu.ManageMenu) ([]*types.Route, map[string]*types.
 			Component: item.Component,
 			Redirect:  "",
 		}
+		// An iframe page is rendered inside a regular Admin route. Href is
+		// therefore data for the page component, rather than an external target.
 		if item.Component == "view.iframe-page" {
 			route.Props = map[string]any{
 				"url": item.Href,

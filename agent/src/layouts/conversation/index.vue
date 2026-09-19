@@ -59,9 +59,7 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'));
 
 const selectedConversationId = ref('');
 const workspaceDirsByConversation = reactive(new Map<string, string>());
-const generatedImageDirsByConversation = reactive(new Map<string, string>());
 const selectedWorkspaceDir = computed(() => workspaceDirsByConversation.get(selectedConversationId.value) || '');
-const selectedGeneratedImageDir = computed(() => generatedImageDirsByConversation.get(selectedConversationId.value) || '');
 const mainPanel = ref<HTMLElement | null>(null);
 const pinnedSummaryOpen = ref(false);
 const workspacePanel = useWorkspacePanel({
@@ -70,6 +68,7 @@ const workspacePanel = useWorkspacePanel({
   draftConversationId: DRAFT_CONVERSATION_ID,
   fetchBlob: path => conversationApi.fetchWorkspaceBlob(path),
   fetchEntries: conversationId => conversationApi.workspaceFiles(conversationId),
+  fetchImageAssets: conversationId => conversationApi.imageAssets(conversationId),
   containerRef: mainPanel
 });
 const workspaceExpanded = workspacePanel.expanded;
@@ -494,9 +493,6 @@ function revealConversationSection(item: Conversation) {
 function syncConversationMetadata(metadata: Conversation | ConversationMetadata) {
   if ('workspaceDir' in metadata && metadata.workspaceDir) {
     workspaceDirsByConversation.set(metadata.id, metadata.workspaceDir);
-  }
-  if ('generatedImageDir' in metadata && metadata.generatedImageDir) {
-    generatedImageDirsByConversation.set(metadata.id, metadata.generatedImageDir);
   }
   const item = conversations.value.find(conversation => conversation.id === metadata.id);
   if (item) replaceConversation({ ...item, ...metadata });
@@ -1058,7 +1054,6 @@ function discardDeletedConversationState(ids: string[]) {
     clearConversationDetail(id);
     workspacePanel.removeConversation(id);
     workspaceDirsByConversation.delete(id);
-    generatedImageDirsByConversation.delete(id);
     closeConversationStream(id);
   });
   clearConversationProcessing(ids);
@@ -1278,7 +1273,7 @@ watch(selectedConversationId, id => {
     && performance.getEntriesByType('navigation').some(entry => (entry as PerformanceNavigationTiming).type === 'reload');
   initialConversationSelection = false;
   if (id) {
-    if (id !== DRAFT_CONVERSATION_ID && (!workspaceDirsByConversation.has(id) || !generatedImageDirsByConversation.has(id))) {
+    if (id !== DRAFT_CONVERSATION_ID && !workspaceDirsByConversation.has(id)) {
       void refreshConversationMetadata(id);
     }
     if (restorePanel) workspacePanel.restore(id);
@@ -1465,7 +1460,6 @@ watch(settingsSection, section => {
             v-model:section="settingsSection"
             v-model:archive-query="archiveQuery"
             :selected-conversation-id="selectedConversationId"
-            :generated-image-dir="selectedGeneratedImageDir"
             :is-new-chat="isNewChat"
             :new-chat-group-name="draftConversationGroupName"
             :current-user="currentUser"
@@ -1550,7 +1544,7 @@ watch(settingsSection, section => {
           :file-tree-loaded="workspaceFileTreeLoaded"
           :file-tree-error="workspaceFileTreeError"
           :image-assets="workspaceImageAssets"
-          :load-tree-image="workspacePanel.loadTreeImage"
+          :load-image-asset="workspacePanel.loadImageAsset"
           :file-lines="activeFilePreviewLines"
           @resize-start="startWorkspaceResize"
           @reload="reloadWorkspace"
@@ -1565,6 +1559,7 @@ watch(settingsSection, section => {
           @close-file="closeFilePreview"
           @toggle-file-tree-directory="toggleWorkspaceFileTreeDirectory"
           @open-tree-file="workspacePanel.openTreeFile"
+          @open-image-asset="workspacePanel.openImageAsset"
         />
       </main>
     </div>

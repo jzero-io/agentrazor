@@ -1,7 +1,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, type Ref } from 'vue';
 import hljs from 'highlight.js/lib/common';
-import type { WorkspaceEntry, WorkspaceFileBlob, WorkspaceFileContent } from '../../service/api';
-import { GENERATED_IMAGES_ASSET_DIRECTORY, useWorkspaceFileTree } from './useWorkspaceFileTree';
+import type { ImageAsset, WorkspaceEntry, WorkspaceFileBlob, WorkspaceFileContent } from '../../service/api';
+import { useWorkspaceFileTree } from './useWorkspaceFileTree';
 
 export interface WorkspaceDescriptor {
   type: 'workspace';
@@ -184,6 +184,12 @@ export function safeWorkspaceFileURL(conversationId: string, relativePath: strin
   return '/api/v1/agent/conversation/' + encodeURIComponent(conversationId) + '/workspace/file?path=' + encodeURIComponent(clean);
 }
 
+export function generatedImageAssetURL(conversationId: string, name: string) {
+  const clean = name.trim();
+  if (!conversationId || !clean || clean === '.' || clean === '..' || /[\\/]/.test(clean)) return '';
+  return '/api/v1/agent/conversation/' + encodeURIComponent(conversationId) + '/image-asset?name=' + encodeURIComponent(clean);
+}
+
 export function normalizeWorkspaceFileReference(href: string, conversationId: string, workspaceDir: string, origin = window.location.origin) {
   if (!conversationId) return '';
   const trimmed = href.trim();
@@ -266,6 +272,7 @@ export function useWorkspacePanel(options: {
   workspaceDir: Ref<string>;
   fetchBlob: (path: string) => Promise<WorkspaceFileBlob>;
   fetchEntries: (conversationId: string) => Promise<WorkspaceEntry[]>;
+  fetchImageAssets: (conversationId: string) => Promise<ImageAsset[]>;
   containerRef?: Ref<HTMLElement | null>;
   onError?: (error: unknown) => void;
 }) {
@@ -282,6 +289,7 @@ export function useWorkspacePanel(options: {
     selectedConversationId: options.selectedConversationId,
     draftConversationId: options.draftConversationId,
     fetchEntries: options.fetchEntries,
+    fetchImageAssets: options.fetchImageAssets,
     onError: options.onError
   });
 
@@ -327,10 +335,7 @@ export function useWorkspacePanel(options: {
   });
   const title = computed(() => activeFilePreview.value?.name || activeWorkspace.value?.title || '');
   const filePath = computed(() => activeFilePreview.value ? displayWorkspaceFilePath(activeFilePreview.value) : '');
-  const fileBreadcrumbs = computed(() => {
-    const parts = filePath.value.split('/').filter(Boolean);
-    return parts[0] === GENERATED_IMAGES_ASSET_DIRECTORY ? parts.slice(1) : parts;
-  });
+  const fileBreadcrumbs = computed(() => filePath.value.split('/').filter(Boolean));
   const fileBadge = computed(() => {
     const language = activeFilePreview.value?.language || 'text';
     if (language === 'typescript') return 'TS';
@@ -404,8 +409,8 @@ export function useWorkspacePanel(options: {
     return file.blob;
   }
 
-  async function loadTreeImage(relativePath: string) {
-    const path = safeWorkspaceFileURL(options.selectedConversationId.value, relativePath);
+  async function loadImageAsset(name: string) {
+    const path = generatedImageAssetURL(options.selectedConversationId.value, name);
     if (!path) throw new Error('图片路径无效');
     return loadImage(path);
   }
@@ -428,6 +433,12 @@ export function useWorkspacePanel(options: {
   }
 
   function fileNameFromPath(path: string) {
+    const queryIndex = path.indexOf('?');
+    if (queryIndex >= 0) {
+      const query = new URLSearchParams(path.slice(queryIndex + 1));
+      const requestedPath = query.get('path') || query.get('name');
+      if (requestedPath) return requestedPath.split('\\').join('/').split('/').filter(Boolean).pop() || '文件';
+    }
     const displayedPath = displayWorkspaceProcessPath(path, options.workspaceDir.value);
     return displayedPath.split('/').filter(Boolean).pop() || '文件';
   }
@@ -670,6 +681,11 @@ export function useWorkspacePanel(options: {
     if (path) void openFile(path, false, forceNewTab);
   }
 
+  function openImageAsset(name: string, forceNewTab = false) {
+    const path = generatedImageAssetURL(options.selectedConversationId.value, name);
+    if (path) void openFile(path, false, forceNewTab);
+  }
+
 
   function reorderFile(fromTabId: string, toTabId: string) {
     const state = activeState.value;
@@ -822,7 +838,7 @@ export function useWorkspacePanel(options: {
     panelStyle,
     normalizeFilePath,
     loadImage,
-    loadTreeImage,
+    loadImageAsset,
     displayWorkspaceFilePath,
     displayWorkspaceProcessPath: (path: string) => displayWorkspaceProcessPath(path, options.workspaceDir.value),
     openWorkspace,
@@ -838,6 +854,7 @@ export function useWorkspacePanel(options: {
     closeFile,
     collapse,
     openTreeFile,
+    openImageAsset,
     toggleExpanded,
     reload,
     refreshFiles,

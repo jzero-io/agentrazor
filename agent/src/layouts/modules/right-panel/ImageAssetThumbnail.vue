@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue';
 import { Icon } from '@iconify/vue';
-import type { WorkspaceTreeNode } from '../../../hooks/business/useWorkspaceFileTree';
+import type { ImageAsset } from '../../../service/api';
 
 const props = defineProps<{
-  asset: WorkspaceTreeNode;
-  loadImage: (relativePath: string) => Promise<Blob>;
+  asset: ImageAsset;
+  loadImage: (name: string) => Promise<Blob>;
 }>();
 
 const emit = defineEmits<{
-  open: [path: string];
+  open: [name: string];
 }>();
 
 const source = ref('');
@@ -25,15 +25,15 @@ function releaseObjectUrl() {
 }
 
 watch(
-  () => props.asset.path,
-  async path => {
+  () => props.asset.name,
+  async name => {
     const version = ++loadVersion;
     releaseObjectUrl();
     source.value = '';
     failed.value = false;
     loading.value = true;
     try {
-      const blob = await props.loadImage(path);
+      const blob = await props.loadImage(name);
       if (version !== loadVersion) return;
       objectUrl = URL.createObjectURL(blob);
       source.value = objectUrl;
@@ -57,7 +57,7 @@ onBeforeUnmount(() => {
     type="button"
     class="image-asset-thumbnail"
     :title="asset.name"
-    @click="emit('open', asset.path)"
+    @click="emit('open', asset.name)"
   >
     <span class="image-asset-thumbnail-preview">
       <img v-if="source && !failed" :src="source" :alt="asset.name" />

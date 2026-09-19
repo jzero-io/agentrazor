@@ -8,7 +8,7 @@ import type { ComponentPublicInstance } from 'vue';
 import { Icon } from '@iconify/vue';
 import type { Conversation, ThreadItem, Turn } from '../../../service/api';
 import { hasGeneratedImageAsset, type ProcessDisplayItem } from '../../../utils/processDisplay';
-import type { WorkspaceDescriptor } from '../../../hooks/business/useWorkspacePanel';
+import { generatedImageAssetURL, type WorkspaceDescriptor } from '../../../hooks/business/useWorkspacePanel';
 import ComposerBox from '../../../layouts/modules/composer-box/index.vue';
 import GeneratedImageAsset from './GeneratedImageAsset.vue';
 import MarkdownBlock from './MarkdownBlock.vue';
@@ -40,7 +40,6 @@ interface ParsedAgentMessage {
 
 const props = defineProps<{
   selectedConversationId: string;
-  generatedImageDir: string;
   isNewChat: boolean;
   newChatGroupName: string;
   currentUser: unknown;
@@ -100,23 +99,13 @@ function workspaceAttachmentPath(path: string) {
   return props.normalizeWorkspaceFilePath(relativePath);
 }
 
-const GENERATED_IMAGES_ASSET_DIRECTORY = '__generated_images__';
-
 function generatedImageAssetPath(item: ThreadItem) {
   const savedPath = typeof item.savedPath === 'string'
     ? item.savedPath.replace(/\\/g, '/').trim()
     : '';
   if (!savedPath) return '';
-
-  const generatedImageDir = props.generatedImageDir.replace(/\\/g, '/').replace(/\/+$/, '');
-  let relativePath = '';
-  if (generatedImageDir && savedPath.startsWith(generatedImageDir + '/')) {
-    relativePath = savedPath.slice(generatedImageDir.length + 1);
-  } else if (!savedPath.includes('/')) {
-    relativePath = savedPath;
-  }
-  if (!relativePath) return '';
-  return props.normalizeWorkspaceFilePath(GENERATED_IMAGES_ASSET_DIRECTORY + '/' + relativePath);
+  const name = savedPath.split('/').filter(Boolean).pop() || '';
+  return generatedImageAssetURL(props.selectedConversationId, name);
 }
 
 function generatedImageName(item: ThreadItem) {

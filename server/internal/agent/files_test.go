@@ -65,30 +65,6 @@ func TestWorkspaceFileContentType(t *testing.T) {
 	}
 }
 
-func TestGeneratedImageRelativePath(t *testing.T) {
-	tests := []struct {
-		name     string
-		path     string
-		expected string
-		ok       bool
-	}{
-		{name: "asset path", path: GeneratedImagesWorkspaceDirectory + "/image.png", expected: "image.png", ok: true},
-		{name: "nested asset path", path: GeneratedImagesWorkspaceDirectory + "/batch/image.png", expected: "batch/image.png", ok: true},
-		{name: "windows separators", path: GeneratedImagesWorkspaceDirectory + "\\batch\\image.png", expected: "batch/image.png", ok: true},
-		{name: "workspace file", path: "images/image.png", ok: false},
-		{name: "lookalike directory", path: GeneratedImagesWorkspaceDirectory + "-other/image.png", ok: false},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			actual, ok := generatedImageRelativePath(test.path)
-			if ok != test.ok || actual != test.expected {
-				t.Fatalf("generatedImageRelativePath() = (%q, %t), want (%q, %t)", actual, ok, test.expected, test.ok)
-			}
-		})
-	}
-}
-
 func TestGeneratedImagePathStaysInConversationRoot(t *testing.T) {
 	root := filepath.Join(string(filepath.Separator), "codex", "generated_images", "conversation-a")
 	target, err := safePathWithin(root, "batch/image.png")
@@ -125,19 +101,6 @@ func TestGeneratedImageTargetRejectsCrossConversationAndNestedPaths(t *testing.T
 		t.Fatalf("generatedImageTarget() rejected valid absolute savedPath: target=%q err=%v", actual, err)
 	}
 
-	for _, virtualPath := range []string{
-		GeneratedImagesWorkspaceDirectory + "/../conversation-b/image.png",
-		GeneratedImagesWorkspaceDirectory + "\\..\\conversation-b\\image.png",
-	} {
-		relative, ok := generatedImageRelativePath(virtualPath)
-		if !ok {
-			t.Fatalf("generatedImageRelativePath(%q) did not recognize asset path", virtualPath)
-		}
-		if _, _, err := service.generatedImageTarget("conversation-a", relative); err == nil {
-			t.Fatalf("virtual generated image traversal %q unexpectedly succeeded", virtualPath)
-		}
-	}
-
 	for _, test := range []struct {
 		conversationID string
 		path           string
@@ -150,6 +113,26 @@ func TestGeneratedImageTargetRejectsCrossConversationAndNestedPaths(t *testing.T
 	} {
 		if _, _, err := service.generatedImageTarget(test.conversationID, test.path); err == nil {
 			t.Fatalf("generatedImageTarget(%q, %q) unexpectedly succeeded", test.conversationID, test.path)
+		}
+	}
+}
+
+func TestGeneratedImageAssetNameMustBeDirectChild(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		valid bool
+	}{
+		{name: "image.png", valid: true},
+		{name: "image-01.webp", valid: true},
+		{name: "", valid: false},
+		{name: ".", valid: false},
+		{name: "..", valid: false},
+		{name: "nested/image.png", valid: false},
+		{name: "nested\\image.png", valid: false},
+		{name: "../other.png", valid: false},
+	} {
+		if actual := isGeneratedImageAssetName(test.name); actual != test.valid {
+			t.Fatalf("isGeneratedImageAssetName(%q) = %t, want %t", test.name, actual, test.valid)
 		}
 	}
 }

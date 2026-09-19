@@ -53,6 +53,20 @@ type GeneratedImage struct {
 	Alt     string `json:"alt"`
 }
 
+type ImageAsset struct {
+	Name string `json:"name"`
+	Size int64  `json:"size"`
+}
+
+type ImageAssetRequest struct {
+	ConversationId string `path:"conversation_id" validate:"required"`
+	Name           string `form:"name" validate:"required"`
+}
+
+type ImageAssetsResponse struct {
+	Images []ImageAsset `json:"images"`
+}
+
 type ListResponse struct {
 	Conversations []Conversation `json:"conversations"`
 }
@@ -70,11 +84,10 @@ type MessageAttachmentRef struct {
 }
 
 type MetadataResponse struct {
-	Id                string `json:"id"`
-	Title             string `json:"title"`
-	WorkspaceDir      string `json:"workspaceDir"`
-	GeneratedImageDir string `json:"generatedImageDir"`
-	UpdatedAt         string `json:"updatedAt"`
+	Id           string `json:"id"`
+	Title        string `json:"title"`
+	WorkspaceDir string `json:"workspaceDir"`
+	UpdatedAt    string `json:"updatedAt"`
 }
 
 type PathRequest struct {

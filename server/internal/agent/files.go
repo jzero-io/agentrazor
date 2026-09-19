@@ -20,10 +20,6 @@ const (
 	MaxAttachmentSize     = maxFileSize
 	MaxMessageAttachments = 10
 	attachmentDirectory   = "attachments"
-	// GeneratedImagesWorkspaceDirectory is a virtual workspace directory used
-	// by the web client to browse images produced by OpenAI image generation.
-	// The files remain stored under CODEX_HOME/generated_images/<conversation>.
-	GeneratedImagesWorkspaceDirectory = "__generated_images__"
 )
 
 type WorkspaceEntry struct {
@@ -36,6 +32,14 @@ type WorkspaceEntry struct {
 type File struct {
 	ContentType string
 	Data        []byte
+}
+
+// GeneratedImageAsset is the public metadata for an image generated in a
+// conversation. It is deliberately separate from workspace files: generated
+// images live under CODEX_HOME and are not part of a Codex workspace.
+type GeneratedImageAsset struct {
+	Name string
+	Size int64
 }
 
 type MessageAttachment struct {
@@ -206,20 +210,7 @@ func (s *Service) ListWorkspaceFiles(ctx context.Context, conversationID string)
 		}
 		files = []WorkspaceEntry{}
 	}
-	generatedImages, err := s.generatedImageTree(ctx, conversationID)
-	if err != nil {
-		return nil, err
-	}
-	if len(generatedImages) > 0 {
-		files = append([]WorkspaceEntry{{
-			Name: "图片资产", Path: GeneratedImagesWorkspaceDirectory, Type: "directory", Children: generatedImages,
-		}}, files...)
-	}
 	return files, nil
-}
-
-func (s *Service) GeneratedImageDir(conversationID string) (string, error) {
-	return s.generatedImagesRoot(conversationID)
 }
 
 func (s *Service) generatedImagesRoot(conversationID string) (string, error) {
@@ -233,7 +224,7 @@ func (s *Service) generatedImagesRoot(conversationID string) (string, error) {
 	return safeChild(filepath.Join(s.codexHome, "generated_images"), conversationID)
 }
 
-func (s *Service) generatedImageTree(ctx context.Context, conversationID string) ([]WorkspaceEntry, error) {
+func (s *Service) ListGeneratedImageAssets(ctx context.Context, conversationID string) ([]GeneratedImageAsset, error) {
 	root, err := s.generatedImagesRoot(conversationID)
 	if err != nil {
 		return nil, err
@@ -241,7 +232,7 @@ func (s *Service) generatedImageTree(ctx context.Context, conversationID string)
 	rootMetadata, err := s.metadata(ctx, root)
 	if err != nil {
 		if isRemoteNotFound(err) {
-			return []WorkspaceEntry{}, nil
+			return []GeneratedImageAsset{}, nil
 		}
 		return nil, err
 	}
@@ -253,7 +244,7 @@ func (s *Service) generatedImageTree(ctx context.Context, conversationID string)
 	if err != nil {
 		return nil, err
 	}
-	result := make([]WorkspaceEntry, 0, len(entries))
+	result := make([]GeneratedImageAsset, 0, len(entries))
 	for _, entry := range entries {
 		if entry.Name == "" || strings.ContainsAny(entry.Name, "/\\") || !entry.IsFile {
 			continue
@@ -262,11 +253,7 @@ func (s *Service) generatedImageTree(ctx context.Context, conversationID string)
 		if err != nil || metadata.IsSymlink || !metadata.IsFile || metadata.Size > maxFileSize {
 			continue
 		}
-		result = append(result, WorkspaceEntry{
-			Name: entry.Name,
-			Path: filepath.ToSlash(filepath.Join(GeneratedImagesWorkspaceDirectory, entry.Name)),
-			Type: "file", Children: []WorkspaceEntry{},
-		})
+		result = append(result, GeneratedImageAsset{Name: entry.Name, Size: metadata.Size})
 	}
 	sort.SliceStable(result, func(i, j int) bool {
 		return strings.ToLower(result[i].Name) < strings.ToLower(result[j].Name)
@@ -343,21 +330,9 @@ func isInternalWorkspaceEntry(name string) bool {
 	return name == ".git" || name == ".agents" || name == ".codex"
 }
 
-func generatedImageRelativePath(filePath string) (string, bool) {
-	normalizedPath := strings.ReplaceAll(strings.TrimSpace(filePath), "\\", "/")
-	generatedPrefix := GeneratedImagesWorkspaceDirectory + "/"
-	if !strings.HasPrefix(normalizedPath, generatedPrefix) {
-		return "", false
-	}
-	return strings.TrimPrefix(normalizedPath, generatedPrefix), true
-}
-
 func (s *Service) ReadWorkspaceFile(ctx context.Context, conversationID, filePath string) (File, error) {
 	if err := validateThreadID(conversationID); err != nil {
 		return File{}, err
-	}
-	if generatedPath, ok := generatedImageRelativePath(filePath); ok {
-		return s.ReadGeneratedImage(ctx, conversationID, generatedPath)
 	}
 	root, err := safeChild(s.workspace, conversationID)
 	if err != nil {
@@ -538,6 +513,21 @@ func (s *Service) ReadGeneratedImage(ctx context.Context, conversationID, savedP
 		return File{}, errors.New("generated image has an unsupported content type")
 	}
 	return File{ContentType: contentType, Data: data}, nil
+}
+
+// ReadGeneratedImageAsset reads a generated image selected through the public
+// asset API. Unlike ReadGeneratedImage, it accepts only a direct file name and
+// therefore never exposes the internal absolute savedPath protocol.
+func (s *Service) ReadGeneratedImageAsset(ctx context.Context, conversationID, name string) (File, error) {
+	name = strings.TrimSpace(name)
+	if !isGeneratedImageAssetName(name) {
+		return File{}, errors.New("generated image asset name is invalid")
+	}
+	return s.ReadGeneratedImage(ctx, conversationID, name)
+}
+
+func isGeneratedImageAssetName(name string) bool {
+	return name != "" && name != "." && name != ".." && filepath.Base(name) == name && !strings.ContainsAny(name, "/\\")
 }
 
 func (s *Service) readConfigFile(ctx context.Context, name string) (string, error) {

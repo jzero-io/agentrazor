@@ -22,11 +22,10 @@ type (
 		UpdatedAt        string  `json:"updatedAt"`
 	}
 	MetadataResponse {
-		Id                string `json:"id"`
-		Title             string `json:"title"`
-		WorkspaceDir      string `json:"workspaceDir"`
-		GeneratedImageDir string `json:"generatedImageDir"`
-		UpdatedAt         string `json:"updatedAt"`
+		Id           string `json:"id"`
+		Title        string `json:"title"`
+		WorkspaceDir string `json:"workspaceDir"`
+		UpdatedAt    string `json:"updatedAt"`
 	}
 	StartedTurn {
 		Id        string `json:"id"`
@@ -83,9 +82,20 @@ type (
 	WorkspaceFilesResponse {
 		Files []WorkspaceEntry `json:"files"`
 	}
+	ImageAsset {
+		Name string `json:"name"`
+		Size int64  `json:"size"`
+	}
+	ImageAssetsResponse {
+		Images []ImageAsset `json:"images"`
+	}
 	WorkspaceFileRequest {
 		ConversationId string `path:"conversation_id" validate:"required"`
 		FilePath       string `form:"path" validate:"required"`
+	}
+	ImageAssetRequest {
+		ConversationId string `path:"conversation_id" validate:"required"`
+		Name           string `form:"name" validate:"required"`
 	}
 	MessageAttachment {
 		Name        string `json:"name"`
@@ -162,6 +172,14 @@ service server {
 	@doc "读取会话工作区文件"
 	@handler WorkspaceFile
 	get /agent/conversation/:conversation_id/workspace/file (WorkspaceFileRequest)
+
+	@doc "获取会话生成的图片资产"
+	@handler ImageAssets
+	get /agent/conversation/:conversation_id/image-assets (PathRequest) returns (ImageAssetsResponse)
+
+	@doc "读取会话生成的图片资产"
+	@handler ImageAsset
+	get /agent/conversation/:conversation_id/image-asset (ImageAssetRequest)
 
 	@doc "修改会话"
 	@handler Update

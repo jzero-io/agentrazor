@@ -272,7 +272,10 @@ declare namespace App {
       key: LangType;
     };
 
-    type I18nRouteKey = Exclude<RouteKey, 'root' | 'not-found'>;
+    // Dynamic menu groups do not appear in elegant-router's file-derived
+    // RouteKey union. Keep platform-owned groups explicit here; plugin-owned
+    // route labels are supplied by their own locale bundles at build time.
+    type I18nRouteKey = Exclude<RouteKey, 'root' | 'not-found'> | 'plugin_management';
 
     type FormMsg = {
       required: string;

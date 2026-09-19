@@ -1,21 +1,21 @@
 import { computed, reactive, type Ref } from 'vue';
-import type { WorkspaceEntry } from '../../service/api';
+import type { ImageAsset, WorkspaceEntry } from '../../service/api';
 
 export interface WorkspaceTreeNode extends WorkspaceEntry {
   children: WorkspaceTreeNode[];
 }
 
-export const GENERATED_IMAGES_ASSET_DIRECTORY = '__generated_images__';
-
 interface UseWorkspaceFileTreeOptions {
   selectedConversationId: Ref<string>;
   draftConversationId: string;
   fetchEntries: (conversationId: string) => Promise<WorkspaceEntry[]>;
+  fetchImageAssets: (conversationId: string) => Promise<ImageAsset[]>;
   onError?: (error: unknown) => void;
 }
 
 export function useWorkspaceFileTree(options: UseWorkspaceFileTreeOptions) {
   const entriesByConversation = reactive(new Map<string, WorkspaceEntry[]>());
+  const imageAssetsByConversation = reactive(new Map<string, ImageAsset[]>());
   const expandedByConversation = reactive(new Map<string, Set<string>>());
   const loadingConversationIds = reactive(new Set<string>());
   const loadedConversationIds = reactive(new Set<string>());
@@ -23,15 +23,8 @@ export function useWorkspaceFileTree(options: UseWorkspaceFileTreeOptions) {
 
   const conversationId = computed(() => options.selectedConversationId.value);
   const entries = computed(() => entriesByConversation.get(conversationId.value) || []);
-  const imageAssets = computed(() => {
-    const root = entries.value.find(entry =>
-      entry.type === 'directory' && entry.path === GENERATED_IMAGES_ASSET_DIRECTORY
-    );
-    return (root?.children || []).filter(entry => entry.type === 'file') as WorkspaceTreeNode[];
-  });
-  const tree = computed(() => entries.value.filter(entry =>
-    entry.path !== GENERATED_IMAGES_ASSET_DIRECTORY
-  ) as WorkspaceTreeNode[]);
+  const imageAssets = computed(() => imageAssetsByConversation.get(conversationId.value) || []);
+  const tree = computed(() => entries.value as WorkspaceTreeNode[]);
   const expandedPaths = computed(() => expandedByConversation.get(conversationId.value) || new Set<string>());
   const loading = computed(() => loadingConversationIds.has(conversationId.value));
   const loaded = computed(() => loadedConversationIds.has(conversationId.value));
@@ -45,16 +38,19 @@ export function useWorkspaceFileTree(options: UseWorkspaceFileTreeOptions) {
     loadingConversationIds.add(id);
     errorsByConversation.delete(id);
     try {
-      const nextEntries = await options.fetchEntries(id);
+      const [nextEntries, nextImageAssets] = await Promise.all([
+        options.fetchEntries(id),
+        options.fetchImageAssets(id)
+      ]);
       if (conversationId.value !== id && !force) return;
       entriesByConversation.set(id, nextEntries);
+      imageAssetsByConversation.set(id, nextImageAssets);
       loadedConversationIds.add(id);
       if (!expandedByConversation.has(id)) {
         expandedByConversation.set(id, new Set(
           nextEntries
             .filter(entry =>
               entry.type === 'directory'
-              && entry.path !== GENERATED_IMAGES_ASSET_DIRECTORY
               && !entry.path.includes('/')
             )
             .map(entry => entry.path)
@@ -80,6 +76,7 @@ export function useWorkspaceFileTree(options: UseWorkspaceFileTreeOptions) {
 
   function removeConversation(id: string) {
     entriesByConversation.delete(id);
+    imageAssetsByConversation.delete(id);
     expandedByConversation.delete(id);
     loadingConversationIds.delete(id);
     loadedConversationIds.delete(id);

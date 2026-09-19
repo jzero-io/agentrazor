@@ -10,6 +10,7 @@ export default defineConfig(configEnv => {
   const buildTime = getBuildTime();
 
   const enableProxy = configEnv.command === 'serve' && !configEnv.isPreview;
+  const pluginRoot = fileURLToPath(new URL('../server/plugins', import.meta.url));
 
   return {
     base: viteEnv.VITE_BASE_URL,
@@ -37,7 +38,8 @@ export default defineConfig(configEnv => {
       open: true,
       proxy: createViteProxy(viteEnv, enableProxy),
       fs: {
-        cachedChecks: false
+        cachedChecks: false,
+        allow: [pluginRoot]
       }
     },
     preview: {

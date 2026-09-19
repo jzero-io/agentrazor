@@ -59,7 +59,8 @@ services:
 
   admin:
     build:
-      context: ../../admin
+      context: ../..
+      dockerfile: admin/Dockerfile
     restart: always
     container_name: agentrazor-admin
     depends_on:

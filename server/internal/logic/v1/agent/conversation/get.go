@@ -50,7 +50,11 @@ func currentUserUUID(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return info.Uuid, nil
+	uuid := strings.TrimSpace(info.Uuid)
+	if uuid == "" {
+		return "", errors.New("authenticated user id is missing")
+	}
+	return uuid, nil
 }
 
 // requireOwner returns the requesting user's UUID after verifying they own the
