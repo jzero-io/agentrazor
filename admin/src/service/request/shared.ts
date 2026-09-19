@@ -21,6 +21,11 @@ async function handleRefreshToken() {
   const { resetStore } = useAuthStore();
 
   const rToken = localStg.get('refreshToken') || '';
+  if (!rToken) {
+    await resetStore();
+    return false;
+  }
+
   const { error, data } = await RefreshToken(rToken);
   if (!error) {
     localStg.set('token', data.token);
@@ -28,7 +33,7 @@ async function handleRefreshToken() {
     return true;
   }
 
-  resetStore();
+  await resetStore();
 
   return false;
 }
@@ -38,13 +43,16 @@ export async function handleExpiredRequest(state: RequestInstanceState) {
     state.refreshTokenFn = handleRefreshToken();
   }
 
-  const success = await state.refreshTokenFn;
-
-  setTimeout(() => {
-    state.refreshTokenFn = null;
-  }, 1000);
-
-  return success;
+  const refreshing = state.refreshTokenFn;
+  try {
+    return await refreshing;
+  } finally {
+    // Clear only the promise this request awaited. A timer left the old promise
+    // reusable for one second and could replay an already failed refresh.
+    if (state.refreshTokenFn === refreshing) {
+      state.refreshTokenFn = null;
+    }
+  }
 }
 
 export function showErrorMsg(state: RequestInstanceState, message: string) {

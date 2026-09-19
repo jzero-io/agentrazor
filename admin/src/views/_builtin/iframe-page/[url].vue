@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeMount, onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeMount, onBeforeUnmount, ref, watch } from 'vue';
 import { request } from '@/service/request';
+import { useAppStore } from '@/store/modules/app';
+import { useThemeStore } from '@/store/modules/theme';
 
 interface Props {
   url: string;
@@ -17,8 +19,16 @@ interface PluginApiRequest {
   params?: Record<string, unknown>;
 }
 
+interface PluginHostContext {
+  type: 'agentrazor:host-context';
+  theme: 'light' | 'dark';
+  locale: App.I18n.LangType;
+}
+
 const props = defineProps<Props>();
 const iframeRef = ref<HTMLIFrameElement | null>(null);
+const appStore = useAppStore();
+const themeStore = useThemeStore();
 
 // Only same-origin plugin static pages get the host API bridge. Regular iframe
 // pages continue to work as plain embeds.
@@ -45,6 +55,18 @@ function allowedMethod(method?: string): PluginMethod | null {
 
 function postPluginResponse(target: Window, requestId: string, result: { data?: unknown; error?: string }) {
   target.postMessage({ type: 'agentrazor:plugin-api-response', requestId, ...result }, window.location.origin);
+}
+
+function postPluginHostContext() {
+  const frame = iframeRef.value;
+  if (!apiPrefix.value || !frame?.contentWindow) return;
+
+  const context: PluginHostContext = {
+    type: 'agentrazor:host-context',
+    theme: themeStore.darkMode ? 'dark' : 'light',
+    locale: appStore.locale
+  };
+  frame.contentWindow.postMessage(context, window.location.origin);
 }
 
 async function handlePluginApiRequest(event: MessageEvent<unknown>) {
@@ -81,11 +103,19 @@ async function handlePluginApiRequest(event: MessageEvent<unknown>) {
 
 onBeforeMount(() => window.addEventListener('message', handlePluginApiRequest));
 onBeforeUnmount(() => window.removeEventListener('message', handlePluginApiRequest));
+
+watch([() => themeStore.darkMode, () => appStore.locale], postPluginHostContext, { immediate: true });
 </script>
 
 <template>
   <div class="h-full">
-    <iframe id="iframePage" ref="iframeRef" class="size-full border-0" :src="url"></iframe>
+    <iframe
+      id="iframePage"
+      ref="iframeRef"
+      class="size-full border-0"
+      :src="url"
+      @load="postPluginHostContext"
+    ></iframe>
   </div>
 </template>
 
