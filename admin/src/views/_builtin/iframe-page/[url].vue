@@ -33,7 +33,7 @@ const themeStore = useThemeStore();
 // Only same-origin plugin static pages get the host API bridge. Regular iframe
 // pages continue to work as plain embeds.
 const apiPrefix = computed(() => {
-  const match = /^\/plugins\/([a-z0-9_-]+)\/admin\/?$/i.exec(props.url);
+  const match = /^\/plugins\/([a-z0-9_-]+)\/admin\/?(?:\?.*)?$/i.exec(props.url);
   return match ? `/api/v1/manage/plugin/${match[1]}` : '';
 });
 
