@@ -46,6 +46,7 @@ export function useAppearance() {
   return {
     appearance,
     appearanceOptions,
+    systemDark,
     isDarkAppearance,
     activeTheme,
     setAppearance

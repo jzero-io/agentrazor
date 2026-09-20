@@ -4,7 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f7f7f5" />
-    <link rel="icon" type="image/png" href="/agentrazor-icon.png" />
+    <base id="agentrazor-runtime-base" href="/" />
+    <script>
+      (() => {
+        const mountPath = '/agent-app';
+        const embedded = window.location.pathname === mountPath
+          || window.location.pathname.startsWith(mountPath + '/');
+        document.getElementById('agentrazor-runtime-base').href = embedded ? mountPath + '/' : '/';
+      })();
+    </script>
+    <link rel="icon" type="image/png" href="./agentrazor-icon.png" />
     <title>AgentRazor</title>
     <script>
       (() => {
@@ -17,7 +26,11 @@
           const sidebarView = JSON.parse(localStorage.getItem('agentrazor_sidebar_view') || '{}');
           const savedSidebarWidth = Number(sidebarView.sidebarWidth) || 296;
           const sidebarWidth = Math.max(264, savedSidebarWidth);
-          const hasSession = Boolean(localStorage.getItem('agentrazor_token'));
+          const inAdminFrame = window.parent !== window
+            && (window.location.pathname === '/agent-app' || window.location.pathname.startsWith('/agent-app/'));
+          // The Admin storage namespace is delivered after the same-origin
+          // handshake. Keep the boot shell neutral until Vue restores it.
+          const hasSession = !inAdminFrame && Boolean(localStorage.getItem('agentrazor_token'));
           const isMobile = window.matchMedia && window.matchMedia('(max-width: 720px)').matches;
           const showSidebar = hasSession && sidebarView.sidebarCollapsed !== true && !isMobile;
           root.dataset.bootSidebar = showSidebar ? 'expanded' : 'hidden';

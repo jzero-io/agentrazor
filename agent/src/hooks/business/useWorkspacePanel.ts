@@ -53,6 +53,32 @@ const RIGHT_PANEL_VIEW_KEY = 'agentrazor_right_panel_view';
 const MAX_FILE_PREVIEW_CHARACTERS = 100_000;
 const MAX_FILE_PREVIEW_LINES = 1_000;
 const MAX_HIGHLIGHT_CHARACTERS = 64_000;
+const MAX_WORKSPACE_URL_LENGTH = 4_096;
+const MAX_WORKSPACE_TITLE_LENGTH = 512;
+
+type WorkspaceDescriptorInput = Partial<WorkspaceDescriptor>;
+
+/**
+ * Workspace links are model-provided content. Restrict them to navigable web
+ * URLs before persisting or rendering them in the preview iframe.
+ */
+export function sanitizeWorkspaceDescriptor(value: WorkspaceDescriptorInput): WorkspaceDescriptor | null {
+  if (value.type !== 'workspace' || typeof value.title !== 'string' || typeof value.url !== 'string') return null;
+
+  const title = value.title.trim();
+  const rawUrl = value.url.trim();
+  if (!title || title.length > MAX_WORKSPACE_TITLE_LENGTH || !rawUrl || rawUrl.length > MAX_WORKSPACE_URL_LENGTH) {
+    return null;
+  }
+
+  try {
+    const url = new URL(rawUrl, document.baseURI);
+    if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.username || url.password) return null;
+    return { type: 'workspace', title, url: url.href };
+  } catch {
+    return null;
+  }
+}
 
 function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, character => ({
@@ -76,15 +102,16 @@ function sanitizeRightPanelState(value: RightPanelConversationState | undefined 
     expanded: Boolean(value.expanded)
   };
   const workspaceTabs = Array.isArray(value.workspaceTabs)
-    ? value.workspaceTabs
-      .filter(workspace => workspace?.type === 'workspace' && workspace.title && workspace.url)
-      .map((workspace, index) => ({
-        type: 'workspace' as const,
-        title: workspace.title,
-        url: workspace.url,
+    ? value.workspaceTabs.reduce<WorkspaceTab[]>((tabs, workspace, index) => {
+      const descriptor = sanitizeWorkspaceDescriptor(workspace);
+      if (!descriptor) return tabs;
+      tabs.push({
+        ...descriptor,
         tabId: typeof workspace.tabId === 'string' && workspace.tabId ? workspace.tabId : createTabId(),
         order: typeof workspace.order === 'number' ? workspace.order : index
-      }))
+      });
+      return tabs;
+    }, [])
     : [];
   const activeWorkspaceTabId = typeof value.activeWorkspaceTabId === 'string'
     ? value.activeWorkspaceTabId
@@ -469,12 +496,14 @@ export function useWorkspacePanel(options: {
   function openWorkspace(workspace: WorkspaceDescriptor, forceNewTab = false) {
     const conversationId = options.selectedConversationId.value;
     if (!conversationId) return;
+    const safeWorkspace = sanitizeWorkspaceDescriptor(workspace);
+    if (!safeWorkspace) return;
     expanded.value = false;
     fileError.value = '';
     const state = statesByConversation.get(conversationId);
     const currentTabs = state?.workspaceTabs || [];
-    const existing = !forceNewTab ? currentTabs.find(tab => tab.url === workspace.url) : null;
-    const tab = existing || { ...workspace, tabId: createTabId(), order: nextTabOrder(state) };
+    const existing = !forceNewTab ? currentTabs.find(tab => tab.url === safeWorkspace.url) : null;
+    const tab = existing || { ...safeWorkspace, tabId: createTabId(), order: nextTabOrder(state) };
     const workspaceTabs = existing ? currentTabs : [...currentTabs, tab];
     setState(conversationId, {
       visible: true,
@@ -488,9 +517,11 @@ export function useWorkspacePanel(options: {
   function replaceWithWorkspace(workspace: WorkspaceDescriptor) {
     const conversationId = options.selectedConversationId.value;
     if (!conversationId) return;
+    const safeWorkspace = sanitizeWorkspaceDescriptor(workspace);
+    if (!safeWorkspace) return;
     expanded.value = false;
     fileError.value = '';
-    const tab = { ...workspace, tabId: createTabId(), order: 0 };
+    const tab = { ...safeWorkspace, tabId: createTabId(), order: 0 };
     setState(conversationId, {
       visible: true,
       kind: 'workspace',

@@ -450,6 +450,8 @@ function dropTab(event: DragEvent, tabId: string) {
         :key="`${conversationId}:${workspace.url}:${reloadVersion}`"
         :src="workspace.url"
         :title="workspace.title"
+        sandbox="allow-downloads allow-forms allow-modals allow-popups allow-scripts"
+        referrerpolicy="no-referrer"
       />
 
       <section v-else class="file-preview-panel">

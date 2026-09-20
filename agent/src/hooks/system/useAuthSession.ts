@@ -1,5 +1,5 @@
 import { computed, onScopeDispose, ref, watch } from 'vue';
-import { authApi, clearRefreshToken, clearToken, getToken, setAuthErrorHandler, setRefreshToken, setToken } from '../../service/api';
+import { authApi, clearAuthTokens, getToken, setAuthErrorHandler, setAuthTokens } from '../../service/api';
 import type { UserInfo } from '../../service/api';
 
 export function useAuthSession(options: {
@@ -115,8 +115,7 @@ export function useAuthSession(options: {
       const { token, refreshToken } = mode === 'password'
         ? await authApi.pwdLogin(username, password)
         : await authApi.codeLogin(email, loginVerificationUuid.value, verificationCode);
-      setToken(token);
-      setRefreshToken(refreshToken);
+      setAuthTokens(token, refreshToken);
       hasAuthToken.value = true;
       currentUser.value = await authApi.getUserInfo();
       loginVisible.value = false;
@@ -142,8 +141,7 @@ export function useAuthSession(options: {
   }
 
   function clearSession() {
-    clearToken();
-    clearRefreshToken();
+    clearAuthTokens();
     hasAuthToken.value = false;
     currentUser.value = null;
   }

@@ -27,6 +27,8 @@ declare namespace Env {
     readonly VITE_ICON_LOCAL_PREFIX: 'local-icon';
     /** backend service base url */
     readonly VITE_SERVICE_BASE_URL: string;
+    /** Agent SPA dev server proxied under /agent-app */
+    readonly VITE_AGENT_APP_PROXY_TARGET?: string;
     /**
      * success code of backend service
      *

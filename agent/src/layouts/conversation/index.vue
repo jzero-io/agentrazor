@@ -11,11 +11,21 @@ import {
   NInput,
   NModal,
   createDiscreteApi,
+  darkTheme,
   zhCN,
   dateZhCN
 } from 'naive-ui';
-import { conversationApi, conversationGroupApi } from '../../service/api';
-import type { Conversation, ConversationDetail, ConversationMetadata, StreamEvent, ThreadItem, TokenQuotaStatus, Turn } from '../../service/api';
+import {
+  conversationApi,
+  conversationGroupApi,
+  getAdminThemeScheme,
+  getToken,
+  isAdminAuthStorageKey,
+  isAdminEmbeddedAuthContext,
+  isAdminThemeStorageKey,
+  setAdminStoragePrefix
+} from '../../service/api';
+import type { AdminThemeScheme, Conversation, ConversationDetail, ConversationMetadata, StreamEvent, ThreadItem, TokenQuotaStatus, Turn } from '../../service/api';
 import { useAppearance } from '../../hooks/system/useAppearance';
 import { useConfirmDialog } from '../../hooks/system/useConfirmDialog';
 import { useAuthSession } from '../../hooks/system/useAuthSession';
@@ -49,6 +59,8 @@ import RightPanel from '../modules/right-panel/index.vue';
 
 installScopedCss(githubDarkTheme, ':root[data-theme="dark"]');
 
+const ADMIN_AUTH_SESSION_CHANGED_MESSAGE = 'agentrazor:admin-auth-session-changed';
+const AGENT_AUTH_READY_MESSAGE = 'agentrazor:agent-auth-ready';
 const CONVERSATION_LIST_DROP_TARGET = 'conversation-list';
 const DRAFT_CONVERSATION_ID = '__draft_conversation__';
 
@@ -189,7 +201,21 @@ const loginModalOffsetX = computed(() => {
   if (typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches) return 0;
   return sidebarWidth.value / 2;
 });
-const { appearance, appearanceOptions, isDarkAppearance, activeTheme, setAppearance } = useAppearance();
+const adminThemeScheme = ref<AdminThemeScheme | null>(null);
+const {
+  appearance,
+  appearanceOptions,
+  isDarkAppearance: localIsDarkAppearance,
+  systemDark,
+  setAppearance
+} = useAppearance();
+const isDarkAppearance = computed(() => {
+  if (adminThemeScheme.value === 'dark') return true;
+  if (adminThemeScheme.value === 'light') return false;
+  if (adminThemeScheme.value === 'auto') return systemDark.value;
+  return localIsDarkAppearance.value;
+});
+const activeTheme = computed(() => isDarkAppearance.value ? darkTheme : null);
 let conversationSelectionToken = 0;
 const draftConversationGroupId = ref('');
 const draftConversationGroupName = computed(
@@ -1107,10 +1133,95 @@ function finishBootScreen() {
   });
 }
 
+function resetSharedAuthState() {
+  hasAuthToken.value = false;
+  currentUser.value = null;
+  clearGroups();
+  draftConversationGroupId.value = '';
+  resetApplicationState();
+}
+
+let sharedAuthSyncPromise: Promise<void> | null = null;
+let sharedAuthSyncPending = false;
+let sharedAuthSyncPendingForce = false;
+
+function synchronizeSharedAuthSession(force = false) {
+  if (!isAdminEmbeddedAuthContext()) return Promise.resolve();
+
+  // Defer an update until the in-flight initial restore completes. bootstrap()
+  // replays it without skipping the normal initial data loading path.
+  if (authChecking.value) {
+    sharedAuthSyncPending = true;
+    sharedAuthSyncPendingForce ||= force;
+    return Promise.resolve();
+  }
+
+  if (!getToken()) {
+    resetSharedAuthState();
+    return Promise.resolve();
+  }
+
+  // The initial bootstrap already restores this exact shared session.
+  if (currentUser.value && !force) return Promise.resolve();
+  if (sharedAuthSyncPromise) return sharedAuthSyncPromise;
+
+  sharedAuthSyncPromise = (async () => {
+    if (force) resetSharedAuthState();
+    const user = await restoreSession();
+    if (!user) {
+      resetSharedAuthState();
+      return;
+    }
+    loginVisible.value = false;
+    await loadConversationGroups();
+    await Promise.all([loadConversations(!settingsVisible.value), loadTokenQuota()]);
+  })().finally(() => {
+    sharedAuthSyncPromise = null;
+  });
+
+  return sharedAuthSyncPromise;
+}
+
+function handleSharedAuthStorage(event: StorageEvent) {
+  if (event.storageArea !== window.localStorage) return;
+  if (isAdminThemeStorageKey(event.key)) {
+    adminThemeScheme.value = getAdminThemeScheme();
+    return;
+  }
+  if (!isAdminAuthStorageKey(event.key)) return;
+  void synchronizeSharedAuthSession();
+}
+
+function handleAdminAuthSessionMessage(event: MessageEvent<unknown>) {
+  if (!isAdminEmbeddedAuthContext()) return;
+  if (event.origin !== window.location.origin || event.source !== window.parent) return;
+  if (!event.data || typeof event.data !== 'object') return;
+  const message = event.data as { type?: unknown; storagePrefix?: unknown };
+  if (message.type !== ADMIN_AUTH_SESSION_CHANGED_MESSAGE) return;
+  const prefixChanged = typeof message.storagePrefix === 'string' && setAdminStoragePrefix(message.storagePrefix);
+  adminThemeScheme.value = getAdminThemeScheme();
+  void synchronizeSharedAuthSession(prefixChanged);
+}
+
+function requestAdminAuthSession() {
+  if (!isAdminEmbeddedAuthContext()) return;
+  window.parent.postMessage({ type: AGENT_AUTH_READY_MESSAGE }, window.location.origin);
+}
+
 async function bootstrap() {
   const restoredSettings = restoreSettingsFromPath();
   installAuthErrorHandler();
   const user = await restoreSession();
+  if (sharedAuthSyncPending) {
+    const force = sharedAuthSyncPendingForce;
+    sharedAuthSyncPending = false;
+    sharedAuthSyncPendingForce = false;
+    if (force || !user) {
+      await synchronizeSharedAuthSession(force);
+      finishBootScreen();
+      return;
+    }
+  }
   if (!user) {
     finishBootScreen();
     return;
@@ -1235,6 +1346,10 @@ function handleDocumentPointerDown(event: PointerEvent) {
 
 onMounted(() => {
   document.addEventListener('pointerdown', handleDocumentPointerDown);
+  window.addEventListener('message', handleAdminAuthSessionMessage);
+  window.addEventListener('storage', handleSharedAuthStorage);
+  adminThemeScheme.value = getAdminThemeScheme();
+  requestAdminAuthSession();
   void bootstrap();
   // 防止登录恢复流程异常卡死导致一直白屏：超时后强制结束启动态
   window.setTimeout(() => {
@@ -1247,6 +1362,8 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleDocumentPointerDown);
+  window.removeEventListener('message', handleAdminAuthSessionMessage);
+  window.removeEventListener('storage', handleSharedAuthStorage);
   closeAllConversationStreams();
   stopAllTurnTimers();
   stopAllConversationTitleRefresh();

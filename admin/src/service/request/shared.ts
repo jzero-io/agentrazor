@@ -1,5 +1,6 @@
 import { useAuthStore } from '@/store/modules/auth';
 import { localStg } from '@/utils/storage';
+import { emitAdminAuthSessionChange } from '@/utils/auth-session';
 import { RefreshToken } from '../api';
 import type { RequestInstanceState } from './type';
 
@@ -30,6 +31,7 @@ async function handleRefreshToken() {
   if (!error) {
     localStg.set('token', data.token);
     localStg.set('refreshToken', data.refreshToken);
+    emitAdminAuthSessionChange('refresh');
     return true;
   }
 

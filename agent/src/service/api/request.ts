@@ -1,34 +1,49 @@
 import type { Envelope, LoginResponse } from './types';
+import {
+  clearStoredAuthTokens,
+  clearStoredRefreshToken,
+  clearStoredToken,
+  getStoredRefreshToken,
+  getStoredToken,
+  setStoredAuthTokens,
+  setStoredRefreshToken,
+  setStoredToken
+} from './authStorage';
 
 export const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
 const BUSINESS_SUCCESS_CODE = 0;
 
-const TOKEN_KEY = 'agentrazor_token';
-const REFRESH_TOKEN_KEY = 'agentrazor_refresh_token';
-
 export function getToken() {
-  return localStorage.getItem(TOKEN_KEY) || '';
+  return getStoredToken();
 }
 
 export function setToken(token: string) {
-  localStorage.setItem(TOKEN_KEY, token);
+  setStoredToken(token);
 }
 
 export function clearToken() {
-  localStorage.removeItem(TOKEN_KEY);
+  clearStoredToken();
 }
 
 export function getRefreshToken() {
-  return localStorage.getItem(REFRESH_TOKEN_KEY) || '';
+  return getStoredRefreshToken();
 }
 
 export function setRefreshToken(refreshToken: string) {
-  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  setStoredRefreshToken(refreshToken);
 }
 
 export function clearRefreshToken() {
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  clearStoredRefreshToken();
+}
+
+export function setAuthTokens(token: string, refreshToken: string) {
+  setStoredAuthTokens({ token, refreshToken });
+}
+
+export function clearAuthTokens() {
+  clearStoredAuthTokens();
 }
 
 let authErrorHandler: (() => void) | null = null;
@@ -58,8 +73,7 @@ export async function refreshAccessToken(): Promise<RefreshAccessTokenResult> {
         if (envelope && envelope.code !== BUSINESS_SUCCESS_CODE) return envelope.code === 40102 ? 'expired' : 'failed';
         const data = envelope ? envelope.data : (body as LoginResponse | null);
         if (!data?.token || !data.refreshToken) return 'failed';
-        setToken(data.token);
-        setRefreshToken(data.refreshToken);
+        setAuthTokens(data.token, data.refreshToken);
         return 'refreshed';
       } catch {
         return 'failed';
@@ -78,8 +92,7 @@ export async function refreshAccessTokenOrExpire() {
 }
 
 export function expireSession() {
-  clearToken();
-  clearRefreshToken();
+  clearAuthTokens();
   authErrorHandler?.();
 }
 

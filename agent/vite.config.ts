@@ -1,10 +1,13 @@
 import { defineConfig, loadEnv } from 'vite';
 import vue from '@vitejs/plugin-vue';
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   return {
+    // Assets stay relative so the same build works both at / and behind the
+    // Admin reverse proxy. Vite's dev client needs an absolute mount path.
+    base: command === 'serve' ? '/agent-app/' : './',
     plugins: [vue()],
     server: {
       host: '0.0.0.0',

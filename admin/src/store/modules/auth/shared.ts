@@ -1,4 +1,5 @@
 import { localStg } from '@/utils/storage';
+import { emitAdminAuthSessionChange } from '@/utils/auth-session';
 
 /** Get token */
 export function getToken() {
@@ -9,4 +10,5 @@ export function getToken() {
 export function clearAuthStorage() {
   localStg.remove('token');
   localStg.remove('refreshToken');
+  emitAdminAuthSessionChange('clear');
 }

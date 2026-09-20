@@ -6,6 +6,7 @@ import { SetupStoreId } from '@/enum';
 import { useRouterPush } from '@/hooks/common/router';
 import { GetUserInfo, LoginByCode, LoginByPwd } from '@/service/api';
 import { localStg } from '@/utils/storage';
+import { emitAdminAuthSessionChange } from '@/utils/auth-session';
 import { $t } from '@/locales';
 import { useRouteStore } from '../route';
 import { useTabStore } from '../tab';
@@ -119,6 +120,7 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
     // 1. stored in the localStorage, the later requests need it in headers
     localStg.set('token', loginToken.token);
     localStg.set('refreshToken', loginToken.refreshToken);
+    emitAdminAuthSessionChange('login');
 
     // 2. get user info
     const pass = await getUserInfo();

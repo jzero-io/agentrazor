@@ -178,6 +178,16 @@ export const useThemeStore = defineStore(SetupStoreId.Theme, () => {
       { immediate: true }
     );
 
+    // The embedded Agent page shares this origin and reads this setting to
+    // match the Admin's appearance. Persist it immediately instead of only
+    // when the browser tab closes, so other same-origin contexts receive a
+    // storage event as soon as the scheme changes.
+    watch(
+      () => settings.value.themeScheme,
+      () => cacheThemeSettings(),
+      { immediate: true }
+    );
+
     watch(
       [grayscaleMode, colourWeaknessMode],
       val => {

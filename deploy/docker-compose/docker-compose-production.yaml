@@ -65,6 +65,8 @@ services:
     depends_on:
       server:
         condition: service_healthy
+      agent:
+        condition: service_started
     environment:
       - TZ=Asia/Shanghai
     ports:

@@ -20,6 +20,20 @@ export function createViteProxy(env: Env.ImportMeta, enable: boolean) {
     Object.assign(proxy, createProxyItem(item));
   });
 
+  // Keep Agent's Vite public base intact while developing through Admin.
+  proxy['/agent-app'] = {
+    target: env.VITE_AGENT_APP_PROXY_TARGET || 'http://localhost:5174',
+    changeOrigin: true,
+    ws: true
+  };
+
+  // The embedded Agent always calls its backend at the browser-origin /api
+  // path. Match the production Admin nginx proxy during local development.
+  proxy['/api'] = {
+    target: env.VITE_SERVICE_BASE_URL || 'http://localhost:8001',
+    changeOrigin: true
+  };
+
   return proxy;
 }
 

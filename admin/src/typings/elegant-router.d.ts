@@ -34,6 +34,7 @@ declare module "@elegant-router/types" {
     "500": "/500";
     "agent": "/agent";
     "agent_config": "/agent/config";
+    "agent_conversations": "/agent/conversations";
     "agent_skills": "/agent/skills";
     "agent_token-usage": "/agent/token-usage";
     "home": "/home";
@@ -119,6 +120,7 @@ declare module "@elegant-router/types" {
     | "iframe-page"
     | "login"
     | "agent_config"
+    | "agent_conversations"
     | "agent_skills"
     | "agent_token-usage"
     | "home"

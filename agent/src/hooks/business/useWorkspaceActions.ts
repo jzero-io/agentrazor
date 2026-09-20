@@ -1,6 +1,6 @@
 import { computed, type Ref } from 'vue';
 import type { ThreadItem, Turn } from '../../service/api';
-import type { FilePreview, WorkspaceDescriptor, useWorkspacePanel } from './useWorkspacePanel';
+import { sanitizeWorkspaceDescriptor, type FilePreview, type WorkspaceDescriptor, type useWorkspacePanel } from './useWorkspacePanel';
 
 interface ParsedAgentMessage {
   markdown: string;
@@ -23,8 +23,9 @@ export function parseWorkspaceLinks(content: string): ParsedAgentMessage {
   const markdown = content.replace(/```json\s*([\s\S]*?)```/gi, (block, raw: string) => {
     try {
       const value = JSON.parse(raw.trim()) as Partial<WorkspaceDescriptor>;
-      if (value.type !== 'workspace' || typeof value.title !== 'string' || typeof value.url !== 'string') return block;
-      workspaces.push({ type: 'workspace', title: value.title, url: value.url });
+      const workspace = sanitizeWorkspaceDescriptor(value);
+      if (!workspace) return block;
+      workspaces.push(workspace);
       return '';
     } catch {
       return block;

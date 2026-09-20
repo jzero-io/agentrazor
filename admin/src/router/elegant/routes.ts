@@ -59,6 +59,17 @@ export const generatedRoutes: GeneratedRoute[] = [
           title: 'agent_config',
           i18nKey: 'route.agent_config',
           icon: 'carbon:settings-services',
+          order: 1
+        }
+      },
+      {
+        name: 'agent_conversations',
+        path: '/agent/conversations',
+        component: 'view.agent_conversations',
+        meta: {
+          title: 'agent_conversations',
+          i18nKey: 'route.agent_conversations',
+          icon: 'carbon:chat',
           order: 2
         }
       },
@@ -70,7 +81,7 @@ export const generatedRoutes: GeneratedRoute[] = [
           title: 'agent_skills',
           i18nKey: 'route.agent_skills',
           icon: 'carbon:skill-level-basic',
-          order: 1
+          order: 3
         }
       },
       {
@@ -81,7 +92,7 @@ export const generatedRoutes: GeneratedRoute[] = [
           title: 'agent_token-usage',
           i18nKey: 'route.agent_token-usage',
           icon: 'carbon:meter',
-          order: 3
+          order: 4
         }
       }
     ]
