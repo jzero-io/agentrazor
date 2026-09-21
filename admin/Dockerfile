@@ -15,6 +15,11 @@ FROM nginx:alpine
 
 WORKDIR /usr/share/nginx/
 
+# Start nginx directly at runtime. This skips the base image entrypoint hooks,
+# whose optional IPv6 migration can block on an Alpine repository request.
+ENTRYPOINT ["nginx"]
+CMD ["-g", "daemon off;"]
+
 COPY ./admin/nginx/default.conf /etc/nginx/conf.d/default.conf
 RUN nginx -t
 
