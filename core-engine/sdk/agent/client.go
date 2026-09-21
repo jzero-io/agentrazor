@@ -139,22 +139,15 @@ func (c *Client) Chat(ctx context.Context, request Request) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := waitForTurn(ctx, sent.ID, events, streamErrors); err != nil {
-		return nil, err
-	}
-
-	detail, err := c.GetConversation(ctx, conversationID)
+	answer, err := waitForTurn(ctx, sent.ID, events, streamErrors)
 	if err != nil {
 		return nil, err
-	}
-	answer := finalAnswer(detail.Turns)
-	if answer == "" {
-		return nil, errors.New("conversation SDK: turn completed without a final answer")
 	}
 	return &Response{ConversationID: conversationID, Answer: answer}, nil
 }
 
-func waitForTurn(ctx context.Context, turnID string, events <-chan Event, streamErrors <-chan error) error {
+func waitForTurn(ctx context.Context, turnID string, events <-chan Event, streamErrors <-chan error) (string, error) {
+	var answer string
 	for {
 		select {
 		case event := <-events:
@@ -162,31 +155,52 @@ func waitForTurn(ctx context.Context, turnID string, events <-chan Event, stream
 				continue
 			}
 			switch event.Type {
+			case "item.completed":
+				var completion struct {
+					Params struct {
+						Item Item `json:"item"`
+					} `json:"params"`
+				}
+				if err := json.Unmarshal(event.Data, &completion); err != nil {
+					return "", fmt.Errorf("conversation SDK: decode completed item: %w", err)
+				}
+				if candidate := finalAnswerFromItems([]Item{completion.Params.Item}); candidate != "" {
+					answer = candidate
+				}
 			case "turn.completed":
 				var completion struct {
 					Params struct {
 						Turn struct {
 							Status string `json:"status"`
+							Items  []Item `json:"items"`
 							Error  *struct {
 								Message string `json:"message"`
 							} `json:"error"`
 						} `json:"turn"`
 					} `json:"params"`
 				}
-				_ = json.Unmarshal(event.Data, &completion)
+				if err := json.Unmarshal(event.Data, &completion); err != nil {
+					return "", fmt.Errorf("conversation SDK: decode completed turn: %w", err)
+				}
 				if completion.Params.Turn.Status == "failed" || completion.Params.Turn.Status == "interrupted" {
 					message := "Codex turn " + completion.Params.Turn.Status
 					if completion.Params.Turn.Error != nil && completion.Params.Turn.Error.Message != "" {
 						message = completion.Params.Turn.Error.Message
 					}
-					return &TurnError{Message: message}
+					return "", &TurnError{Message: message}
 				}
-				return nil
+				if candidate := finalAnswerFromItems(completion.Params.Turn.Items); candidate != "" {
+					answer = candidate
+				}
+				if answer == "" {
+					return "", errors.New("conversation SDK: completed turn did not contain a final answer")
+				}
+				return answer, nil
 			}
 		case err := <-streamErrors:
-			return err
+			return "", err
 		case <-ctx.Done():
-			return ctx.Err()
+			return "", ctx.Err()
 		}
 	}
 }
@@ -247,27 +261,18 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body any, outp
 	return nil
 }
 
-func finalAnswer(turns []Turn) string {
-	var fallback string
-	for turnIndex := len(turns) - 1; turnIndex >= 0; turnIndex-- {
-		items := turns[turnIndex].Items
-		for itemIndex := len(items) - 1; itemIndex >= 0; itemIndex-- {
-			current := items[itemIndex]
-			itemType, _ := current["type"].(string)
-			text, _ := current["text"].(string)
-			if itemType != "agentMessage" || strings.TrimSpace(text) == "" {
-				continue
-			}
-			if fallback == "" {
-				fallback = text
-			}
-			phase, _ := current["phase"].(string)
-			if phase == "final_answer" {
-				return text
-			}
+func finalAnswerFromItems(items []Item) string {
+	for itemIndex := len(items) - 1; itemIndex >= 0; itemIndex-- {
+		current := items[itemIndex]
+		itemType, _ := current["type"].(string)
+		text, _ := current["text"].(string)
+		phase, _ := current["phase"].(string)
+		if itemType != "agentMessage" || phase != "final_answer" || strings.TrimSpace(text) == "" {
+			continue
 		}
+		return text
 	}
-	return fallback
+	return ""
 }
 
 func responseMessage(payload []byte, fallback string) string {
