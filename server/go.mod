@@ -13,7 +13,7 @@ require (
 	github.com/guregu/null/v5 v5.0.0
 	github.com/huandu/go-sqlbuilder v1.42.1
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/jzero-io/agentrazor/core-engine v0.0.0-20260918043707-a9dac1273d12
+	github.com/jzero-io/agentrazor/core-engine v0.0.0-20260921043301-3ca31b2ce28a
 	github.com/jzero-io/jzero v1.4.1
 	github.com/pelletier/go-toml/v2 v2.3.0
 	github.com/pkg/errors v0.9.1
