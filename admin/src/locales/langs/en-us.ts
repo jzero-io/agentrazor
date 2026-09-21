@@ -173,6 +173,8 @@ const local: App.I18n.Schema = {
     manage_menu: 'Menu Manage',
     manage_email: 'Email Settings',
     plugin_management: 'Plugin Management',
+    plugins: 'Plugin Management',
+    plugins_overview: 'Plugin Overview',
     agent: 'Agent Manage',
     agent_config: 'Config Manage',
     agent_conversations: 'Conversations',
@@ -391,6 +393,12 @@ const local: App.I18n.Schema = {
       editorPlaceholder: 'Edit the current file',
       loading: 'Loading…',
       selectGuide: 'Select a Skill on the left to view its contents'
+    },
+    pluginOverview: {
+      title: 'Plugin Overview',
+      empty: 'No plugins available',
+      open: 'Open Plugin',
+      unavailable: 'No Available Pages'
     },
     agentTokenUsage: {
       summaryTitle: 'Token overview',

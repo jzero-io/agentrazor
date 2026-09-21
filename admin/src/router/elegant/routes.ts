@@ -192,5 +192,25 @@ export const generatedRoutes: GeneratedRoute[] = [
         }
       }
     ]
+  },
+  {
+    name: 'plugins',
+    path: '/plugins',
+    component: 'layout.base',
+    meta: {
+      title: 'plugins',
+      i18nKey: 'route.plugins'
+    },
+    children: [
+      {
+        name: 'plugins_overview',
+        path: '/plugins/overview',
+        component: 'view.plugins_overview',
+        meta: {
+          title: 'plugins_overview',
+          i18nKey: 'route.plugins_overview'
+        }
+      }
+    ]
   }
 ];

@@ -2,7 +2,7 @@ name: agentrazor
 
 services:
   codex:
-    image: ghcr.io/jzero-io/agentrazor-codex:v0.5.0
+    image: ghcr.io/jzero-io/agentrazor-codex:v0.6.1
     pull_policy: always
     restart: always
     container_name: agentrazor-codex
@@ -24,7 +24,7 @@ services:
       - app-network
 
   server:
-    image: ghcr.io/jzero-io/agentrazor-server:v0.5.0
+    image: ghcr.io/jzero-io/agentrazor-server:v0.6.1
     pull_policy: always
     restart: always
     container_name: agentrazor-server
@@ -58,7 +58,7 @@ services:
       - data-network
 
   admin:
-    image: ghcr.io/jzero-io/agentrazor-admin:v0.5.0
+    image: ghcr.io/jzero-io/agentrazor-admin:v0.6.1
     pull_policy: always
     restart: always
     container_name: agentrazor-admin
@@ -75,7 +75,7 @@ services:
       - app-network
 
   agent:
-    image: ghcr.io/jzero-io/agentrazor-agent:v0.5.0
+    image: ghcr.io/jzero-io/agentrazor-agent:v0.6.1
     pull_policy: always
     restart: always
     container_name: agentrazor-agent

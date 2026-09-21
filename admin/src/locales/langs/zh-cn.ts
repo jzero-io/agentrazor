@@ -173,6 +173,8 @@ const local: App.I18n.Schema = {
     manage_menu: '菜单管理',
     manage_email: '邮箱配置',
     plugin_management: '插件管理',
+    plugins: '插件管理',
+    plugins_overview: '插件总览',
     agent: 'Agent 管理',
     agent_config: '配置管理',
     agent_conversations: '会话管理',
@@ -390,6 +392,12 @@ const local: App.I18n.Schema = {
       editorPlaceholder: '编辑当前文件内容',
       loading: '加载中…',
       selectGuide: '选择左侧 Skill 查看内容'
+    },
+    pluginOverview: {
+      title: '插件总览',
+      empty: '暂无插件',
+      open: '进入插件',
+      unavailable: '暂无可用页面'
     },
     agentTokenUsage: {
       summaryTitle: 'Token 概览',

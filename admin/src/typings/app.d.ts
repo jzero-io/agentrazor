@@ -384,6 +384,13 @@ declare namespace App {
       selectGuide: string;
     };
 
+    type PluginOverviewSchema = {
+      title: string;
+      empty: string;
+      open: string;
+      unavailable: string;
+    };
+
     type AgentTokenUsageSchema = {
       summaryTitle: string;
       trendTitle: string;
@@ -651,6 +658,7 @@ declare namespace App {
         };
         agentConfig: AgentConfigSchema;
         agentSkills: AgentSkillsSchema;
+        pluginOverview: PluginOverviewSchema;
         agentTokenUsage: AgentTokenUsageSchema;
         manage: {
           common: {

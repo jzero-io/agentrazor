@@ -7,6 +7,7 @@ import { SetupStoreId } from '@/enum';
 import { router } from '@/router';
 import { createStaticRoutes, getAuthVueRoutes } from '@/router/routes';
 import { ROOT_ROUTE } from '@/router/routes/builtin';
+import { withPluginOverview } from '@/router/routes/plugin-overview';
 import { getRouteName, getRoutePath } from '@/router/elegant/transform';
 import { GetConstantRoutes, GetUserRoutes, IsRouteExist } from '@/service/api';
 import { useAppStore } from '../app';
@@ -251,7 +252,7 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
     if (!error) {
       const { routes, home } = data;
 
-      addAuthRoutes(routes);
+      addAuthRoutes(withPluginOverview(routes));
 
       handleConstantAndAuthRoutes();
 

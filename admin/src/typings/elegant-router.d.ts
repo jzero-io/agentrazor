@@ -45,6 +45,8 @@ declare module "@elegant-router/types" {
     "manage_menu": "/manage/menu";
     "manage_role": "/manage/role";
     "manage_user": "/manage/user";
+    "plugins": "/plugins";
+    "plugins_overview": "/plugins/overview";
   };
 
   /**
@@ -96,6 +98,7 @@ declare module "@elegant-router/types" {
     | "iframe-page"
     | "login"
     | "manage"
+    | "plugins"
   >;
 
   /**
@@ -128,6 +131,7 @@ declare module "@elegant-router/types" {
     | "manage_menu"
     | "manage_role"
     | "manage_user"
+    | "plugins_overview"
   >;
 
   /**
