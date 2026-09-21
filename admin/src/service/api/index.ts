@@ -5,3 +5,4 @@ export * from './version';
 export * from './conversation';
 export * from './token-usage';
 export * from './home';
+export * from './plugin';

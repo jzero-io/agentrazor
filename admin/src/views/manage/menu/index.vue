@@ -6,7 +6,7 @@ import { useBoolean } from '@sa/hooks';
 import { DeleteMenu, GetAllPages, GetMenuList } from '@/service/api';
 import { useAppStore } from '@/store/modules/app';
 import { useTable, useTableOperate } from '@/hooks/common/table';
-import { $t } from '@/locales';
+import { $t, translateOr } from '@/locales';
 import { yesOrNoRecord } from '@/constants/common';
 import { enableStatusRecord, menuTypeRecord } from '@/constants/business';
 import SvgIcon from '@/components/custom/svg-icon.vue';
@@ -55,7 +55,7 @@ const { columns, columnChecks, data, loading, pagination, getData, getDataByPage
       render: row => {
         const { i18nKey, menuName } = row;
 
-        const label = i18nKey ? $t(i18nKey) : menuName;
+        const label = translateOr(i18nKey, menuName);
 
         return <span>{label}</span>;
       }

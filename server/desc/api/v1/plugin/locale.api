@@ -1,0 +1,19 @@
+syntax = "v1"
+
+info (
+	go_package: "v1/plugin/locale"
+)
+
+type GetResponse {
+	Locales map[string]interface{} `json:"locales"`
+}
+
+@server (
+	prefix:          /api/v1
+	group:           v1/plugin/locale
+	compact_handler: true
+)
+service server {
+	@handler Get
+	get /plugin/admin-locales returns (GetResponse)
+}

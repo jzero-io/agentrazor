@@ -18,6 +18,7 @@ import (
 	v1managemenu "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/menu"
 	v1managerole "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/role"
 	v1manageuser "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/user"
+	v1pluginlocale "github.com/jzero-io/agentrazor/server/internal/handler/v1/plugin/locale"
 	v1route "github.com/jzero-io/agentrazor/server/internal/handler/v1/route"
 	version "github.com/jzero-io/agentrazor/server/internal/handler/version"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
@@ -566,6 +567,18 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					},
 				}...,
 			),
+			rest.WithPrefix("/api/v1"),
+		)
+	}
+	{
+		server.AddRoutes(
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/plugin/admin-locales",
+					Handler: v1pluginlocale.Get(serverCtx),
+				},
+			},
 			rest.WithPrefix("/api/v1"),
 		)
 	}

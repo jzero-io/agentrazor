@@ -9,6 +9,7 @@ import { createStaticRoutes, getAuthVueRoutes } from '@/router/routes';
 import { ROOT_ROUTE } from '@/router/routes/builtin';
 import { withPluginOverview } from '@/router/routes/plugin-overview';
 import { getRouteName, getRoutePath } from '@/router/elegant/transform';
+import { loadPluginAdminLocales } from '@/locales/runtime';
 import { GetConstantRoutes, GetUserRoutes, IsRouteExist } from '@/service/api';
 import { useAppStore } from '../app';
 import { useAuthStore } from '../auth';
@@ -220,7 +221,7 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
   /** Init auth route */
   async function initAuthRoute() {
     if (authRouteMode.value === 'static') {
-      initStaticAuthRoute();
+      await initStaticAuthRoute();
     } else {
       await initDynamicAuthRoute();
     }
@@ -229,7 +230,9 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
   }
 
   /** Init static auth route */
-  function initStaticAuthRoute() {
+  async function initStaticAuthRoute() {
+    await loadPluginAdminLocales();
+
     const { authRoutes: staticAuthRoutes } = createStaticRoutes();
 
     if (authStore.isStaticSuper) {
@@ -247,7 +250,7 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
 
   /** Init dynamic auth route */
   async function initDynamicAuthRoute() {
-    const { data, error } = await GetUserRoutes();
+    const [{ data, error }] = await Promise.all([GetUserRoutes(), loadPluginAdminLocales()]);
 
     if (!error) {
       const { routes, home } = data;

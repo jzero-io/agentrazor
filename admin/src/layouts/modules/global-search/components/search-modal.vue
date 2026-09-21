@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router';
 import { onKeyStroke, useDebounceFn } from '@vueuse/core';
 import { useRouteStore } from '@/store/modules/route';
 import { useAppStore } from '@/store/modules/app';
-import { $t } from '@/locales';
+import { $t, translateOr } from '@/locales';
 import SearchResult from './search-result.vue';
 import SearchFooter from './search-footer.vue';
 
@@ -27,7 +27,7 @@ const visible = defineModel<boolean>('show', { required: true });
 function search() {
   resultOptions.value = routeStore.searchMenus.filter(menu => {
     const trimKeyword = keyword.value.toLocaleLowerCase().trim();
-    const title = (menu.i18nKey ? $t(menu.i18nKey) : menu.label).toLocaleLowerCase();
+    const title = translateOr(menu.i18nKey, menu.label).toLocaleLowerCase();
     return trimKeyword && title.includes(trimKeyword);
   });
   activePath.value = resultOptions.value[0]?.routePath ?? '';

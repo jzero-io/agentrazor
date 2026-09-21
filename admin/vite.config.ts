@@ -11,7 +11,6 @@ export default defineConfig(configEnv => {
 
   const enableProxy = configEnv.command === 'serve' && !configEnv.isPreview;
   const adminRoot = fileURLToPath(new URL('./', import.meta.url));
-  const pluginRoot = fileURLToPath(new URL('../server/plugins', import.meta.url));
 
   return {
     base: viteEnv.VITE_BASE_URL,
@@ -40,7 +39,7 @@ export default defineConfig(configEnv => {
       proxy: createViteProxy(viteEnv, enableProxy),
       fs: {
         cachedChecks: false,
-        allow: [adminRoot, pluginRoot]
+        allow: [adminRoot]
       }
     },
     preview: {

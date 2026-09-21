@@ -11,19 +11,22 @@ import (
 	"github.com/jzero-io/agentrazor/server/internal/agent"
 	"github.com/jzero-io/agentrazor/server/internal/config"
 	"github.com/jzero-io/agentrazor/server/internal/model"
+	"github.com/jzero-io/agentrazor/server/internal/pluginregistry"
 )
 
 type ServiceContext struct {
 	*svc.ServiceContext
-	ConfigCenter configcenter.ConfigCenter[config.Config]
-	Model        model.Model
-	AgentService *agent.Service
+	ConfigCenter   configcenter.ConfigCenter[config.Config]
+	Model          model.Model
+	AgentService   *agent.Service
+	PluginRegistry *pluginregistry.Registry
 	Middleware
 }
 
 func NewServiceContext(cc configcenter.ConfigCenter[config.Config], route2code func(r *http.Request) string) *ServiceContext {
 	svcCtx := &ServiceContext{
-		ConfigCenter: cc,
+		ConfigCenter:   cc,
+		PluginRegistry: pluginregistry.New(),
 	}
 	svcCtx.SetConfigListener()
 

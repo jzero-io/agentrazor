@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, shallowRef, watch } from 'vue';
 import { useLoading } from '@sa/hooks';
-import { $t } from '@/locales';
+import { $t, translateOr } from '@/locales';
 import { GetAllPages, GetMenuTree, GetRoleHome, GetRoleMenus, SetRoleMenus, UpdateRoleHome } from '@/service/api';
 
 defineOptions({
@@ -88,7 +88,7 @@ const localizedTree = computed(() => {
   function localize(nodes: Api.Manage.MenuTree[]): Api.Manage.MenuTree[] {
     return nodes.map(node => ({
       ...node,
-      label: node.i18nKey ? $t(node.i18nKey) : node.label,
+      label: translateOr(node.i18nKey, node.label),
       children: node.children ? localize(node.children) : undefined
     }));
   }

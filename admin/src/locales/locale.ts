@@ -1,7 +1,7 @@
 import zhCN from './langs/zh-cn';
 import enUS from './langs/en-us';
 
-type LocaleMessages = Record<string, unknown>;
+export type LocaleMessages = Record<string, unknown>;
 
 interface LocaleMergeContext {
   sourceFile: string;
@@ -12,13 +12,26 @@ function isLocaleMessages(value: unknown): value is LocaleMessages {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/**
- * Merge compile-time plugin locale bundles into the Admin locale tree.
- *
- * Each plugin owns files at `server/plugins/<plugin>/admin/locales/<lang>.json`. The Admin shell only supplies the
- * common loader; it contains no plugin copy.
- */
-function mergeLocaleMessages(
+function assertSafeLocaleValue(value: unknown, sourceFile: string, parentKey = ''): void {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertSafeLocaleValue(item, sourceFile, `${parentKey}[${index}]`));
+    return;
+  }
+
+  if (!isLocaleMessages(value)) return;
+
+  Object.entries(value).forEach(([key, child]) => {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+      throw new Error(`Plugin locale ${sourceFile} contains an unsafe key: ${key}`);
+    }
+
+    const keyPath = parentKey ? `${parentKey}.${key}` : key;
+    assertSafeLocaleValue(child, sourceFile, keyPath);
+  });
+}
+
+/** Merge a locale tree without allowing the source to replace an existing core value. */
+export function mergeLocaleMessages(
   target: LocaleMessages,
   source: LocaleMessages,
   context: LocaleMergeContext
@@ -26,19 +39,16 @@ function mergeLocaleMessages(
   const result = { ...target };
   const { sourceFile, parentKey = '' } = context;
 
-  for (const [key, value] of Object.entries(source)) {
-    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
-      throw new Error(`Plugin locale ${sourceFile} contains an unsafe key: ${key}`);
-    }
+  assertSafeLocaleValue(source, sourceFile, parentKey);
 
+  for (const [key, value] of Object.entries(source)) {
     const keyPath = parentKey ? `${parentKey}.${key}` : key;
     const current = result[key];
     if (isLocaleMessages(current) && isLocaleMessages(value)) {
       result[key] = mergeLocaleMessages(current, value, { sourceFile, parentKey: keyPath });
+    } else if (Object.hasOwn(result, key)) {
+      throw new Error(`Plugin locale ${sourceFile} attempts to override ${keyPath}`);
     } else {
-      if (Object.hasOwn(result, key)) {
-        throw new Error(`Plugin locale ${sourceFile} attempts to override ${keyPath}`);
-      }
       result[key] = value;
     }
   }
@@ -46,26 +56,52 @@ function mergeLocaleMessages(
   return result;
 }
 
-const pluginLocaleBundles = import.meta.glob('../../../server/plugins/*/admin/locales/*.json', {
-  eager: true,
-  import: 'default'
-}) as Record<string, LocaleMessages>;
+function cloneLocaleValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(cloneLocaleValue);
 
-function withPluginLocales(language: App.I18n.LangType, coreLocale: App.I18n.Schema): App.I18n.Schema {
-  const suffix = `/locales/${language}.json`;
+  if (isLocaleMessages(value)) {
+    return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, cloneLocaleValue(child)]));
+  }
 
-  return Object.entries(pluginLocaleBundles)
-    .filter(([file]) => file.endsWith(suffix))
-    .sort(([left], [right]) => left.localeCompare(right))
-    .reduce<LocaleMessages>(
-      (messages, [file, pluginLocale]) => mergeLocaleMessages(messages, pluginLocale, { sourceFile: file }),
-      coreLocale
-    ) as App.I18n.Schema;
+  return value;
+}
+
+function cloneLocaleMessages(messages: LocaleMessages): LocaleMessages {
+  return cloneLocaleValue(messages) as LocaleMessages;
+}
+
+function freezeLocaleValue(value: unknown): void {
+  if (Array.isArray(value)) {
+    value.forEach(freezeLocaleValue);
+    Object.freeze(value);
+    return;
+  }
+
+  if (!isLocaleMessages(value)) return;
+
+  Object.values(value).forEach(freezeLocaleValue);
+  Object.freeze(value);
+}
+
+function createCoreLocaleSnapshot(messages: App.I18n.Schema): LocaleMessages {
+  const snapshot = cloneLocaleMessages(messages as LocaleMessages);
+  freezeLocaleValue(snapshot);
+  return snapshot;
+}
+
+/** Immutable baselines used to rebuild locale state on every runtime refresh. */
+const coreLocaleSnapshots: Readonly<Record<App.I18n.LangType, LocaleMessages>> = Object.freeze({
+  'zh-CN': createCoreLocaleSnapshot(zhCN),
+  'en-US': createCoreLocaleSnapshot(enUS)
+});
+
+export function getCoreLocaleMessages(locale: App.I18n.LangType): LocaleMessages {
+  return cloneLocaleMessages(coreLocaleSnapshots[locale]);
 }
 
 const locales: Record<App.I18n.LangType, App.I18n.Schema> = {
-  'zh-CN': withPluginLocales('zh-CN', zhCN),
-  'en-US': withPluginLocales('en-US', enUS)
+  'zh-CN': getCoreLocaleMessages('zh-CN') as App.I18n.Schema,
+  'en-US': getCoreLocaleMessages('en-US') as App.I18n.Schema
 };
 
 export default locales;

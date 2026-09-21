@@ -1,11 +1,9 @@
 FROM node:20.12.2-bullseye-slim AS builder
 
-# Build context is the repository root so the generic locale loader can include
-# the plugin bundles that are present in this build.
+# Build context is the repository root.
 WORKDIR /workspace
 
 COPY ./admin ./admin
-COPY ./server/plugins ./server/plugins
 
 WORKDIR /workspace/admin
 

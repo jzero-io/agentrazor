@@ -2,6 +2,7 @@
 package plugins
 
 import (
+	{{if .Plugins}}"github.com/zeromicro/go-zero/core/logx"{{end}}
 	"github.com/zeromicro/go-zero/rest"
 
     "{{ .Module }}/internal/handler"
@@ -14,6 +15,9 @@ func LoadPlugins(server *rest.Server, svcCtx *svc.ServiceContext) {
 	{{ range $i, $v := .Plugins }}
 	{
         serverless := serverless{{ $i }}.New(svcCtx.ServiceContext)
+        if err := svcCtx.PluginRegistry.RegisterProvider("{{ $v.Name }}", serverless); err != nil {
+            logx.Errorf("register plugin %q locale provider: %v", "{{ $v.Name }}", err)
+        }
         serverless.HandlerFunc(server, serverless.SvcCtx)
         handler.RegisterRoute2Code(serverless.RouteCodesMap)
     }

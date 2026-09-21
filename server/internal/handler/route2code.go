@@ -90,6 +90,7 @@ var RoutesCodesMap = map[string]string{
 	"POST:/api/v1/manage/deleteUser":                                                 "v1:manage:user:delete",
 	"POST:/api/v1/manage/editUser":                                                   "v1:manage:user:edit",
 	"GET:/api/v1/manage/getUserList":                                                 "v1:manage:user:list",
+	"GET:/api/v1/plugin/admin-locales":                                               "v1:plugin:locale:get",
 	"GET:/api/v1/route/getConstantRoutes":                                            "v1:route:getConstantRoutes",
 	"GET:/api/v1/route/getUserRoutes":                                                "v1:route:getUserRoutes",
 	"GET:/api/v1/route/isRouteExist":                                                 "v1:route:isRouteExist",

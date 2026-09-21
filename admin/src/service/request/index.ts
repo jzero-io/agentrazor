@@ -14,6 +14,13 @@ function isRefreshTokenRequest(url?: string) {
   return url?.split('?')[0] === refreshTokenUrl;
 }
 
+function resetAuthOnUnauthorized(httpStatus?: number) {
+  if (httpStatus !== 401) return;
+
+  const authStore = useAuthStore();
+  authStore.resetStore();
+}
+
 export const request = createFlatRequest<App.Service.Response, RequestInstanceState>(
   {
     baseURL,
@@ -45,6 +52,8 @@ export const request = createFlatRequest<App.Service.Response, RequestInstanceSt
       );
     },
     async onBackendFail(response, instance) {
+      if (response.config.silent) return null;
+
       const authStore = useAuthStore();
       const isRefreshRequest = isRefreshTokenRequest(response.config.url);
       const responseCode = String(response.data?.code || '');
@@ -125,6 +134,8 @@ export const request = createFlatRequest<App.Service.Response, RequestInstanceSt
       return response.data.data;
     },
     onError(error) {
+      if (error.config?.silent) return;
+
       // when the request is fail, you can show error message
 
       let message = error.message;
@@ -132,10 +143,7 @@ export const request = createFlatRequest<App.Service.Response, RequestInstanceSt
 
       const httpStatus = error.response?.status ?? error.status;
 
-      if (httpStatus === 401) {
-        const authStore = useAuthStore();
-        authStore.resetStore();
-      }
+      resetAuthOnUnauthorized(httpStatus);
 
       // get backend error message and code
       if (error.code === BACKEND_ERROR_CODE) {

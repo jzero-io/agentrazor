@@ -1,11 +1,8 @@
-# The Admin image builds from the repository root in order to discover the
-# plugin-owned locale bundles. Keep the context limited to those inputs.
+# The Admin image builds from the repository root. Keep the context limited to
+# the Admin application; plugin locales are loaded from Server at runtime.
 *
 !admin/
 !admin/**
-!server/
-!server/plugins/
-!server/plugins/**
 
 admin/node_modules
 admin/dist

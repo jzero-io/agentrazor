@@ -1,6 +1,6 @@
 import type { Router } from 'vue-router';
 import type { LastLevelRouteKey, RouteKey, RouteMap } from '@elegant-router/types';
-import { $t } from '@/locales';
+import { translateOr } from '@/locales';
 import { getRoutePath } from '@/router/elegant/transform';
 
 /**
@@ -67,7 +67,7 @@ export function getTabByRoute(route: App.Global.TabRoute) {
   // Get icon and localIcon from getRouteIcons function
   const { icon, localIcon } = getRouteIcons(route);
 
-  const label = i18nKey ? $t(i18nKey) : title;
+  const label = translateOr(i18nKey, title);
 
   const tab: App.Global.Tab = {
     id: getTabIdByRoute(route),
@@ -115,7 +115,7 @@ export function getRouteIcons(route: App.Global.TabRoute) {
  */
 export function getDefaultHomeTab(router: Router, homeRouteName: LastLevelRouteKey) {
   const homeRoutePath = getRoutePath(homeRouteName);
-  const i18nLabel = $t(`route.${homeRouteName}`);
+  const i18nLabel = translateOr(`route.${homeRouteName}`, homeRouteName);
 
   let homeTab: App.Global.Tab = {
     id: getRoutePath(homeRouteName),
@@ -173,9 +173,20 @@ export function filterTabsByIds(tabIds: string[], tabs: App.Global.Tab[]) {
 export function extractTabsByAllRoutes(router: Router, tabs: App.Global.Tab[]) {
   const routes = router.getRoutes();
 
-  const routeNames = routes.map(route => route.name);
+  return tabs.flatMap(tab => {
+    const route = routes.find(item => item.name === tab.routeKey);
+    if (!route) return [];
 
-  return tabs.filter(tab => routeNames.includes(tab.routeKey));
+    const { i18nKey, title } = route.meta;
+
+    return [
+      {
+        ...tab,
+        label: translateOr(i18nKey, title),
+        i18nKey
+      }
+    ];
+  });
 }
 
 /**
@@ -222,7 +233,7 @@ export function updateTabByI18nKey(tab: App.Global.Tab) {
 
   return {
     ...tab,
-    label: i18nKey ? $t(i18nKey) : label
+    label: translateOr(i18nKey, label)
   };
 }
 
