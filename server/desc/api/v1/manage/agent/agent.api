@@ -197,17 +197,6 @@ type LogoutRequest {}
 
 type LogoutResponse {}
 
-type HomeOverviewRequest {}
-
-type HomeOverviewResponse {
-	AgentRunning   bool   `json:"agentRunning"`
-	ActiveProvider string `json:"activeProvider"`
-	Model          string `json:"model"`
-	ModelName      string `json:"modelName"`
-	TotalTokens    int64  `json:"totalTokens"`
-	SkillCount     int64  `json:"skillCount"`
-}
-
 @server (
 	prefix:          /api/v1
 	group:           v1/manage/agent
@@ -268,16 +257,5 @@ service server {
 
 	@handler ResetUserTokenQuota
 	post /manage/agent/token-quota/users/:user_uuid/reset (ResetUserTokenQuotaRequest) returns (ResetUserTokenQuotaResponse)
-}
-
-@server (
-	prefix:          /api/v1
-	group:           v1/manage/agent
-	compact_handler: true
-	middleware:      Authx
-)
-service server {
-	@handler HomeOverview
-	get /home/overview (HomeOverviewRequest) returns (HomeOverviewResponse)
 }
 

@@ -64,18 +64,6 @@ type GetUserTokenQuotaResponse struct {
 	Quota TokenQuotaUser `json:"quota"`
 }
 
-type HomeOverviewRequest struct {
-}
-
-type HomeOverviewResponse struct {
-	AgentRunning   bool   `json:"agentRunning"`
-	ActiveProvider string `json:"activeProvider"`
-	Model          string `json:"model"`
-	ModelName      string `json:"modelName"`
-	TotalTokens    int64  `json:"totalTokens"`
-	SkillCount     int64  `json:"skillCount"`
-}
-
 type ListSkillsRequest struct {
 }
 

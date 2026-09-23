@@ -333,21 +333,3 @@ func ResetUserTokenQuota(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		}
 	}
 }
-
-func HomeOverview(svcCtx *svc.ServiceContext) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.HomeOverviewRequest
-		if err := httpx.Parse(r, &req); err != nil {
-			httpx.ErrorCtx(r.Context(), w, err)
-			return
-		}
-
-		l := agent.NewHomeOverview(r.Context(), svcCtx, r)
-		resp, err := l.HomeOverview(&req)
-		if err != nil {
-			httpx.ErrorCtx(r.Context(), w, err)
-		} else {
-			httpx.OkJsonCtx(r.Context(), w, resp)
-		}
-	}
-}

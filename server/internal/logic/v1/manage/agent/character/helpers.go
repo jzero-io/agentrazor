@@ -12,7 +12,7 @@ import (
 
 	agentcharactermodel "github.com/jzero-io/agentrazor/server/internal/model/agent_character"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
-	types "github.com/jzero-io/agentrazor/server/internal/types/v1/manage/character"
+	types "github.com/jzero-io/agentrazor/server/internal/types/v1/manage/agent/character"
 )
 
 const maxCharacterPromptBytes = 16000

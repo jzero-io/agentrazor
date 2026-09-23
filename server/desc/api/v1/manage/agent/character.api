@@ -5,12 +5,12 @@ info (
 	desc:       "后台 Agent 角色管理接口"
 	author:     "agentrazor"
 	version:    "v1"
-	go_package: "v1/manage/character"
+	go_package: "v1/manage/agent/character"
 )
 
 import (
-	"../../common/request.api"
-	"../../common/response.api"
+	"../../../common/request.api"
+	"../../../common/response.api"
 )
 
 type (
@@ -61,7 +61,7 @@ type (
 
 @server (
 	prefix:          /api/v1
-	group:           v1/manage/character
+	group:           v1/manage/agent/character
 	compact_handler: true
 	middleware:      Authx
 )

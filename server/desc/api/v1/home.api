@@ -1,0 +1,27 @@
+syntax = "v1"
+
+info (
+	go_package: "v1/home"
+)
+
+type HomeOverviewRequest {}
+
+type HomeOverviewResponse {
+	AgentRunning   bool   `json:"agentRunning"`
+	ActiveProvider string `json:"activeProvider"`
+	Model          string `json:"model"`
+	ModelName      string `json:"modelName"`
+	TotalTokens    int64  `json:"totalTokens"`
+	SkillCount     int64  `json:"skillCount"`
+}
+
+@server (
+	prefix:          /api/v1
+	group:           v1/home
+	compact_handler: true
+	middleware:      Authx
+)
+service server {
+	@handler HomeOverview
+	get /home/overview (HomeOverviewRequest) returns (HomeOverviewResponse)
+}

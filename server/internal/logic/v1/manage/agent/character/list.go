@@ -11,7 +11,7 @@ import (
 	agentcharactermodel "github.com/jzero-io/agentrazor/server/internal/model/agent_character"
 	manageusermodel "github.com/jzero-io/agentrazor/server/internal/model/manage_user"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
-	types "github.com/jzero-io/agentrazor/server/internal/types/v1/manage/character"
+	types "github.com/jzero-io/agentrazor/server/internal/types/v1/manage/agent/character"
 )
 
 type List struct {
