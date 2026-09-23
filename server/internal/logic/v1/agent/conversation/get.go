@@ -140,6 +140,14 @@ func buildDetail(ctx context.Context, svcCtx *svc.ServiceContext, conversationID
 	if groupID := assignments[conversationID]; groupID != "" {
 		detail.Conversation.GroupId = &groupID
 	}
+	characterIDs, err := characterAssignments(ctx, svcCtx, uuid)
+	if err != nil {
+		return nil, err
+	}
+	if characterID := characterIDs[conversationID]; characterID != "" {
+		detail.Conversation.CharacterId = &characterID
+	}
+
 	for _, turn := range thread.Turns {
 		items := make([]map[string]any, 0, len(turn.Items))
 		for _, item := range turn.Items {

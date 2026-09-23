@@ -52,6 +52,15 @@ export const generatedRoutes: GeneratedRoute[] = [
     },
     children: [
       {
+        name: 'agent_characters',
+        path: '/agent/characters',
+        component: 'view.agent_characters',
+        meta: {
+          title: 'agent_characters',
+          i18nKey: 'route.agent_characters'
+        }
+      },
+      {
         name: 'agent_config',
         path: '/agent/config',
         component: 'view.agent_config',

@@ -16,6 +16,7 @@ type (
 		PinnedAt         *string `json:"pinnedAt,omitempty"`
 		ArchivedAt       *string `json:"archivedAt,omitempty"`
 		GroupId          *string `json:"groupId,omitempty"`
+		CharacterId      *string `json:"characterId,omitempty"`
 		Running          bool    `json:"running"`
 		RunningStartedAt *string `json:"runningStartedAt,omitempty"`
 		CreatedAt        string  `json:"createdAt"`
@@ -121,7 +122,8 @@ type (
 		GroupId        *string `json:"groupId,optional"`
 	}
 	CreateRequest {
-		GroupId *string `json:"groupId,optional"`
+		GroupId     *string `json:"groupId,optional"`
+		CharacterId *string `json:"characterId,optional"`
 	}
 	SendMessageRequest {
 		ConversationId string                 `path:"conversation_id" validate:"required"`

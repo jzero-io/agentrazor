@@ -182,6 +182,7 @@ const routeMap: RouteMap = {
   "404": "/404",
   "500": "/500",
   "agent": "/agent",
+  "agent_characters": "/agent/characters",
   "agent_config": "/agent/config",
   "agent_conversations": "/agent/conversations",
   "agent_skills": "/agent/skills",

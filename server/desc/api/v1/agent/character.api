@@ -1,0 +1,59 @@
+syntax = "v1"
+
+info (
+	title:      "Agent Character API"
+	desc:       "Agent 角色管理接口"
+	author:     "agentrazor"
+	version:    "v1"
+	go_package: "v1/agent/character"
+)
+
+type (
+	Character {
+		Id          string `json:"id"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Prompt      string `json:"prompt"`
+		Builtin     bool   `json:"builtin"`
+		CreatedAt   string `json:"createdAt"`
+		UpdatedAt   string `json:"updatedAt"`
+	}
+	ListResponse {
+		Characters []Character `json:"characters"`
+	}
+	CreateRequest {
+		Name        string `json:"name" validate:"required,max=80"`
+		Description string `json:"description,optional" validate:"max=240"`
+		Prompt      string `json:"prompt" validate:"required,max=16000"`
+	}
+	PathRequest {
+		CharacterId string `path:"character_id" validate:"required"`
+	}
+	UpdateRequest {
+		CharacterId string  `path:"character_id" validate:"required"`
+		Name        *string `json:"name,optional" validate:"omitempty,max=80"`
+		Description *string `json:"description,optional" validate:"omitempty,max=240"`
+		Prompt      *string `json:"prompt,optional" validate:"omitempty,max=16000"`
+	}
+	DeleteResponse  {}
+)
+
+@server (
+	prefix:          /api/v1
+	group:           v1/agent/character
+	compact_handler: true
+	middleware:      Agent
+)
+service server {
+	@handler List
+	get /agent/characters returns (ListResponse)
+
+	@handler Create
+	post /agent/characters (CreateRequest) returns (Character)
+
+	@handler Update
+	patch /agent/characters/:character_id (UpdateRequest) returns (Character)
+
+	@handler Delete
+	delete /agent/characters/:character_id (PathRequest) returns (DeleteResponse)
+}

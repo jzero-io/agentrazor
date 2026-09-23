@@ -177,6 +177,7 @@ const local: App.I18n.Schema = {
     plugins_overview: 'Plugin Overview',
     agent: 'Agent Manage',
     agent_config: 'Config Manage',
+    agent_characters: 'Character Management',
     agent_conversations: 'Conversations',
     agent_skills: 'Skills Manage',
     'agent_token-usage': 'Token Management',
@@ -207,6 +208,11 @@ const local: App.I18n.Schema = {
         saveUser: 'Save User Token Quota',
         restoreUser: 'Restore User Global Quota',
         resetUser: 'Reset User Token Usage'
+      },
+      characters: {
+        create: 'Create Built-in Character',
+        update: 'Update Built-in Character',
+        delete: 'Delete Built-in Character'
       }
     },
     manage: {

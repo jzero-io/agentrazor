@@ -8,6 +8,7 @@ import (
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 
 	"github.com/jzero-io/agentrazor/server/internal/model/agent_api_key"
+	"github.com/jzero-io/agentrazor/server/internal/model/agent_character"
 	"github.com/jzero-io/agentrazor/server/internal/model/agent_token_quota"
 	"github.com/jzero-io/agentrazor/server/internal/model/conversation"
 	"github.com/jzero-io/agentrazor/server/internal/model/conversation_group"
@@ -22,6 +23,7 @@ import (
 
 type Model struct {
 	AgentApiKey                 agent_api_key.AgentApiKeyModel
+	AgentCharacter              agent_character.AgentCharacterModel
 	AgentTokenQuota             agent_token_quota.AgentTokenQuotaModel
 	Conversation                conversation.ConversationModel
 	ConversationGroup           conversation_group.ConversationGroupModel
@@ -37,6 +39,7 @@ type Model struct {
 func NewModel(conn sqlx.SqlConn, op ...opts.Opt[modelx.ModelOpts]) Model {
 	return Model{
 		AgentApiKey:                 agent_api_key.NewAgentApiKeyModel(conn, op...),
+		AgentCharacter:              agent_character.NewAgentCharacterModel(conn, op...),
 		AgentTokenQuota:             agent_token_quota.NewAgentTokenQuotaModel(conn, op...),
 		Conversation:                conversation.NewConversationModel(conn, op...),
 		ConversationGroup:           conversation_group.NewConversationGroupModel(conn, op...),

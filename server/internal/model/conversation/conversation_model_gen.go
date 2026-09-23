@@ -26,11 +26,12 @@ var (
 )
 
 const (
-	Id         condition.Field = "id"
-	UserUuid   condition.Field = "user_uuid"
-	GroupUuid  condition.Field = "group_uuid"
-	CreateTime condition.Field = "create_time"
-	UpdateTime condition.Field = "update_time"
+	Id            condition.Field = "id"
+	UserUuid      condition.Field = "user_uuid"
+	GroupUuid     condition.Field = "group_uuid"
+	CreateTime    condition.Field = "create_time"
+	UpdateTime    condition.Field = "update_time"
+	CharacterUuid condition.Field = "character_uuid"
 )
 
 func initConversationVars(flavor sqlbuilder.Flavor) {
@@ -74,11 +75,12 @@ type (
 	}
 
 	Conversation struct {
-		Id         string         `db:"id"`
-		UserUuid   string         `db:"user_uuid"`
-		GroupUuid  sql.NullString `db:"group_uuid"`
-		CreateTime time.Time      `db:"create_time"`
-		UpdateTime time.Time      `db:"update_time"`
+		Id            string         `db:"id"`
+		UserUuid      string         `db:"user_uuid"`
+		GroupUuid     sql.NullString `db:"group_uuid"`
+		CreateTime    time.Time      `db:"create_time"`
+		UpdateTime    time.Time      `db:"update_time"`
+		CharacterUuid sql.NullString `db:"character_uuid"`
 	}
 )
 
@@ -157,7 +159,7 @@ func (m *defaultConversationModel) Insert(ctx context.Context, session sqlx.Sess
 	statement, args := sqlbuilder.NewInsertBuilder().
 		InsertInto(m.table).
 		Cols(conversationRowsExpectAutoSet).
-		Values(data.Id, data.UserUuid, data.GroupUuid).BuildWithFlavor(m.flavor)
+		Values(data.Id, data.UserUuid, data.GroupUuid, data.CharacterUuid).BuildWithFlavor(m.flavor)
 	if session != nil {
 		return session.ExecCtx(ctx, statement, args...)
 	}
@@ -170,7 +172,7 @@ func (m *defaultConversationModel) InsertV2(ctx context.Context, session sqlx.Se
 	statement, args = sqlbuilder.NewInsertBuilder().
 		InsertInto(m.table).
 		Cols(conversationRowsExpectAutoSet).
-		Values(data.Id, data.UserUuid, data.GroupUuid).BuildWithFlavor(m.flavor)
+		Values(data.Id, data.UserUuid, data.GroupUuid, data.CharacterUuid).BuildWithFlavor(m.flavor)
 
 	var err error
 	if session != nil {
@@ -198,6 +200,9 @@ func (m *defaultConversationModel) Update(ctx context.Context, session sqlx.Sess
 	}
 	if slices.Contains(conversationRowsExpectAutoFieldNames, condition.QuoteWithFlavor(m.flavor, "update_time")) {
 		assigns = append(assigns, sb.Assign(condition.QuoteWithFlavor(m.flavor, "update_time"), data.UpdateTime))
+	}
+	if slices.Contains(conversationRowsExpectAutoFieldNames, condition.QuoteWithFlavor(m.flavor, "character_uuid")) {
+		assigns = append(assigns, sb.Assign(condition.QuoteWithFlavor(m.flavor, "character_uuid"), data.CharacterUuid))
 	}
 
 	sb.Set(assigns...)
@@ -242,7 +247,7 @@ func (m *customConversationModel) BulkInsert(ctx context.Context, session sqlx.S
 	sb.Cols(conversationRowsExpectAutoSet)
 
 	for _, data := range datas {
-		sb.Values(data.Id, data.UserUuid, data.GroupUuid)
+		sb.Values(data.Id, data.UserUuid, data.GroupUuid, data.CharacterUuid)
 	}
 
 	statement, args := sb.BuildWithFlavor(m.flavor)

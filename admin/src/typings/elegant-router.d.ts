@@ -33,6 +33,7 @@ declare module "@elegant-router/types" {
     "404": "/404";
     "500": "/500";
     "agent": "/agent";
+    "agent_characters": "/agent/characters";
     "agent_config": "/agent/config";
     "agent_conversations": "/agent/conversations";
     "agent_skills": "/agent/skills";
@@ -122,6 +123,7 @@ declare module "@elegant-router/types" {
     | "500"
     | "iframe-page"
     | "login"
+    | "agent_characters"
     | "agent_config"
     | "agent_conversations"
     | "agent_skills"

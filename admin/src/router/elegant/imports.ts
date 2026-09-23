@@ -20,6 +20,7 @@ export const views: Record<LastLevelRouteKey, RouteComponent | (() => Promise<Ro
   500: () => import("@/views/_builtin/500/index.vue"),
   "iframe-page": () => import("@/views/_builtin/iframe-page/[url].vue"),
   login: () => import("@/views/_builtin/login/index.vue"),
+  agent_characters: () => import("@/views/agent/characters/index.vue"),
   agent_config: () => import("@/views/agent/config/index.vue"),
   agent_conversations: () => import("@/views/agent/conversations/index.vue"),
   agent_skills: () => import("@/views/agent/skills/index.vue"),

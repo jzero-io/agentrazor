@@ -47,6 +47,11 @@ func (l *List) List() (resp *types.ListResponse, err error) {
 		return nil, err
 	}
 
+	characterIDs, err := characterAssignments(l.ctx, l.svcCtx, uuid)
+	if err != nil {
+		return nil, err
+	}
+
 	threads, err := l.listOwnedThreads(owned)
 	if err != nil {
 		return nil, err
@@ -72,6 +77,9 @@ func (l *List) List() (resp *types.ListResponse, err error) {
 		setConversationActiveTurn(&mapped, l.svcCtx.AgentService, thread.ID)
 		if groupID := assignments[thread.ID]; groupID != "" {
 			mapped.GroupId = &groupID
+		}
+		if characterID := characterIDs[thread.ID]; characterID != "" {
+			mapped.CharacterId = &characterID
 		}
 		response.Conversations = append(response.Conversations, mapped)
 	}

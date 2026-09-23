@@ -557,6 +557,11 @@ declare namespace App {
             apiKeyLogin: string;
             logout: string;
           };
+          characters: {
+            create: string;
+            update: string;
+            delete: string;
+          };
           skills: {
             upload: string;
             edit: string;

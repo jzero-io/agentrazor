@@ -1,0 +1,80 @@
+syntax = "v1"
+
+info (
+	title:      "Agent Character Management API"
+	desc:       "后台 Agent 角色管理接口"
+	author:     "agentrazor"
+	version:    "v1"
+	go_package: "v1/manage/character"
+)
+
+import (
+	"../../common/request.api"
+	"../../common/response.api"
+)
+
+type (
+	Owner {
+		UserUuid  string `json:"userUuid"`
+		Username  string `json:"username"`
+		NickName  string `json:"nickName"`
+		UserEmail string `json:"userEmail"`
+	}
+	Character {
+		Id          string `json:"id"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Prompt      string `json:"prompt"`
+		Builtin     bool   `json:"builtin"`
+		Sort        int64  `json:"sort"`
+		Owner       *Owner `json:"owner,omitempty"`
+		CreatedAt   string `json:"createdAt"`
+		UpdatedAt   string `json:"updatedAt"`
+	}
+	ListRequest {
+		PageRequest
+		Kind    string `form:"kind" validate:"required,oneof=builtin custom"`
+		Keyword string `form:"keyword,optional"`
+	}
+	ListResponse {
+		PageResponse
+		Records []Character `json:"records"`
+	}
+	CreateRequest {
+		Name        string `json:"name" validate:"required,max=80"`
+		Description string `json:"description,optional" validate:"max=240"`
+		Prompt      string `json:"prompt" validate:"required,max=16000"`
+		Sort        int64  `json:"sort,default=0"`
+	}
+	UpdateRequest {
+		CharacterId string `path:"character_id" validate:"required"`
+		Name        string `json:"name" validate:"required,max=80"`
+		Description string `json:"description,optional" validate:"max=240"`
+		Prompt      string `json:"prompt" validate:"required,max=16000"`
+		Sort        int64  `json:"sort,default=0"`
+	}
+	DeleteRequest {
+		CharacterId string `path:"character_id" validate:"required"`
+	}
+	DeleteResponse  {}
+)
+
+@server (
+	prefix:          /api/v1
+	group:           v1/manage/character
+	compact_handler: true
+	middleware:      Authx
+)
+service server {
+	@handler List
+	get /manage/agent/characters (ListRequest) returns (ListResponse)
+
+	@handler Create
+	post /manage/agent/characters/builtin (CreateRequest) returns (Character)
+
+	@handler Update
+	patch /manage/agent/characters/builtin/:character_id (UpdateRequest) returns (Character)
+
+	@handler Delete
+	delete /manage/agent/characters/builtin/:character_id (DeleteRequest) returns (DeleteResponse)
+}

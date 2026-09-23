@@ -9,11 +9,13 @@ import (
 
 	swagger "github.com/jzero-io/agentrazor/server/internal/handler/swagger"
 	v1agentapikey "github.com/jzero-io/agentrazor/server/internal/handler/v1/agent/apikey"
+	v1agentcharacter "github.com/jzero-io/agentrazor/server/internal/handler/v1/agent/character"
 	v1agentconversation "github.com/jzero-io/agentrazor/server/internal/handler/v1/agent/conversation"
 	v1agentconversationgroup "github.com/jzero-io/agentrazor/server/internal/handler/v1/agent/conversation/group"
 	v1agenttoken "github.com/jzero-io/agentrazor/server/internal/handler/v1/agent/token"
 	v1auth "github.com/jzero-io/agentrazor/server/internal/handler/v1/auth"
 	v1manageagent "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/agent"
+	v1managecharacter "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/character"
 	v1manageemail "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/email"
 	v1managemenu "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/menu"
 	v1managerole "github.com/jzero-io/agentrazor/server/internal/handler/v1/manage/role"
@@ -63,6 +65,36 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 						Method:  http.MethodDelete,
 						Path:    "/agent/api-keys/:id",
 						Handler: v1agentapikey.Delete(serverCtx),
+					},
+				}...,
+			),
+			rest.WithPrefix("/api/v1"),
+		)
+	}
+	{
+		server.AddRoutes(
+			rest.WithMiddlewares(
+				[]rest.Middleware{serverCtx.Agent},
+				[]rest.Route{
+					{
+						Method:  http.MethodGet,
+						Path:    "/agent/characters",
+						Handler: v1agentcharacter.List(serverCtx),
+					},
+					{
+						Method:  http.MethodPost,
+						Path:    "/agent/characters",
+						Handler: v1agentcharacter.Create(serverCtx),
+					},
+					{
+						Method:  http.MethodPatch,
+						Path:    "/agent/characters/:character_id",
+						Handler: v1agentcharacter.Update(serverCtx),
+					},
+					{
+						Method:  http.MethodDelete,
+						Path:    "/agent/characters/:character_id",
+						Handler: v1agentcharacter.Delete(serverCtx),
 					},
 				}...,
 			),
@@ -414,6 +446,36 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 						Method:  http.MethodGet,
 						Path:    "/home/overview",
 						Handler: v1manageagent.HomeOverview(serverCtx),
+					},
+				}...,
+			),
+			rest.WithPrefix("/api/v1"),
+		)
+	}
+	{
+		server.AddRoutes(
+			rest.WithMiddlewares(
+				[]rest.Middleware{serverCtx.Authx},
+				[]rest.Route{
+					{
+						Method:  http.MethodGet,
+						Path:    "/manage/agent/characters",
+						Handler: v1managecharacter.List(serverCtx),
+					},
+					{
+						Method:  http.MethodPost,
+						Path:    "/manage/agent/characters/builtin",
+						Handler: v1managecharacter.Create(serverCtx),
+					},
+					{
+						Method:  http.MethodPatch,
+						Path:    "/manage/agent/characters/builtin/:character_id",
+						Handler: v1managecharacter.Update(serverCtx),
+					},
+					{
+						Method:  http.MethodDelete,
+						Path:    "/manage/agent/characters/builtin/:character_id",
+						Handler: v1managecharacter.Delete(serverCtx),
 					},
 				}...,
 			),

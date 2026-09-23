@@ -177,6 +177,7 @@ const local: App.I18n.Schema = {
     plugins_overview: '插件总览',
     agent: 'Agent 管理',
     agent_config: '配置管理',
+    agent_characters: '角色管理',
     agent_conversations: '会话管理',
     agent_skills: 'Skills 管理',
     'agent_token-usage': 'Token 管理',
@@ -207,6 +208,11 @@ const local: App.I18n.Schema = {
         saveUser: '保存用户 Token 额度',
         restoreUser: '恢复用户全局额度',
         resetUser: '重置用户 Token 用量'
+      },
+      characters: {
+        create: '新增内置角色',
+        update: '编辑内置角色',
+        delete: '删除内置角色'
       }
     },
     manage: {

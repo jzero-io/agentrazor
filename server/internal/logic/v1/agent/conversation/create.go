@@ -20,17 +20,11 @@ type Create struct {
 	r      *http.Request
 }
 
-// 创建会话
 func NewCreate(ctx context.Context, svcCtx *svc.ServiceContext, r *http.Request) *Create {
-	return &Create{
-		Logger: logx.WithContext(ctx),
-		ctx:    ctx,
-		svcCtx: svcCtx,
-		r:      r,
-	}
+	return &Create{Logger: logx.WithContext(ctx), ctx: ctx, svcCtx: svcCtx, r: r}
 }
 
-func (l *Create) Create(req *types.CreateRequest) (resp *types.Conversation, err error) {
+func (l *Create) Create(req *types.CreateRequest) (*types.Conversation, error) {
 	userUUID, err := currentUserUUID(l.ctx)
 	if err != nil {
 		return nil, err
@@ -39,24 +33,45 @@ func (l *Create) Create(req *types.CreateRequest) (resp *types.Conversation, err
 	if err != nil {
 		return nil, err
 	}
+	characterUUID, characterPrompt, err := normalizeOwnedCharacter(l.ctx, l.svcCtx, userUUID, req.CharacterId)
+	if err != nil {
+		return nil, err
+	}
+
 	thread, err := l.svcCtx.AgentService.Create(l.ctx)
 	if err != nil {
 		return nil, err
 	}
+	cleanup := func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_ = l.svcCtx.AgentService.Delete(cleanupCtx, thread.ID)
+	}
+	if characterPrompt != "" {
+		if err := l.svcCtx.AgentService.WriteConversationInstructions(l.ctx, thread.ID, characterPrompt); err != nil {
+			cleanup()
+			return nil, err
+		}
+	}
+
 	row := &conversationmodel.Conversation{Id: thread.ID, UserUuid: userUUID}
 	if groupUUID != "" {
 		row.GroupUuid = sql.NullString{String: groupUUID, Valid: true}
 	}
+	if characterUUID != "" {
+		row.CharacterUuid = sql.NullString{String: characterUUID, Valid: true}
+	}
 	if err := l.svcCtx.Model.Conversation.InsertV2(l.ctx, nil, row); err != nil {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		_ = l.svcCtx.AgentService.Delete(cleanupCtx, thread.ID)
+		cleanup()
 		return nil, err
 	}
 
 	conversation := toConversation(thread)
 	if groupUUID != "" {
 		conversation.GroupId = &groupUUID
+	}
+	if characterUUID != "" {
+		conversation.CharacterId = &characterUUID
 	}
 	return &conversation, nil
 }

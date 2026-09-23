@@ -19,6 +19,7 @@ type Conversation struct {
 	PinnedAt         *string `json:"pinnedAt,omitempty"`
 	ArchivedAt       *string `json:"archivedAt,omitempty"`
 	GroupId          *string `json:"groupId,omitempty"`
+	CharacterId      *string `json:"characterId,omitempty"`
 	Running          bool    `json:"running"`
 	RunningStartedAt *string `json:"runningStartedAt,omitempty"`
 	CreatedAt        string  `json:"createdAt"`
@@ -26,7 +27,8 @@ type Conversation struct {
 }
 
 type CreateRequest struct {
-	GroupId *string `json:"groupId,optional"`
+	GroupId     *string `json:"groupId,optional"`
+	CharacterId *string `json:"characterId,optional"`
 }
 
 type DeleteResponse struct {
