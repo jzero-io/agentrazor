@@ -34,7 +34,7 @@ const themeStore = useThemeStore();
 // pages continue to work as plain embeds.
 const apiPrefix = computed(() => {
   const match = /^\/plugins\/([a-z0-9_-]+)\/admin\/?(?:\?.*)?$/i.exec(props.url);
-  return match ? `/api/v1/manage/plugin/${match[1]}` : '';
+  return match ? `/api/v1/plugin/admin/${match[1]}` : '';
 });
 
 function validPluginRequest(value: unknown): value is PluginApiRequest {
