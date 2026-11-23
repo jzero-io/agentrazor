@@ -3,7 +3,6 @@ set -eu
 
 umask 077
 mkdir -p "$CODEX_HOME" "$CODEX_HOME/skills" "$CODEX_HOME/workspace" "$(dirname "$CODEX_SOCKET")"
-rm -rf "$CODEX_HOME/skills/request-guard" "$CODEX_HOME/skills/.system/request-guard"
 if [ -f /etc/codex/AGENTS.md ] && [ ! -f "$CODEX_HOME/AGENTS.md" ]; then
   cp /etc/codex/AGENTS.md "$CODEX_HOME/AGENTS.md"
 fi

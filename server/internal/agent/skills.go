@@ -471,6 +471,15 @@ func (s *Service) SyncPluginSkills(ctx context.Context, pluginsRoot string) (Plu
 	result.Skipped = skipped
 
 	for _, item := range pending {
+		// Startup synchronization only seeds missing skills. An existing target
+		// belongs to the user, even if its manifest is incomplete or invalid.
+		target := filepath.Join(s.codexHome, "skills", item.Name)
+		if _, err := s.metadata(ctx, target); err == nil {
+			result.Skipped = append(result.Skipped, item.Name)
+			continue
+		} else if !isRemoteNotFound(err) {
+			return result, fmt.Errorf("inspect installed plugin skill %q: %w", item.Name, err)
+		}
 		entries, err := readSkillDirectory(item.Path)
 		if err != nil {
 			return result, fmt.Errorf("package plugin skill %q: %w", item.Name, err)

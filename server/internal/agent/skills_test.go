@@ -5,10 +5,19 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"context"
+	"encoding/base64"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 func TestManagedSkillsFromListResponse(t *testing.T) {
@@ -255,6 +264,127 @@ func TestSplitPluginSkillsSkipsOnlyDuplicateNames(t *testing.T) {
 	if !reflect.DeepEqual(skipped, wantSkipped) {
 		t.Fatalf("skipped = %#v, want %#v", skipped, wantSkipped)
 	}
+}
+
+func TestSyncPluginSkillsPreservesUserEdits(t *testing.T) {
+	home := t.TempDir()
+	plugins := t.TempDir()
+	bundle := filepath.Join(plugins, "plugin", "skills", "example")
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bundle, "SKILL.md"), []byte("---\nname: example\ndescription: Default\n---\nDefault content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := skillSyncTestService(t, home, false)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	result, err := s.SyncPluginSkills(ctx, plugins)
+	if err != nil || !reflect.DeepEqual(result.Installed, []string{"example"}) {
+		t.Fatalf("first sync = %#v, %v", result, err)
+	}
+	manifest := filepath.Join(home, "skills", "example", "SKILL.md")
+	custom := []byte("User-edited manifest, deliberately without valid frontmatter")
+	if err := os.WriteFile(manifest, custom, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.Stat(manifest)
+	// A newer bundle must not reset the user's existing directory.
+	if err := os.WriteFile(filepath.Join(bundle, "new-reference.md"), []byte("new default"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, err = s.SyncPluginSkills(ctx, plugins)
+	if err != nil || len(result.Installed) != 0 || !reflect.DeepEqual(result.Skipped, []string{"example"}) {
+		t.Fatalf("repeat sync = %#v, %v", result, err)
+	}
+	got, _ := os.ReadFile(manifest)
+	after, _ := os.Stat(manifest)
+	if !bytes.Equal(got, custom) || !before.ModTime().Equal(after.ModTime()) {
+		t.Fatal("startup synchronization rewrote the user-edited skill")
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(manifest), "new-reference.md")); !os.IsNotExist(err) {
+		t.Fatal("startup synchronization injected files into an existing skill")
+	}
+}
+
+func TestSyncPluginSkillsStopsOnInspectionFailure(t *testing.T) {
+	plugins := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(plugins, "plugin", "skills", "example"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s := skillSyncTestService(t, t.TempDir(), true)
+	if _, err := s.SyncPluginSkills(context.Background(), plugins); err == nil || !strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("sync error = %v, want inspection failure", err)
+	}
+}
+
+// Exercise startup synchronization through the real JSON-RPC client with a
+// filesystem-backed peer, so preservation is checked on actual file contents.
+func skillSyncTestService(t *testing.T, home string, denyMetadata bool) *Service {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		for {
+			var req struct {
+				ID     int64          `json:"id"`
+				Method string         `json:"method"`
+				Params map[string]any `json:"params"`
+			}
+			if conn.ReadJSON(&req) != nil {
+				return
+			}
+			result := map[string]any{}
+			path, _ := req.Params["path"].(string)
+			var opErr error
+			switch req.Method {
+			case "fs/getMetadata":
+				if denyMetadata {
+					opErr = fmt.Errorf("permission denied")
+				} else if st, err := os.Lstat(path); err != nil {
+					opErr = err
+				} else {
+					result["isDirectory"] = st.IsDir()
+				}
+			case "fs/createDirectory":
+				opErr = os.MkdirAll(path, 0o755)
+			case "fs/remove":
+				opErr = os.RemoveAll(path)
+			case "fs/writeFile":
+				data, err := base64.StdEncoding.DecodeString(req.Params["dataBase64"].(string))
+				if err == nil {
+					err = os.WriteFile(path, data, 0o644)
+				}
+				opErr = err
+			case "skills/list":
+				result["data"] = []any{map[string]any{"skills": []any{map[string]any{
+					"name": "example", "path": filepath.Join(home, "skills", "example", "SKILL.md"), "enabled": true, "scope": "user",
+				}}}}
+			default:
+				opErr = fmt.Errorf("unexpected RPC %s", req.Method)
+			}
+			response := map[string]any{"id": req.ID, "result": result}
+			if opErr != nil {
+				delete(response, "result")
+				response["error"] = map[string]any{"code": -32000, "message": opErr.Error()}
+			}
+			if err := conn.WriteJSON(response); err != nil {
+				return
+			}
+		}
+	}))
+	t.Cleanup(server.Close)
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rpc := &appServer{connection: conn, waitDone: make(chan struct{}), pending: make(map[int64]chan rpcEnvelope)}
+	go rpc.readLoop()
+	t.Cleanup(func() { _ = rpc.close() })
+	return &Service{server: rpc, codexHome: home}
 }
 
 func addZipFile(t *testing.T, writer *zip.Writer, name string, mode int64, content string) {
