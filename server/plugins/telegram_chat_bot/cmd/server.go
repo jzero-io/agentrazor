@@ -3,7 +3,6 @@ package cmd
 import (
 	"net/http"
 
-	"github.com/common-nighthawk/go-figure"
 	coresvc "github.com/jzero-io/agentrazor/core-engine/svc"
 	"github.com/jzero-io/jzero/core/configcenter"
 	"github.com/jzero-io/jzero/core/configcenter/subscriber"
@@ -33,8 +32,6 @@ var serverCmd = &cobra.Command{
 		// set up logger
 		logx.Must(logx.SetUp(cc.MustGetConfig().Log.LogConf))
 
-		// print banner
-		printBanner(cc.MustGetConfig().Banner)
 		// print version
 		printVersion()
 
@@ -64,10 +61,6 @@ var serverCmd = &cobra.Command{
 		logx.Infof("Starting rest server at %s:%d...", cc.MustGetConfig().Rest.Host, cc.MustGetConfig().Rest.Port)
 		group.Start()
 	},
-}
-
-func printBanner(c config.BannerConf) {
-	figure.NewColorFigure(c.Text, c.FontName, c.Color, true).Print()
 }
 
 func init() {

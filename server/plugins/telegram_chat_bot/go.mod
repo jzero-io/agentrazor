@@ -3,7 +3,6 @@ module telegram_chat_bot
 go 1.25.0
 
 require (
-	github.com/common-nighthawk/go-figure v0.0.0-20210622060536-734e95fb86be
 	github.com/go-playground/validator/v10 v10.27.0
 	github.com/jzero-io/agentrazor/core-engine v0.0.0-20260921043301-3ca31b2ce28a
 	github.com/jzero-io/jzero v1.4.1
