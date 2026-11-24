@@ -8,3 +8,15 @@ log:
     encoding: plain
     level: info
     mode: console
+
+# These placeholders satisfy the shared host configuration model while the
+# plugin standalone command is parsed. Serverless deployments overwrite them
+# with the live AgentRazor SQLx and Redis configuration before use.
+sqlx:
+    driverName: "mysql"
+    dataSource: "root:123456@tcp(127.0.0.1:3306)/agentrazor-admin?charset=utf8mb4&parseTime=True&loc=Local"
+
+redis:
+    host: "127.0.0.1:6379"
+    type: "node"
+    pass: "123456"
