@@ -2,24 +2,11 @@
 package plugins
 
 import (
-	serverless0 "telegram_chat_bot/serverless"
-
-	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/rest"
 
-	"github.com/jzero-io/agentrazor/server/internal/handler"
 	"github.com/jzero-io/agentrazor/server/internal/svc"
 )
 
 func LoadPlugins(server *rest.Server, svcCtx *svc.ServiceContext) {
-
-	{
-		serverless := serverless0.New(svcCtx.ServiceContext)
-		if err := svcCtx.PluginRegistry.RegisterProvider("telegram_chat_bot", serverless); err != nil {
-			logx.Errorf("register plugin %q locale provider: %v", "telegram_chat_bot", err)
-		}
-		serverless.HandlerFunc(server, serverless.SvcCtx)
-		handler.RegisterRoute2Code(serverless.RouteCodesMap)
-	}
 
 }

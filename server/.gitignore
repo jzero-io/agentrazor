@@ -36,9 +36,4 @@ data
 !/server/
 go.work
 go.work.sum
-plugins/*
-!plugins/plugins.go
-!plugins/telegram_chat_bot/
-!plugins/telegram_chat_bot/**
-plugins/telegram_chat_bot/desc/swagger/
-!plugins/plugins.go
+plugins
