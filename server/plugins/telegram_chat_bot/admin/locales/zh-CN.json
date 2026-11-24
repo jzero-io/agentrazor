@@ -1,0 +1,14 @@
+{
+  "route": {
+    "plugin_telegram_chat_bot": "Telegram 问答机器人"
+  },
+  "button": {
+    "plugin": {
+      "telegram": {
+        "readStatus": "读取 Telegram 运行状态",
+        "readConfiguration": "查看 Telegram 配置",
+        "saveConfiguration": "保存 Telegram 配置"
+      }
+    }
+  }
+}

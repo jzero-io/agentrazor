@@ -1,0 +1,4 @@
+gen:
+    hooks:
+        after:
+            - jzero gen swagger

@@ -1,0 +1,70 @@
+syntax = "v1"
+
+info (
+	title: "telegram_chat_bot_admin"
+	desc:  "Telegram Q&A plugin administration"
+)
+
+type TelegramConfiguration {
+	BotToken              string `json:"botToken,optional"`
+	GroupChatIDs          string `json:"groupChatIDs"`
+	APIBaseURL            string `json:"apiBaseURL"`
+	PollTimeoutSeconds    int    `json:"pollTimeoutSeconds"`
+	RequestTimeoutSeconds int    `json:"requestTimeoutSeconds"`
+}
+
+type ConversationConfiguration {
+	BaseURL        string `json:"baseURL"`
+	APIKey         string `json:"apiKey,optional"`
+	TimeoutSeconds int    `json:"timeoutSeconds"`
+}
+
+type PluginConfiguration {
+	Telegram     TelegramConfiguration     `json:"telegram"`
+	Conversation ConversationConfiguration `json:"conversation"`
+}
+
+type ConfigurationSecrets {
+	TelegramBotToken   bool `json:"telegramBotToken"`
+	ConversationAPIKey bool `json:"conversationAPIKey"`
+}
+
+type GetConfigurationResponse {
+	Config    PluginConfiguration  `json:"config"`
+	Secrets   ConfigurationSecrets `json:"secrets"`
+	UpdatedAt string               `json:"updatedAt"`
+}
+
+type SaveConfigurationRequest {
+	Config PluginConfiguration `json:"config"`
+}
+
+type SaveConfigurationResponse {
+	Config    PluginConfiguration  `json:"config"`
+	Secrets   ConfigurationSecrets `json:"secrets"`
+	UpdatedAt string               `json:"updatedAt"`
+}
+
+type GetStatusResponse {
+	BotRunning        bool   `json:"botRunning"`
+	BotUsername       string `json:"botUsername"`
+	TokenConfigured   bool   `json:"tokenConfigured"`
+	AllowedGroups     int    `json:"allowedGroups"`
+	ConversationCount int64  `json:"conversationCount"`
+}
+
+@server (
+	prefix:     /api/v1/plugin/admin/telegram_chat_bot
+	group:      v1/telegram_chat_bot_admin
+	middleware: Authx
+)
+service telegramChatBotAdmin {
+	@handler GetConfiguration
+	get /configuration returns (GetConfigurationResponse)
+
+	@handler SaveConfiguration
+	put /configuration (SaveConfigurationRequest) returns (SaveConfigurationResponse)
+
+	@handler GetStatus
+	get /status returns (GetStatusResponse)
+}
